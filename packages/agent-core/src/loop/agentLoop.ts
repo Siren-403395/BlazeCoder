@@ -80,6 +80,8 @@ export interface AgentLoopDeps {
   spawn?: ToolContext["spawn"];
   /** Nesting depth for this run; 0 = main agent. */
   depth?: number;
+  /** Directory for spilled oversized tool output (threaded into ToolContext). */
+  spillDir?: string;
   /** Debug/test seam: invoked with the immutable LoopState at the top of each iteration. */
   onLoopState?: (state: LoopState) => void;
 }
@@ -309,6 +311,7 @@ export async function runAgentLoop(
       clock,
       spawn: deps.spawn,
       depth: deps.depth ?? 0,
+      spillDir: deps.spillDir,
     };
     const results = await executor.executeTurn(response.toolCalls, ctx);
     session.messages.push({ role: "tool", results });

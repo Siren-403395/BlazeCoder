@@ -16,6 +16,7 @@ const MAX_TIMEOUT_MS = 600_000;
 export const runCommandTool: Tool = {
   name: TOOL_NAMES.bash,
   readOnly: false,
+  maxResultSizeChars: 30_000, // smaller cap; the tail (stderr) is always preserved on spill
   description: `Run a shell command in the working directory; returns stdout/stderr and the exit code. This is how you install deps, build, run tests/type-checks/linters, use git, scaffold — and VERIFY your work after editing.
 
 Prefer the dedicated tools over their shell equivalents:

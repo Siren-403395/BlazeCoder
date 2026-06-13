@@ -124,6 +124,9 @@ export function makeCtx(overrides: Partial<ToolContext> = {}): { ctx: ToolContex
     signal: overrides.signal ?? new AbortController().signal,
     logger: overrides.logger ?? silentLogger,
     clock: overrides.clock ?? new FixedClock(0),
+    spillDir: overrides.spillDir,
+    spawn: overrides.spawn,
+    depth: overrides.depth,
   };
   return { ctx, events };
 }

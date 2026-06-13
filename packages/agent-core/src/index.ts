@@ -119,6 +119,8 @@ export interface AgentRuntimeOptions {
   sourceRootDir?: (source: RuleSource) => string | undefined;
   /** Settings file paths per persistent scope, so "always allow" can write to disk. */
   settingsFiles?: Record<"user" | "project" | "local", string>;
+  /** Directory for spilled oversized tool output (readable via Read if inside the workspace). */
+  spillDir?: string;
   maxTurns?: number;
   maxBudgetUsd?: number;
   contextTokens?: number;
@@ -207,6 +209,7 @@ export class AgentRuntime {
   private readonly loopConfig: AgentLoopConfig;
   private readonly defaultEffort: Effort;
   private readonly settingsFiles?: Record<"user" | "project" | "local", string>;
+  private readonly spillDir?: string;
   /** Loaded skills (for a /skill palette in the TUI). */
   readonly skills: Skill[];
 
@@ -266,6 +269,7 @@ export class AgentRuntime {
     };
     this.defaultEffort = opts.defaultEffort ?? "high";
     this.settingsFiles = opts.settingsFiles;
+    this.spillDir = opts.spillDir;
     this.skills = opts.skills ?? [];
   }
 
@@ -284,6 +288,7 @@ export class AgentRuntime {
       hooks: this.hooks,
       spawn: (def, prompt, signal) => this.spawn(def, prompt, signal),
       depth: 0,
+      spillDir: this.spillDir,
     };
   }
 

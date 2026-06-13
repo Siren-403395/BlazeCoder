@@ -35,3 +35,5 @@ docs/_research_*.json
 
 # per-project local settings (committable project settings.json is tracked)
 **/.zephyrcode/settings.local.json
+# spilled oversized tool output
+**/.zephyrcode/tool-results/

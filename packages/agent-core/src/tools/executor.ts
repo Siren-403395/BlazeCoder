@@ -5,6 +5,8 @@
  * is converted to an isError result so the loop survives and can self-correct.
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ToolCall } from "@coding-agent/shared";
 import type { Clock } from "../ports";
 import type { ToolResultRecord } from "../ports";
@@ -103,7 +105,7 @@ export class ToolExecutor {
       }
     }
 
-    const { content, truncated } = this.cap(result.content);
+    const { content, truncated } = this.cap(result.content, tool, ctx, call.id);
     const durationMs = this.clock.now() - started;
     run.emit({
       type: "tool_result",
@@ -154,11 +156,34 @@ export class ToolExecutor {
     });
   }
 
-  private cap(content: string): { content: string; truncated: boolean } {
-    if (content.length <= this.maxResultChars) return { content, truncated: false };
-    const head = content.slice(0, this.maxResultChars);
+  /**
+   * Cap a tool result at the tool's own limit (or the executor default). On overflow,
+   * spill the FULL output to <spillDir>/<id>.txt (when a spillDir is set) and return a
+   * head+tail preview with a pointer; otherwise truncate. The tail is preserved so a
+   * Bash failure's stderr (the load-bearing signal) survives.
+   */
+  private cap(content: string, tool: Tool | undefined, ctx: ToolContext, callId: string): { content: string; truncated: boolean } {
+    const limit = tool?.maxResultSizeChars ?? this.maxResultChars;
+    if (content.length <= limit) return { content, truncated: false };
+
+    const headLen = Math.floor(limit * 0.7);
+    const tailLen = limit - headLen;
+    const head = content.slice(0, headLen);
+    const tail = content.slice(-tailLen);
+
+    let pointer = "narrow your query or read a specific range";
+    if (ctx.spillDir) {
+      try {
+        mkdirSync(ctx.spillDir, { recursive: true });
+        const path = join(ctx.spillDir, `${callId}.txt`);
+        writeFileSync(path, content);
+        pointer = `full output (${content.length} chars) saved to ${path} — read it with Read if you need more`;
+      } catch {
+        // spill failed → fall back to the truncation pointer
+      }
+    }
     return {
-      content: `${head}\n…[truncated ${content.length - this.maxResultChars} chars — narrow your query or read a specific range]`,
+      content: `${head}\n…[truncated ${content.length - limit} chars; ${pointer}]\n${tail}`,
       truncated: true,
     };
   }

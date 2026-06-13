@@ -37,6 +37,8 @@ export interface ToolContext {
   spawn?: (def: AgentDefinition, prompt: string, signal: AbortSignal) => Promise<SubagentRunResult>;
   /** Nesting depth; 0 for the main agent. The Task tool refuses when > 0 (no nesting). */
   depth?: number;
+  /** Directory for spilled oversized tool output (absent ⇒ truncate instead of spill). */
+  spillDir?: string;
 }
 
 export interface ToolResult {

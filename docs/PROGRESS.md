@@ -36,7 +36,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 - [x] P1-tools-4   WebSearch + WebFetch behind a WebClient port, mandatory Sources citation   (deps: tools-1)
 
 ## P2 — nice-to-have
-- [ ] P2-tools-5   per-tool maxResultSizeChars with disk-spill-and-pointer (replace flat 60k cap)   (deps: tools-3)
+- [x] P2-tools-5   per-tool maxResultSizeChars with disk-spill-and-pointer (replace flat 60k cap)   (deps: tools-3)
 - [x] P2-tools-6   searchHint + CORE_TOOLS allowlist scaffolding for deferred-tool loading   (deps: tools-2, orch-2)
 - [ ] P2-context-6 cache discipline: stable prefix + cache-token telemetry + compaction logging   (deps: context-1)
 - [ ] P2-context-7 optional live session-notes file as a zero-cost summary source   (deps: context-3)

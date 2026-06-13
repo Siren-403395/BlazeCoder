@@ -96,6 +96,8 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     rules: settings.rules,
     sourceRootDir,
     settingsFiles: { user: paths.user, project: paths.project, local: paths.local },
+    // Spill oversized tool output inside the workspace so the agent can Read it back.
+    spillDir: join(root, ".zephyrcode", "tool-results"),
     extraPreToolUseHooks,
     extraPostToolUseHooks,
     extraTools,
