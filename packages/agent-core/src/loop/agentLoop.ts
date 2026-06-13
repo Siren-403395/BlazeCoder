@@ -181,6 +181,7 @@ export async function runAgentLoop(
             },
             onToolCall: (call) =>
               emit({ type: "tool_call", id: call.id, name: call.name, input: call.input }),
+            onRetry: (info) => emit({ type: "api_retry", ...info }),
           })
         : await gateway.complete(request, signal);
     } catch (err) {

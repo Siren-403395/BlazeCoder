@@ -199,6 +199,24 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
     case "budget":
       return { ...state, tokensUsed: action.usedTokens, tokensTotal: action.totalTokens };
 
+    case "api_retry": {
+      const [rid, seq] = id(state, "r");
+      const status = action.status ? ` (HTTP ${action.status})` : "";
+      return {
+        ...state,
+        seq,
+        items: [
+          ...state.items,
+          {
+            kind: "notice",
+            id: rid,
+            level: "warn",
+            message: `Model call failed${status}; retrying (attempt ${action.attempt}/${action.maxRetries})…`,
+          },
+        ],
+      };
+    }
+
     case "compact_boundary": {
       const [cid, seq] = id(state, "c");
       return { ...state, seq, items: [...state.items, { kind: "compact", id: cid, reason: action.reason }] };

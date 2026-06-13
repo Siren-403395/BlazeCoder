@@ -16,6 +16,8 @@ export interface CliConfig {
   maxTurns: number;
   maxBudgetUsd: number;
   contextTokens: number;
+  /** Max transient-failure retries per model call. */
+  maxRetries: number;
   /** Root dir for sessions + memories + global config (~/.zephyrcode by default). */
   home: string;
   /** Use the offline stub gateway instead of a real provider. */
@@ -78,6 +80,7 @@ export function loadConfig(cwd: string = process.cwd()): CliConfig {
     maxTurns: num(env.AGENT_MAX_TURNS, 24),
     maxBudgetUsd: num(env.AGENT_MAX_BUDGET_USD, 1),
     contextTokens: num(env.AGENT_CONTEXT_TOKENS, 65536),
+    maxRetries: num(env.AGENT_MAX_RETRIES, 8),
     home,
     fakeModel: env.AGENT_FAKE_MODEL === "1" || env.AGENT_FAKE_MODEL === "true",
   };

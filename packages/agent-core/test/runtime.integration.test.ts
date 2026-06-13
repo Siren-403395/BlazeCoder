@@ -8,7 +8,7 @@ import {
   InMemoryWorkspace,
   silentLogger,
 } from "../src/index";
-import type { AgentRuntimeOptions } from "../src/index";
+import type { AgentRuntimeOptions, ModelGateway } from "../src/index";
 import {
   call,
   reply,
@@ -116,6 +116,36 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     const reloaded = await rt.getSession(session.id);
     const stored = reloaded?.messages.find((m) => m.role === "assistant");
     expect(stored?.role === "assistant" && stored.reasoning).toBe(REASONING);
+  });
+
+  it("forwards gateway retry attempts to the UI as api_retry events", async () => {
+    const gateway: ModelGateway = {
+      model: "m",
+      async complete() {
+        return reply("done", []);
+      },
+      async stream(_req, _sig, handlers) {
+        handlers.onRetry?.({ attempt: 1, maxRetries: 8, delayMs: 5, status: 503 });
+        handlers.onRetry?.({ attempt: 2, maxRetries: 8, delayMs: 10, status: 503 });
+        handlers.onText("done");
+        return reply("done", []);
+      },
+    };
+    const clock = new FixedClock(1);
+    const rt = createAgentRuntime({
+      gateway,
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+    });
+    const { emit, events } = sink();
+    const { result } = await rt.run({ prompt: "x" }, emit, signal());
+    expect(result.subtype).toBe("success");
+    const retries = events.filter((e) => e.type === "api_retry");
+    expect(retries).toHaveLength(2);
+    expect(retries[0]).toMatchObject({ attempt: 1, status: 503 });
   });
 
   it("resumes an existing session", async () => {

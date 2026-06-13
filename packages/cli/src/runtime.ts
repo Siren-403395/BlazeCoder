@@ -40,7 +40,7 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
   const gateway =
     config.fakeModel || !config.apiKey
       ? new StubGateway()
-      : new DeepSeekGateway({ apiKey: config.apiKey, model: config.model, baseUrl: config.baseUrl });
+      : new DeepSeekGateway({ apiKey: config.apiKey, model: config.model, baseUrl: config.baseUrl, maxRetries: config.maxRetries });
 
   // Sessions + agent memory are PER-PROJECT: rooted in this workspace's own
   // state dir, never the shared home. (The .env / API key stays global.)

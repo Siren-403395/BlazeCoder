@@ -67,6 +67,8 @@ export interface ModelStreamHandlers {
   /** Incremental reasoning trace (thinking mode); separate channel from onText. */
   onReasoning(textChunk: string): void;
   onToolCall(call: ToolCall): void;
+  /** A transient failure is being retried with backoff (so the UI can show it). */
+  onRetry?(info: { attempt: number; maxRetries: number; delayMs: number; status?: number }): void;
 }
 
 export interface ModelGateway {

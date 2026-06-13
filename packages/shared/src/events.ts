@@ -70,6 +70,8 @@ export type AgentEvent =
   | { type: "budget"; totalTokens: number; usedTokens: number; remainingTokens: number }
   /** A compaction occurred between two turns. */
   | { type: "compact_boundary"; reason: string; tokensBefore: number; tokensAfter: number; clearedToolUseIds?: string[] }
+  /** The model gateway is retrying a transient failure (backoff in progress). */
+  | { type: "api_retry"; attempt: number; maxRetries: number; delayMs: number; status?: number }
   /** The loop is blocked awaiting a human allow/deny decision. */
   | {
       type: "permission_request";

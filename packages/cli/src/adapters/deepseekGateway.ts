@@ -13,6 +13,7 @@ import type {
   ModelStreamHandlers,
   TranscriptMessage,
 } from "@coding-agent/core";
+import { HttpError, NonRetryableError, parseRetryAfter, withRetry } from "./withRetry";
 
 interface OpenAiMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -43,7 +44,13 @@ export interface DeepSeekGatewayOptions {
   /** USD per 1M tokens; defaults are approximate DeepSeek list prices. */
   pricePerMInput?: number;
   pricePerMOutput?: number;
+  /** Max transient-failure retries per model call (default 8). */
+  maxRetries?: number;
+  /** Abort a stream that stalls for this long with no data (default 90s). */
+  idleTimeoutMs?: number;
 }
+
+const DEFAULT_IDLE_TIMEOUT_MS = 90_000;
 
 export class DeepSeekGateway implements ModelGateway {
   readonly model: string;
@@ -51,6 +58,8 @@ export class DeepSeekGateway implements ModelGateway {
   private readonly apiKey: string;
   private readonly priceIn: number;
   private readonly priceOut: number;
+  private readonly maxRetries: number;
+  private readonly idleTimeoutMs: number;
 
   constructor(opts: DeepSeekGatewayOptions) {
     this.model = opts.model;
@@ -58,6 +67,8 @@ export class DeepSeekGateway implements ModelGateway {
     this.endpoint = `${(opts.baseUrl ?? "https://api.deepseek.com").replace(/\/$/, "")}/chat/completions`;
     this.priceIn = opts.pricePerMInput ?? 0.27;
     this.priceOut = opts.pricePerMOutput ?? 1.1;
+    this.maxRetries = opts.maxRetries ?? 8;
+    this.idleTimeoutMs = opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   }
 
   private buildBody(request: ModelRequest, stream: boolean): Record<string, unknown> {
@@ -73,7 +84,8 @@ export class DeepSeekGateway implements ModelGateway {
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      throw new Error(`DeepSeek HTTP ${res.status}: ${detail.slice(0, 500)}`);
+      // Typed so withRetry can decide: 429/5xx retry, 4xx (auth/validation) do not.
+      throw new HttpError(res.status, `DeepSeek HTTP ${res.status}: ${detail.slice(0, 500)}`, parseRetryAfter(res.headers.get("retry-after")));
     }
     return res;
   }
@@ -83,33 +95,68 @@ export class DeepSeekGateway implements ModelGateway {
   }
 
   async complete(request: ModelRequest, signal: AbortSignal): Promise<ModelResponse> {
-    const res = await this.post(this.buildBody(request, false), signal);
-    const data = (await res.json()) as {
-      choices?: { message?: OpenAiMessage; finish_reason?: string }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-    const choice = data.choices?.[0];
-    const message = choice?.message;
-    const usage = {
-      inputTokens: data.usage?.prompt_tokens ?? 0,
-      outputTokens: data.usage?.completion_tokens ?? 0,
-    };
-    return {
-      text: typeof message?.content === "string" ? message.content : "",
-      reasoning: typeof message?.reasoning_content === "string" ? message.reasoning_content : undefined,
-      toolCalls: parseToolCalls(message?.tool_calls),
-      stopReason: mapStopReason(choice?.finish_reason),
-      usage,
-      costUsd: this.cost(usage),
-    };
+    const body = this.buildBody(request, false);
+    return withRetry(
+      async () => {
+        const res = await this.post(body, signal);
+        const data = (await res.json()) as {
+          choices?: { message?: OpenAiMessage; finish_reason?: string }[];
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        };
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+        const usage = {
+          inputTokens: data.usage?.prompt_tokens ?? 0,
+          outputTokens: data.usage?.completion_tokens ?? 0,
+        };
+        return {
+          text: typeof message?.content === "string" ? message.content : "",
+          reasoning: typeof message?.reasoning_content === "string" ? message.reasoning_content : undefined,
+          toolCalls: parseToolCalls(message?.tool_calls),
+          stopReason: mapStopReason(choice?.finish_reason),
+          usage,
+          costUsd: this.cost(usage),
+        };
+      },
+      { maxRetries: this.maxRetries, signal },
+    );
   }
 
-  async stream(
-    request: ModelRequest,
+  async stream(request: ModelRequest, signal: AbortSignal, handlers: ModelStreamHandlers): Promise<ModelResponse> {
+    const body = this.buildBody(request, true);
+    // Retry the connection/HTTP-status phase. If the stream already emitted output
+    // before failing, mark it NonRetryable so a retry can't re-emit duplicate text.
+    return withRetry(
+      async () => {
+        let emitted = false;
+        const guarded: ModelStreamHandlers = {
+          onText: (c) => {
+            emitted = true;
+            handlers.onText(c);
+          },
+          onReasoning: (c) => {
+            emitted = true;
+            handlers.onReasoning(c);
+          },
+          onToolCall: handlers.onToolCall,
+        };
+        try {
+          return await this.readStream(body, signal, guarded);
+        } catch (err) {
+          if (emitted) throw new NonRetryableError(err);
+          throw err;
+        }
+      },
+      { maxRetries: this.maxRetries, signal, onRetry: handlers.onRetry },
+    );
+  }
+
+  private async readStream(
+    body: Record<string, unknown>,
     signal: AbortSignal,
     handlers: ModelStreamHandlers,
   ): Promise<ModelResponse> {
-    const res = await this.post(this.buildBody(request, true), signal);
+    const res = await this.post(body, signal);
     if (!res.body) throw new Error("DeepSeek streaming response had no body.");
 
     const reader = res.body.getReader();
@@ -124,9 +171,23 @@ export class DeepSeekGateway implements ModelGateway {
     // exactly once with complete args after the stream ends.
     const acc = new Map<number, { id: string; name: string; args: string }>();
 
+    // Abort a stream that stalls with no data for idleTimeoutMs — surfaced as a
+    // retryable network error (the connection wedged, not the model thinking).
+    const readWithIdle = (): Promise<{ done: boolean; value?: Uint8Array }> => {
+      let timer: ReturnType<typeof setTimeout>;
+      const idle = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          const e = new Error(`DeepSeek stream idle for ${this.idleTimeoutMs}ms`) as Error & { code?: string };
+          e.code = "ETIMEDOUT";
+          reject(e);
+        }, this.idleTimeoutMs);
+      });
+      return Promise.race([reader.read(), idle]).finally(() => clearTimeout(timer));
+    };
+
     try {
       for (;;) {
-        const { done, value } = await reader.read();
+        const { done, value } = await readWithIdle();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let nl: number;
