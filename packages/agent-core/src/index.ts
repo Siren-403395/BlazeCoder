@@ -73,6 +73,7 @@ export * from "./session/store";
 export * from "./workspace";
 export * from "./util";
 export * from "./prompts";
+export * from "./outputStyles";
 export * from "./loop/agentLoop";
 export * from "./loop/transitions";
 export * from "./orchestration/agentRegistry";
@@ -108,6 +109,8 @@ export interface AgentRuntimeOptions {
   extraPreToolUseHooks?: PreToolUseHook[];
   extraPostToolUseHooks?: PostToolUseHook[];
   system?: string;
+  /** Extra durable instructions appended as a final system-prompt section (e.g. an output style). */
+  extraInstructions?: string;
   userRules?: string;
   permissionMode?: PermissionMode;
   allow?: string[];
@@ -260,6 +263,7 @@ export class AgentRuntime {
 
     this.loopConfig = {
       promptOverride: opts.system,
+      extraInstructions: opts.extraInstructions,
       userRules: opts.userRules,
       maxTurns: opts.maxTurns ?? 24,
       maxBudgetUsd: opts.maxBudgetUsd ?? 1,

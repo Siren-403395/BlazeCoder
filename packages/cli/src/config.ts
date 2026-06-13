@@ -24,6 +24,8 @@ export interface CliConfig {
   fakeModel: boolean;
   /** Enable the WebSearch/WebFetch tools (off by default). */
   webEnabled: boolean;
+  /** Active output-style name (resolved against loaded output-styles), if any. */
+  outputStyle?: string;
 }
 
 /** Parse a .env file's KEY=VALUE lines into a record (no interpolation). */
@@ -86,5 +88,6 @@ export function loadConfig(cwd: string = process.cwd()): CliConfig {
     home,
     fakeModel: env.AGENT_FAKE_MODEL === "1" || env.AGENT_FAKE_MODEL === "true",
     webEnabled: env.AGENT_WEB === "1" || env.AGENT_WEB === "true",
+    outputStyle: env.AGENT_OUTPUT_STYLE || undefined,
   };
 }
