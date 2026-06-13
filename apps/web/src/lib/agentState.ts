@@ -12,6 +12,8 @@ import type {
   AgentEvent,
   FileLanguage,
   ResultSubtype,
+  SessionState,
+  SessionStatus,
   TokenUsage,
 } from "@coding-agent/shared";
 
@@ -38,6 +40,8 @@ export interface TraceEntry {
   status?: ActivityStatus;
   durationMs?: number;
   isError?: boolean;
+  /** assistant entries: true while prose is still streaming in. */
+  streaming?: boolean;
   /** notice entries */
   level?: "info" | "warn" | "error";
 }
@@ -79,8 +83,12 @@ export interface AgentUiState {
   turns: number;
 }
 
-/** Local actions are AgentEvents plus the user's own prompt submissions. */
-export type UiAction = AgentEvent | { type: "user_prompt"; text: string };
+/** Local actions: AgentEvents plus the user's prompt and session load/reset. */
+export type UiAction =
+  | AgentEvent
+  | { type: "user_prompt"; text: string }
+  | { type: "hydrate"; session: SessionState }
+  | { type: "reset" };
 
 export const initialState: AgentUiState = {
   status: "idle",
@@ -95,8 +103,23 @@ function append(state: AgentUiState, entry: Omit<TraceEntry, "id"> & { id?: stri
   return { ...state, trace: [...state.trace, { id: id ?? `e${state.trace.length}`, ...rest }] };
 }
 
+/** Index of the assistant entry currently streaming, or -1. */
+function findLastStreamingAssistant(trace: TraceEntry[]): number {
+  for (let i = trace.length - 1; i >= 0; i--) {
+    const t = trace[i]!;
+    if (t.kind === "assistant" && t.streaming) return i;
+  }
+  return -1;
+}
+
 export function applyEvent(state: AgentUiState, action: UiAction): AgentUiState {
   switch (action.type) {
+    case "reset":
+      return initialState;
+
+    case "hydrate":
+      return hydrateFromSession(action.session);
+
     case "user_prompt": {
       const text = action.text.trim();
       if (!text) return state;
@@ -116,21 +139,54 @@ export function applyEvent(state: AgentUiState, action: UiAction): AgentUiState 
         maxTurns: action.maxTurns,
       };
 
-    case "assistant": {
-      let next = state;
-      const text = action.text.trim();
-      if (text) next = append(next, { kind: "assistant", text });
-      for (const call of action.toolCalls) {
-        next = append(next, {
-          id: call.id,
-          kind: "tool",
-          toolName: call.name,
-          input: call.input,
-          status: "running",
-          text: "",
-        });
+    case "assistant_delta": {
+      const idx = findLastStreamingAssistant(state.trace);
+      if (idx >= 0) {
+        const trace = state.trace.slice();
+        const prev = trace[idx]!;
+        trace[idx] = { ...prev, text: prev.text + action.text };
+        return { ...state, status: "running", trace };
       }
-      return { ...next, turns: state.turns + 1, pendingPermission: undefined };
+      return append({ ...state, status: "running" }, { kind: "assistant", text: action.text, streaming: true });
+    }
+
+    case "tool_call": {
+      if (state.trace.some((t) => t.kind === "tool" && t.id === action.id)) return state;
+      return append(state, {
+        id: action.id,
+        kind: "tool",
+        toolName: action.name,
+        input: action.input,
+        status: "running",
+        text: "",
+      });
+    }
+
+    case "assistant": {
+      // Reconcile: finalize a streaming entry if present, else create one
+      // (non-streaming path); ensure a row exists per tool call (dedup by id).
+      const text = action.text.trim();
+      let trace = state.trace;
+      const liveIdx = findLastStreamingAssistant(trace);
+      if (liveIdx >= 0) {
+        trace = trace.slice();
+        const prev = trace[liveIdx]!;
+        trace[liveIdx] = { ...prev, text: text || prev.text, streaming: false };
+      } else if (text) {
+        trace = [...trace, { id: `e${trace.length}`, kind: "assistant", text }];
+      }
+      for (const call of action.toolCalls) {
+        if (!trace.some((t) => t.kind === "tool" && t.id === call.id)) {
+          trace = [
+            ...trace,
+            { id: call.id, kind: "tool", toolName: call.name, input: call.input, status: "running", text: "" },
+          ];
+        }
+      }
+      // Count tool-use turns only, matching the server's cap semantics (a final
+      // no-tool answer is not a turn).
+      const turns = state.turns + (action.toolCalls.length > 0 ? 1 : 0);
+      return { ...state, trace, turns, pendingPermission: undefined };
     }
 
     case "tool_result": {
@@ -258,5 +314,78 @@ export function runStats(state: AgentUiState): RunStats {
     budget: state.budget,
     compactions: state.compactions,
     fileCount: Object.keys(state.files).length,
+  };
+}
+
+function uiStatusFromSession(status: SessionStatus): UiStatus {
+  // A loaded session is never mid-run; collapse running/awaiting back to idle.
+  return status === "done" || status === "error" ? status : "idle";
+}
+
+/**
+ * Rebuild full UI state from a persisted session: files from the project
+ * snapshot, and the conversation by replaying the transcript (pairing each tool
+ * result back to its call). Pure, so it is unit-testable.
+ */
+export function hydrateFromSession(session: SessionState): AgentUiState {
+  const files: Record<string, UiFile> = {};
+  for (const f of session.project.files) {
+    files[f.path] = { path: f.path, language: f.language, content: f.content };
+  }
+
+  const trace: TraceEntry[] = [];
+  let counter = 0;
+  const nextId = () => `h${counter++}`;
+  let compactions = 0;
+
+  for (const message of session.messages) {
+    switch (message.role) {
+      case "user":
+        trace.push({ id: nextId(), kind: "user", text: message.content });
+        break;
+      case "assistant":
+        if (message.content.trim()) trace.push({ id: nextId(), kind: "assistant", text: message.content });
+        for (const call of message.toolCalls) {
+          trace.push({ id: call.id, kind: "tool", toolName: call.name, input: call.input, status: "ok", text: "" });
+        }
+        break;
+      case "tool":
+        for (const result of message.results) {
+          const status: ActivityStatus = result.isError ? "error" : "ok";
+          const existing = trace.find((e) => e.kind === "tool" && e.id === result.toolUseId);
+          if (existing) {
+            existing.text = result.content;
+            existing.isError = result.isError;
+            existing.status = status;
+          } else {
+            trace.push({
+              id: result.toolUseId,
+              kind: "tool",
+              toolName: result.toolName,
+              text: result.content,
+              isError: result.isError,
+              status,
+            });
+          }
+        }
+        break;
+      case "summary":
+        compactions += 1;
+        trace.push({ id: nextId(), kind: "compact", text: "Context compacted" });
+        break;
+    }
+  }
+
+  return {
+    status: uiStatusFromSession(session.status),
+    sessionId: session.id,
+    model: session.model,
+    files,
+    trace,
+    compactions,
+    turns: session.turns,
+    numTurns: session.turns,
+    totalCostUsd: session.costUsd,
+    usage: session.usage,
   };
 }

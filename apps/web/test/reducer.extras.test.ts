@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyEvent, initialState, runStats, type UiAction } from "@/lib/agentState";
+import type { SessionState } from "@coding-agent/shared";
+import { applyEvent, fileList, initialState, runStats, type UiAction } from "@/lib/agentState";
 
 function run(actions: UiAction[]) {
   return actions.reduce(applyEvent, initialState);
@@ -33,6 +34,21 @@ describe("applyEvent — extended behavior", () => {
     expect(s.trace.filter((t) => t.kind === "tool")).toHaveLength(1); // updated, not duplicated
   });
 
+  it("assembles a streamed turn without duplicating the message or tool row", () => {
+    const s = run([
+      { type: "assistant_delta", text: "Build" },
+      { type: "assistant_delta", text: "ing it." },
+      { type: "tool_call", id: "c1", name: "write_file", input: { path: "/a.tsx" } },
+      { type: "assistant", text: "Building it.", toolCalls: [{ id: "c1", name: "write_file", input: { path: "/a.tsx" } }] },
+    ]);
+    const assistant = s.trace.filter((t) => t.kind === "assistant");
+    expect(assistant).toHaveLength(1);
+    expect(assistant[0]?.text).toBe("Building it.");
+    expect(assistant[0]?.streaming).toBe(false);
+    const tools = s.trace.filter((t) => t.kind === "tool");
+    expect(tools.map((t) => t.id)).toEqual(["c1"]);
+  });
+
   it("marks a failed tool as error", () => {
     const s = run([
       { type: "assistant", text: "", toolCalls: [{ id: "c", name: "run_command", input: { command: "x" } }] },
@@ -49,18 +65,62 @@ describe("applyEvent — extended behavior", () => {
     expect(s.files["/a.ts"]).toMatchObject({ content: "v2", prevContent: "v1", lastOp: "edit" });
   });
 
-  it("counts model turns live as assistant events arrive", () => {
+  it("counts tool-use turns only (a final no-tool answer is not a turn)", () => {
     const s = run([
-      { type: "assistant", text: "first turn", toolCalls: [] },
-      { type: "assistant", text: "", toolCalls: [{ id: "c", name: "write_file", input: { path: "/a.ts" } }] },
+      { type: "assistant", text: "step one", toolCalls: [{ id: "c", name: "write_file", input: { path: "/a.ts" } }] },
+      { type: "assistant", text: "all done", toolCalls: [] },
     ]);
-    expect(runStats(s).numTurns).toBe(2);
+    expect(runStats(s).numTurns).toBe(1);
   });
 
   it("counts compactions and logs a boundary", () => {
     const s = run([{ type: "compact_boundary", reason: "limit", tokensBefore: 10, tokensAfter: 5 }]);
     expect(s.compactions).toBe(1);
     expect(s.trace.at(-1)?.kind).toBe("compact");
+  });
+
+  it("rehydrates UI state from a persisted session, and reset clears it", () => {
+    const session: SessionState = {
+      id: "sess-9",
+      createdAt: 1,
+      updatedAt: 2,
+      model: "deepseek-chat",
+      title: "Build 2048",
+      messages: [
+        { role: "user", content: "build 2048" },
+        {
+          role: "assistant",
+          content: "Done.",
+          toolCalls: [{ id: "w1", name: "write_file", input: { path: "/src/App.tsx" } }],
+        },
+        {
+          role: "tool",
+          results: [{ toolUseId: "w1", toolName: "write_file", content: "Wrote /src/App.tsx", isError: false }],
+        },
+      ],
+      project: {
+        projectName: "p",
+        summary: "",
+        features: [],
+        runInstructions: "",
+        files: [{ path: "/src/App.tsx", language: "tsx", content: "x" }],
+      },
+      turns: 1,
+      costUsd: 0.02,
+      usage: { inputTokens: 10, outputTokens: 5 },
+      status: "done",
+    };
+
+    const s = applyEvent(initialState, { type: "hydrate", session });
+    expect(s.sessionId).toBe("sess-9");
+    expect(s.status).toBe("done");
+    expect(fileList(s).map((f) => f.path)).toEqual(["/src/App.tsx"]);
+    const tool = s.trace.find((t) => t.id === "w1");
+    expect(tool?.status).toBe("ok");
+    expect(tool?.text).toBe("Wrote /src/App.tsx");
+    expect(s.trace.some((t) => t.kind === "user" && t.text === "build 2048")).toBe(true);
+
+    expect(applyEvent(s, { type: "reset" })).toEqual(initialState);
   });
 
   it("summarizes run stats", () => {

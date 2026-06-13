@@ -3,6 +3,7 @@ import { Badge, Button, IconButton, StatusDot } from "@/ui";
 import type { Tone } from "@/ui";
 import type { UiStatus } from "@/lib/agentState";
 import type { ResolvedTheme } from "@/hooks/useTheme";
+import { SessionMenu } from "@/features/sessions/SessionMenu";
 
 const PHASE: Record<UiStatus, { tone: Tone; label: string; pulse?: boolean }> = {
   idle: { tone: "neutral", label: "Ready" },
@@ -20,6 +21,8 @@ export function Header({
   onToggleTheme,
   onExport,
   canExport,
+  onSelectSession,
+  onNewSession,
 }: {
   phase: UiStatus;
   model?: string;
@@ -28,6 +31,8 @@ export function Header({
   onToggleTheme: () => void;
   onExport: () => void;
   canExport: boolean;
+  onSelectSession: (id: string) => void;
+  onNewSession: () => void;
 }) {
   const p = PHASE[phase];
   return (
@@ -37,8 +42,10 @@ export function Header({
           <Sparkle size={14} weight="fill" />
         </span>
         <span className="text-sm font-semibold tracking-tight text-text">Coding Agent</span>
+        <span className="hidden h-4 w-px bg-border sm:block" />
+        <SessionMenu currentId={sessionId} onSelect={onSelectSession} onNew={onNewSession} />
         {model && (
-          <Badge tone="neutral" mono className="hidden sm:inline-flex">
+          <Badge tone="neutral" mono className="hidden md:inline-flex">
             {model}
           </Badge>
         )}

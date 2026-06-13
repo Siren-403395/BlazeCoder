@@ -14,7 +14,7 @@ import {
   type UiStatus,
 } from "@/lib/agentState";
 import { runAgent } from "@/lib/eventStream";
-import { postPermission } from "@/lib/api";
+import { getSession, postPermission } from "@/lib/api";
 
 export interface AgentRun {
   state: AgentUiState;
@@ -25,6 +25,10 @@ export interface AgentRun {
   run: (prompt: string) => Promise<void>;
   stop: () => void;
   decide: (behavior: "allow" | "deny") => Promise<void>;
+  /** Load a persisted session and rehydrate the UI to resume it. */
+  loadSession: (id: string) => Promise<void>;
+  /** Clear the workspace and start a fresh session. */
+  newSession: () => void;
 }
 
 export function useAgentRun(): AgentRun {
@@ -73,6 +77,33 @@ export function useAgentRun(): AgentRun {
     await postPermission({ requestId: pending.requestId, behavior });
   }, []);
 
+  // Switching sessions abandons any in-flight run so its late SSE events cannot
+  // land on the freshly loaded/cleared state.
+  const abandonRun = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setBusy(false);
+  };
+
+  const loadSession = useCallback(async (id: string) => {
+    abandonRun();
+    try {
+      const session = await getSession(id);
+      dispatch({ type: "hydrate", session });
+    } catch (err) {
+      dispatch({
+        type: "notice",
+        level: "error",
+        message: `Could not load session: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }, []);
+
+  const newSession = useCallback(() => {
+    abandonRun();
+    dispatch({ type: "reset" });
+  }, []);
+
   const phase: UiStatus = busy
     ? state.status === "awaiting_permission"
       ? "awaiting_permission"
@@ -81,5 +112,5 @@ export function useAgentRun(): AgentRun {
       ? "idle" // stopped without a terminal event
       : state.status;
 
-  return { state, busy, phase, run, stop, decide };
+  return { state, busy, phase, run, stop, decide, loadSession, newSession };
 }

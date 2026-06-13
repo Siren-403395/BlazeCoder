@@ -18,10 +18,14 @@ const STATUS_LABEL: Record<UiStatus, string> = {
 };
 
 export function App() {
-  const { state, busy, phase, run, stop, decide } = useAgentRun();
+  const { state, busy, phase, run, stop, decide, loadSession, newSession } = useAgentRun();
   const { resolved, toggle } = useTheme();
   const [tab, setTab] = useState<WorkTab>("preview");
   const [selected, setSelected] = useState<string | undefined>(undefined);
+  // Capture any ?session= deep-link at first render, before the URL-sync effect runs.
+  const [initialSession] = useState(() =>
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("session"),
+  );
 
   const files = useMemo(() => fileList(state), [state.files]);
   const segments = useMemo(() => buildConversation(state.trace), [state.trace]);
@@ -47,6 +51,25 @@ export function App() {
     if (state.previewHtml) setTab("preview");
   }, [state.previewHtml]);
 
+  // Resume a deep-linked session on load; show its files first.
+  useEffect(() => {
+    if (initialSession) {
+      loadSession(initialSession)
+        .then(() => setTab("files"))
+        .catch(() => {});
+    }
+  }, [initialSession, loadSession]);
+
+  // Reflect the active session in the URL once it exists. We never strip the
+  // param here, so a ?session= deep-link survives until hydrate resolves; it is
+  // cleared only on an explicit New session.
+  useEffect(() => {
+    if (typeof window === "undefined" || !state.sessionId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("session", state.sessionId);
+    window.history.replaceState(null, "", url);
+  }, [state.sessionId]);
+
   const liveMessage = state.pendingPermission
     ? `Permission needed for ${state.pendingPermission.toolName}`
     : STATUS_LABEL[phase];
@@ -68,6 +91,21 @@ export function App() {
         onToggleTheme={toggle}
         onExport={() => void exportProjectZip(state.sessionId ?? "project", files)}
         canExport={files.length > 0}
+        onSelectSession={(id) => {
+          loadSession(id)
+            .then(() => setTab("files"))
+            .catch(() => {});
+        }}
+        onNewSession={() => {
+          newSession();
+          setSelected(undefined);
+          setTab("preview");
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("session");
+            window.history.replaceState(null, "", url);
+          }
+        }}
       />
       <Workspace
         segments={segments}
