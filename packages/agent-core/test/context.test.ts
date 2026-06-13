@@ -7,9 +7,12 @@ import {
   estimateRequestTokens,
   estimateTokens,
   FixedClock,
+  InMemoryWorkspace,
+  ReadLedger,
   silentLogger,
 } from "../src/index";
 import type { SessionState, TranscriptMessage } from "../src/index";
+import type { AgentEvent } from "@coding-agent/shared";
 import { reply, ScriptedGateway } from "./fakes";
 
 function session(messages: TranscriptMessage[]): SessionState {
@@ -135,6 +138,56 @@ describe("ContextManager compaction", () => {
     await expect(cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, () => {}, signal)).rejects.toBeInstanceOf(
       CompactionThrashError,
     );
+  });
+
+  it("clears only whitelisted (Read/Bash/Grep/Glob) old results, keeps Edit/Write + the most recent", async () => {
+    const cm = new ContextManager(
+      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.2, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      new FixedClock(),
+      silentLogger,
+    );
+    const s = session([
+      { role: "user", content: "hi" },
+      { role: "tool", results: [{ toolUseId: "r1", toolName: "Read", content: "A".repeat(400), isError: false }] },
+      { role: "tool", results: [{ toolUseId: "e1", toolName: "Edit", content: "Edited /a.ts (1 replacement).", isError: false }] },
+      { role: "tool", results: [{ toolUseId: "r2", toolName: "Read", content: "B".repeat(40), isError: false }] },
+    ]);
+    const events: AgentEvent[] = [];
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+
+    const tool = (i: number) => s.messages[i] as Extract<TranscriptMessage, { role: "tool" }>;
+    expect(tool(1).results[0]!.content).toMatch(/Read result cleared/); // old Read cleared
+    expect(tool(2).results[0]!.content).toBe("Edited /a.ts (1 replacement)."); // Edit kept verbatim
+    expect(tool(3).results[0]!.content).toBe("B".repeat(40)); // most-recent kept verbatim
+    const boundary = events.find((e): e is Extract<AgentEvent, { type: "compact_boundary" }> => e.type === "compact_boundary");
+    expect(boundary?.clearedToolUseIds).toEqual(["r1"]);
+  });
+
+  it("after summarization inserts a restored-files message and clears the ledger", async () => {
+    const ws = new InMemoryWorkspace();
+    await ws.write({ path: "/main.ts", language: "ts", content: "export const x = 1;\n".repeat(8) });
+    const led = new ReadLedger();
+    led.record("/main.ts", (await ws.stat("/main.ts"))!);
+    const gw = new ScriptedGateway("m", [reply("SUMMARY")]);
+    const cm = new ContextManager(
+      { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.1, bufferTokens: 55, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      new FixedClock(),
+      silentLogger,
+      gw,
+    );
+    const s = session([
+      { role: "user", content: "X".repeat(40) },
+      { role: "tool", results: [{ toolUseId: "t1", toolName: "Read", content: "R".repeat(200), isError: false }] },
+      { role: "tool", results: [{ toolUseId: "t2", toolName: "Read", content: "S".repeat(40), isError: false }] },
+      { role: "user", content: "Z".repeat(40) },
+    ]);
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [], ledger: led, workspace: ws }, () => {}, signal);
+
+    expect(s.messages[0]!.role).toBe("summary");
+    expect(s.messages[1]!.role).toBe("user");
+    expect((s.messages[1] as { content: string }).content).toContain("Restored file context after compaction");
+    expect((s.messages[1] as { content: string }).content).toContain("/main.ts");
+    expect(led.recentlyReadPaths()).toEqual([]); // ledger cleared post-rehydration
   });
 
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {

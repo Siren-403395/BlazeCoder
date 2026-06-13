@@ -6,9 +6,11 @@
  *      CompactionThrashError instead of looping forever.
  */
 
-import type { Clock, EventSink, Logger, ModelGateway, SessionState, ToolSchema } from "../ports";
+import type { Clock, EventSink, Logger, ModelGateway, SessionState, ToolSchema, Workspace } from "../ports";
+import type { ReadLedger } from "../workspace/ledger";
+import { TOOL_NAMES } from "../tools/toolNames";
 import { assembleRequest, estimateRequestTokens } from "./sessionContext";
-import { buildSummaryRequest } from "./rehydration";
+import { buildPostCompactFileMessage, buildSummaryRequest } from "./rehydration";
 
 export interface CompactionConfig {
   contextTokens: number;
@@ -46,7 +48,15 @@ export class CompactionThrashError extends Error {
   }
 }
 
-const CLEARED_MARKER = "[tool result cleared to save context]";
+/**
+ * Tool results safe to clear: bulky, regenerable read/search/shell output. Edit/Write
+ * confirmations are NOT cleared — they're cheap and a useful record of what changed.
+ */
+const COMPACTABLE = new Set<string>([TOOL_NAMES.read, TOOL_NAMES.bash, TOOL_NAMES.grep, TOOL_NAMES.glob]);
+
+function isClearedMarker(content: string): boolean {
+  return /result cleared to save context\]\s*$/.test(content);
+}
 
 export class ContextManager {
   private thrash = 0;
@@ -88,6 +98,9 @@ export class ContextManager {
       maxOutputTokens?: number;
       /** The server's authoritative input-token count from the previous turn, if any. */
       realInputTokens?: number;
+      /** Read-ledger + workspace enable post-summarization fresh-file rehydration. */
+      ledger?: ReadLedger;
+      workspace?: Workspace;
     },
     emit: EventSink,
     signal: AbortSignal,
@@ -113,11 +126,17 @@ export class ContextManager {
 
     // Stage 1 — clear old tool results (deterministic, no LLM). The transcript is now
     // mutated so the real count is stale; fall back to the estimate.
-    const cleared = this.clearOldToolResults(session);
+    const clearedIds = this.clearOldToolResults(session);
     let after = this.estimate(session, params);
     if (after < compactAt) {
-      if (cleared > 0) {
-        emit({ type: "compact_boundary", reason: `cleared ${cleared} old tool result(s)`, tokensBefore: current, tokensAfter: after });
+      if (clearedIds.length > 0) {
+        emit({
+          type: "compact_boundary",
+          reason: `cleared ${clearedIds.length} old tool result(s)`,
+          tokensBefore: current,
+          tokensAfter: after,
+          clearedToolUseIds: clearedIds,
+        });
       }
       this.thrash = 0;
       return;
@@ -130,8 +149,15 @@ export class ContextManager {
     }
     const before = after;
     await this.summarize(session, signal);
+    await this.rehydrateFiles(session, params.ledger, params.workspace);
     after = this.estimate(session, params);
-    emit({ type: "compact_boundary", reason: "summarized conversation history", tokensBefore: before, tokensAfter: after });
+    emit({
+      type: "compact_boundary",
+      reason: "summarized conversation history",
+      tokensBefore: before,
+      tokensAfter: after,
+      clearedToolUseIds: clearedIds.length ? clearedIds : undefined,
+    });
 
     // Stage 3 — circuit breaker.
     if (before - after < 0.05 * this.config.contextTokens) {
@@ -146,20 +172,38 @@ export class ContextManager {
     }
   }
 
-  private clearOldToolResults(session: SessionState): number {
+  /**
+   * After summarizing, the model retains only prose mentions of the files it was
+   * editing. Re-read the recently-read files FRESH and inject them right after the
+   * summary, then clear the ledger so the next Edit must re-read (defends against
+   * a file changing between rehydration and the edit).
+   */
+  private async rehydrateFiles(session: SessionState, ledger?: ReadLedger, workspace?: Workspace): Promise<void> {
+    if (!ledger || !workspace) return;
+    if (session.messages[0]?.role !== "summary") return; // summarize() didn't run
+    const tail = session.messages.slice(1);
+    const fileMsg = await buildPostCompactFileMessage(ledger, workspace, tail);
+    if (fileMsg) session.messages.splice(1, 0, fileMsg);
+    ledger.clear();
+  }
+
+  /** Clear old, regenerable tool results in place. Returns the toolUseIds cleared. */
+  private clearOldToolResults(session: SessionState): string[] {
     const toolMsgIndexes = session.messages
       .map((m, i) => (m.role === "tool" ? i : -1))
       .filter((i) => i >= 0);
-    const cutoff = toolMsgIndexes.slice(0, Math.max(0, toolMsgIndexes.length - this.config.keepRecentToolResults));
-    let cleared = 0;
+    // Always keep the most-recent tool message(s) verbatim — floor at 1.
+    const keepRecent = Math.max(1, this.config.keepRecentToolResults);
+    const cutoff = toolMsgIndexes.slice(0, Math.max(0, toolMsgIndexes.length - keepRecent));
+    const cleared: string[] = [];
     for (const idx of cutoff) {
       const msg = session.messages[idx];
       if (msg && msg.role === "tool") {
         for (const result of msg.results) {
-          if (result.content !== CLEARED_MARKER) {
-            result.content = CLEARED_MARKER;
-            cleared += 1;
-          }
+          if (!COMPACTABLE.has(result.toolName)) continue; // keep Edit/Write confirmations
+          if (isClearedMarker(result.content)) continue; // skip already-cleared
+          result.content = `[${result.toolName} result cleared to save context]`;
+          cleared.push(result.toolUseId);
         }
       }
     }

@@ -9,7 +9,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 - [x] P0-tools-1   shared TOOL_NAMES constant + fix prompt↔registry name-drift bug
 - [x] P0-prompts-2 sectioned composable system-prompt builder (string[]), port counterweight prose, keep identity   (deps: tools-1)
 - [x] P0-context-1 type-aware token estimation + authoritative real input_tokens
-- [ ] P0-context-2 whitelist tool-result clearing + post-compact fresh file rehydration   (deps: context-1)
+- [x] P0-context-2 whitelist tool-result clearing + post-compact fresh file rehydration   (deps: context-1)
 - [ ] P0-perm-1    permission rule grammar + per-tool matchers (Bash prefix/wildcard, file globs)
 - [ ] P0-perm-2    rewrite PermissionEngine: behavior-priority over layered rules + decisionReason   (deps: perm-1)
 - [ ] P0-perm-3    persisted layered settings store + PermissionUpdate pipeline via buildRuntime   (deps: perm-2)

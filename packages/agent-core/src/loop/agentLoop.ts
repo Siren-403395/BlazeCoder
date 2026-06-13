@@ -138,7 +138,15 @@ export async function runAgentLoop(
     try {
       await contextManager.maybeCompact(
         session,
-        { system, projectRules, tools: toolSchemas, maxOutputTokens, realInputTokens: session.lastRealInputTokens },
+        {
+          system,
+          projectRules,
+          tools: toolSchemas,
+          maxOutputTokens,
+          realInputTokens: session.lastRealInputTokens,
+          ledger,
+          workspace,
+        },
         emit,
         signal,
       );

@@ -8,7 +8,8 @@
  * automatically because project rules are re-assembled fresh every turn.
  */
 
-import type { ModelRequest, TranscriptMessage } from "../ports";
+import type { ModelRequest, TranscriptMessage, Workspace } from "../ports";
+import type { ReadLedger } from "../workspace/ledger";
 
 export const SUMMARY_INSTRUCTIONS = [
   "You are compacting a coding-agent conversation to fit the context window.",
@@ -47,5 +48,69 @@ export function buildSummaryRequest(messagesToSummarize: TranscriptMessage[]): M
     tools: [],
     maxOutputTokens: 1500,
     temperature: 0,
+  };
+}
+
+/** Plain text of a kept message, for the "already present in the tail" check. */
+function messageText(m: TranscriptMessage): string {
+  switch (m.role) {
+    case "user":
+    case "summary":
+      return m.content;
+    case "assistant":
+      return m.content;
+    case "tool":
+      return m.results.map((r) => r.content).join("\n");
+  }
+}
+
+export interface PostCompactFileOptions {
+  /** Max number of files to re-read. */
+  limit?: number;
+  /** Max chars kept per file (head-truncated beyond this). */
+  perFileChars?: number;
+  /** Max total chars across all restored files. */
+  totalChars?: number;
+}
+
+/**
+ * After summarizing, the model has only prose mentions of the files it was editing.
+ * Re-read the most-recently-read files FRESH from the workspace and inject them as a
+ * single synthetic user message right after the summary, so post-compaction turns
+ * start on validated, current content. Files whose content is already present in the
+ * kept tail are skipped (no point duplicating). Returns null if nothing to restore.
+ */
+export async function buildPostCompactFileMessage(
+  ledger: ReadLedger,
+  workspace: Workspace,
+  keptTail: TranscriptMessage[],
+  opts: PostCompactFileOptions = {},
+): Promise<TranscriptMessage | null> {
+  const limit = opts.limit ?? 5;
+  const perFileChars = opts.perFileChars ?? 20_000;
+  const totalChars = opts.totalChars ?? 200_000;
+  const tailText = keptTail.map(messageText).join("\n");
+
+  const blocks: string[] = [];
+  let totalUsed = 0;
+  // Oversample candidates since some will be skipped (binary, missing, already present).
+  for (const abs of ledger.recentlyReadPaths(limit * 4)) {
+    if (blocks.length >= limit) break;
+    const file = await workspace.read(abs);
+    if (!file || file.content.includes(String.fromCharCode(0))) continue;
+    let content = file.content;
+    if (content.length > perFileChars) content = `${content.slice(0, perFileChars)}\n…[truncated]`;
+    // Skip if a representative slice is still present verbatim in the kept tail.
+    const probe = content.slice(0, 200);
+    if (probe.length > 0 && tailText.includes(probe)) continue;
+    if (totalUsed + content.length > totalChars) break;
+    totalUsed += content.length;
+    blocks.push(`<file path="${abs}">\n${content}\n</file>`);
+  }
+
+  if (blocks.length === 0) return null;
+  return {
+    role: "user",
+    content: `[Restored file context after compaction — current on-disk content of the files in play]\n${blocks.join("\n")}`,
   };
 }

@@ -18,7 +18,20 @@ export class ReadLedger {
 
   /** Mark a file as read (or freshly written) with its current stamp. */
   record(absPath: string, stamp: FileStamp): void {
+    // Re-insert so Map iteration order tracks recency (most-recently-read last).
+    this.seen.delete(absPath);
     this.seen.set(absPath, stamp);
+  }
+
+  /** Paths read this run, most-recent first (for post-compaction file rehydration). */
+  recentlyReadPaths(limit?: number): string[] {
+    const all = [...this.seen.keys()].reverse();
+    return limit === undefined ? all : all.slice(0, Math.max(0, limit));
+  }
+
+  /** Drop all read stamps (e.g. after compaction, so the next Edit must re-read). */
+  clear(): void {
+    this.seen.clear();
   }
 
   has(absPath: string): boolean {

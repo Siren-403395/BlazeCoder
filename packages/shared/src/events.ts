@@ -69,7 +69,7 @@ export type AgentEvent =
   /** Context budget gauge update (after each turn / compaction). */
   | { type: "budget"; totalTokens: number; usedTokens: number; remainingTokens: number }
   /** A compaction occurred between two turns. */
-  | { type: "compact_boundary"; reason: string; tokensBefore: number; tokensAfter: number }
+  | { type: "compact_boundary"; reason: string; tokensBefore: number; tokensAfter: number; clearedToolUseIds?: string[] }
   /** The loop is blocked awaiting a human allow/deny decision. */
   | {
       type: "permission_request";
