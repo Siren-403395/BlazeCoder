@@ -110,18 +110,3 @@ describe("scrollback is bounded (truncation)", () => {
   });
 });
 
-describe("resume is scoped to the current project", () => {
-  it("listSessions returns only sessions whose cwd matches the workspace root", async () => {
-    const store = new InMemorySessionStore(new FixedClock(1000));
-    const here = await store.create({ id: "here", model: "m", title: "this project", cwd: "/" });
-    here.messages = [{ role: "user", content: "x" }];
-    await store.save(here);
-    const elsewhere = await store.create({ id: "elsewhere", model: "m", title: "another project", cwd: "/somewhere/else" });
-    elsewhere.messages = [{ role: "user", content: "y" }];
-    await store.save(elsewhere);
-
-    // makeRuntime uses InMemoryWorkspace, rooted at "/".
-    const sessions = await makeRuntime(store).listSessions();
-    expect(sessions.map((s) => s.id)).toEqual(["here"]);
-  });
-});

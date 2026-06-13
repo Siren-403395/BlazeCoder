@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { render } from "ink";
 import { App } from "./tui/App";
 import { loadConfig } from "./config";
+import { migrateLegacySessions } from "./projects";
 import { buildRuntime } from "./runtime";
 import { runHeadless, type OutputFormat } from "./headless";
 import { isEffort, type Effort } from "@coding-agent/core";
@@ -87,6 +88,7 @@ async function main(): Promise<void> {
   const effort: Effort = args.effort && isEffort(args.effort) ? args.effort : "high";
   const format: OutputFormat = args.format && ["text", "json", "stream-json"].includes(args.format) ? args.format : "text";
   const config = loadConfig(cwd);
+  await migrateLegacySessions(config.home); // relocate any pre-isolation global sessions
   const runtime = buildRuntime(config, cwd, { permissionMode: args.yolo ? "bypassPermissions" : undefined });
 
   // Resolve a session to resume, if requested.

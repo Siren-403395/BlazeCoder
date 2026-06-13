@@ -267,13 +267,12 @@ export class AgentRuntime {
   }
 
   /**
-   * Sessions for the CURRENT project only. Sessions are persisted globally (one
-   * store under ~/.zephyrcode), but resume is scoped to the workspace they ran
-   * in, so a fresh project never surfaces another project's history.
+   * Sessions for the current project. Isolation is STRUCTURAL: the CLI roots the
+   * session store in a per-project directory, so the store only ever contains
+   * this workspace's sessions. (See packages/cli/src/projects.ts.)
    */
-  async listSessions(): Promise<SessionSummary[]> {
-    const root = this.workspace.root;
-    return (await this.store.list()).filter((s) => s.cwd === root);
+  listSessions(): Promise<SessionSummary[]> {
+    return this.store.list();
   }
 
   /** Workspace files as paths relative to the root (for @-mention completion), gitignore-aware, secrets excluded. */
