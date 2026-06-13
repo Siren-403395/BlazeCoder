@@ -10,28 +10,26 @@ import type {
   AgentEvent,
   GeneratedProject,
   ProjectFile,
+  SessionState,
+  SessionSummary,
   StopReason,
   TokenUsage,
   ToolCall,
+  TranscriptMessage,
+} from "@coding-agent/shared";
+
+// The conversation transcript + session shapes are FE↔BE contracts; they live in
+// @coding-agent/shared and are re-exported here so the loop, store, and adapters
+// can keep importing them from the ports boundary.
+export type {
+  SessionState,
+  SessionStatus,
+  SessionSummary,
+  ToolResultRecord,
+  TranscriptMessage,
 } from "@coding-agent/shared";
 
 export type JSONSchema = Record<string, unknown>;
-
-// ─── Conversation transcript (normalized, provider-agnostic) ──────────────────
-
-export interface ToolResultRecord {
-  toolUseId: string;
-  toolName: string;
-  content: string;
-  isError: boolean;
-}
-
-export type TranscriptMessage =
-  | { role: "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls: ToolCall[] }
-  | { role: "tool"; results: ToolResultRecord[] }
-  /** Replaces collapsed history after compaction; rendered to the model as context. */
-  | { role: "summary"; content: string };
 
 // ─── Model gateway ────────────────────────────────────────────────────────────
 
@@ -57,9 +55,21 @@ export interface ModelResponse {
   costUsd: number;
 }
 
+/** Callbacks a streaming gateway invokes as the model produces output. */
+export interface ModelStreamHandlers {
+  onText(textChunk: string): void;
+  onToolCall(call: ToolCall): void;
+}
+
 export interface ModelGateway {
   readonly model: string;
   complete(request: ModelRequest, signal: AbortSignal): Promise<ModelResponse>;
+  /**
+   * Optional streaming variant. When present the loop prefers it and emits the
+   * deltas live; the returned ModelResponse is the assembled final turn. Gateways
+   * without it (stub, tests) still work via `complete`.
+   */
+  stream?(request: ModelRequest, signal: AbortSignal, handlers: ModelStreamHandlers): Promise<ModelResponse>;
 }
 
 // ─── Workspace (the project file graph the agent edits) ───────────────────────
@@ -114,35 +124,6 @@ export interface MemoryStore {
 }
 
 // ─── Sessions (conversation persistence) ──────────────────────────────────────
-
-export type SessionStatus =
-  | "idle"
-  | "running"
-  | "awaiting_permission"
-  | "done"
-  | "error";
-
-export interface SessionState {
-  id: string;
-  createdAt: number;
-  updatedAt: number;
-  model: string;
-  title: string;
-  messages: TranscriptMessage[];
-  project: GeneratedProject;
-  turns: number;
-  costUsd: number;
-  usage: TokenUsage;
-  status: SessionStatus;
-}
-
-export interface SessionSummary {
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  turns: number;
-}
 
 export interface SessionStore {
   create(init: { id: string; model: string; title: string; project: GeneratedProject }): Promise<SessionState>;

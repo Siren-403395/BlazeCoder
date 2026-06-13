@@ -43,6 +43,10 @@ export type AgentEvent =
     }
   /** A model turn: assistant prose plus any tool calls it requested this turn. */
   | { type: "assistant"; text: string; toolCalls: ToolCall[] }
+  /** Incremental assistant prose during streaming; concatenate in arrival order. */
+  | { type: "assistant_delta"; text: string }
+  /** A tool call surfaced live during streaming, before it executes. */
+  | { type: "tool_call"; id: string; name: string; input: Record<string, unknown> }
   /** Result of executing one tool call (concise; bulky payloads use dedicated events). */
   | {
       type: "tool_result";

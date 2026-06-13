@@ -136,7 +136,15 @@ export async function runAgentLoop(
 
     let response: ModelResponse;
     try {
-      response = await gateway.complete(request, signal);
+      response = gateway.stream
+        ? await gateway.stream(request, signal, {
+            onText: (chunk) => {
+              if (chunk) emit({ type: "assistant_delta", text: chunk });
+            },
+            onToolCall: (call) =>
+              emit({ type: "tool_call", id: call.id, name: call.name, input: call.input }),
+          })
+        : await gateway.complete(request, signal);
     } catch (err) {
       if (signal.aborted) return finish("cancelled", "Run cancelled.");
       const message = err instanceof Error ? err.message : String(err);
