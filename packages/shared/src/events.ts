@@ -85,6 +85,16 @@ export type AgentEvent =
   | { type: "api_retry"; attempt: number; maxRetries: number; delayMs: number; status?: number }
   /** The agent's task list was updated (full replace) via the TodoWrite tool. */
   | { type: "todos"; items: TodoItem[] }
+  /** A delegated sub-agent (Task tool) started or finished. */
+  | {
+      type: "subagent";
+      phase: "start" | "end";
+      agentType: string;
+      description: string;
+      turns?: number;
+      subtype?: ResultSubtype;
+      summary?: string;
+    }
   /** The loop is blocked awaiting a human allow/deny decision. */
   | {
       type: "permission_request";

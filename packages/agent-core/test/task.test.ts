@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { AgentRegistry, makeTaskTool } from "../src/index";
+import { AgentRegistry, builtinTools, makeTaskTool, ToolRegistry } from "../src/index";
 import type { SubagentRunResult } from "../src/index";
 import { makeCtx } from "./fakes";
 
 const registry = new AgentRegistry();
 const task = makeTaskTool(registry);
+const fullRegistry = () => new ToolRegistry().registerAll([...builtinTools(), makeTaskTool(registry)]);
+
+describe("ToolRegistry.filter (per-agent tool pool, no-nest)", () => {
+  it("restricts to the allowed names and always drops Task", () => {
+    const f = fullRegistry().filter(["Read"]);
+    expect(f.names()).toEqual(["Read"]);
+    expect(f.has("Write")).toBe(false);
+  });
+
+  it("never includes Task even when named (no nesting)", () => {
+    expect(fullRegistry().filter(["Read", "Task"]).has("Task")).toBe(false);
+  });
+
+  it("the explorer pool is exactly Read/Grep/Glob", () => {
+    expect(fullRegistry().filter(["Read", "Grep", "Glob"]).names().sort()).toEqual(["Glob", "Grep", "Read"]);
+  });
+});
 const ok = (text: string): SubagentRunResult => ({ text, turns: 1, subtype: "success" });
 
 describe("Task tool", () => {

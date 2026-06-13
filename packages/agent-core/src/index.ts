@@ -275,8 +275,14 @@ export class AgentRuntime {
    * so it can't itself spawn. Uses the agent definition's prompt/turn limits.
    */
   private spawn(def: AgentDefinition, prompt: string, signal: AbortSignal): Promise<SubagentRunResult> {
+    // Filter the tool pool to the agent definition (always minus Task — no nesting),
+    // and bind a sub-executor to that smaller registry under the same engine/hooks.
+    const subRegistry = this.registry.filter(def.tools);
+    const subExecutor = new ToolExecutor(subRegistry, this.engine, this.hooks, this.clock);
     const deps: AgentLoopDeps = {
       ...this.loopDeps(this.defaultEffort),
+      registry: subRegistry,
+      executor: subExecutor,
       depth: 1,
       config: {
         ...this.loopConfig,

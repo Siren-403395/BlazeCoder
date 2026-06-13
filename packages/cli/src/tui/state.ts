@@ -206,6 +206,15 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       // Full replace; the panel shows the live list and is cleared when emptied.
       return { ...state, todos: action.items };
 
+    case "subagent": {
+      const [sid, seq] = id(state, "s");
+      const message =
+        action.phase === "start"
+          ? `↳ delegating to ${action.agentType}: ${action.description}`
+          : `↳ ${action.agentType} finished (${action.turns ?? 0} turn${action.turns === 1 ? "" : "s"})`;
+      return { ...state, seq, items: [...state.items, { kind: "notice", id: sid, level: "info", message }] };
+    }
+
     case "api_retry": {
       const [rid, seq] = id(state, "r");
       const status = action.status ? ` (HTTP ${action.status})` : "";

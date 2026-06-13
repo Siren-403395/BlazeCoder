@@ -19,6 +19,7 @@ import type {
 import type { ReadLedger } from "../workspace/ledger";
 import type { AgentDefinition } from "../orchestration/agentRegistry";
 import type { SubagentRunResult } from "../orchestration/subagent";
+import { TOOL_NAMES } from "./toolNames";
 
 export interface ToolContext {
   sessionId: string;
@@ -88,6 +89,24 @@ export class ToolRegistry {
 
   names(): string[] {
     return [...this.tools.keys()];
+  }
+
+  /**
+   * A new registry holding only the allowed tools (undefined ⇒ all), minus any
+   * denied — and ALWAYS excluding Task, so a sub-agent can never spawn its own
+   * sub-agents (no-nest, enforced structurally, not just by the depth guard).
+   */
+  filter(allow?: string[], deny?: string[]): ToolRegistry {
+    const allowSet = allow ? new Set(allow) : undefined;
+    const denySet = new Set(deny ?? []);
+    const next = new ToolRegistry();
+    for (const tool of this.list()) {
+      if (tool.name === TOOL_NAMES.task) continue;
+      if (allowSet && !allowSet.has(tool.name)) continue;
+      if (denySet.has(tool.name)) continue;
+      next.register(tool);
+    }
+    return next;
   }
 
   /** The schemas handed to the model gateway. */

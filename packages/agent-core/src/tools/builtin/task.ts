@@ -53,7 +53,18 @@ Writing the prompt: brief the sub-agent like a smart colleague who just walked i
       const prompt = typeof input.prompt === "string" ? input.prompt : "";
       if (!prompt.trim()) return { content: "Task requires a 'prompt' describing the work for the sub-agent.", isError: true };
 
+      const description = typeof input.description === "string" ? input.description : type;
+      ctx.emit({ type: "subagent", phase: "start", agentType: type, description });
       const result = await ctx.spawn(def, prompt, ctx.signal);
+      ctx.emit({
+        type: "subagent",
+        phase: "end",
+        agentType: type,
+        description,
+        turns: result.turns,
+        subtype: result.subtype,
+        summary: result.text,
+      });
       if (!result.text.trim()) return { content: `Sub-agent (${type}) ended as ${result.subtype} with no output.`, isError: true };
       return { content: result.text };
     },

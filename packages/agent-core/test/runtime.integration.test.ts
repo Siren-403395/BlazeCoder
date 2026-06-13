@@ -164,6 +164,11 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     // The sub-agent's distilled report came back as the main Task tool_result.
     const taskResult = events.find((e) => e.type === "tool_result" && e.toolUseId === "t");
     expect(taskResult && taskResult.type === "tool_result" && taskResult.content).toContain("investigation complete");
+    // subagent start/end events bracket the run with the right agent type.
+    const subEvents = events.filter((e): e is Extract<AgentEvent, { type: "subagent" }> => e.type === "subagent");
+    expect(subEvents.map((e) => e.phase)).toEqual(["start", "end"]);
+    expect(subEvents[0]!.agentType).toBe("explorer");
+    expect(subEvents[1]!.subtype).toBe("success");
   });
 
   it("fires the lifecycle hooks (SessionStart context, Stop, SessionEnd) and survives a throwing hook", async () => {
