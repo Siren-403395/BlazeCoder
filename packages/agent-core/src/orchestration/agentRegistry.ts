@@ -33,8 +33,10 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
 export class AgentRegistry {
   private readonly agents = new Map<string, AgentDefinition>();
 
-  constructor(defs: AgentDefinition[] = DEFAULT_AGENTS) {
-    for (const def of defs) this.register(def);
+  /** Always starts from the built-ins; `extra` (loaded markdown agents) overrides by name. */
+  constructor(extra: AgentDefinition[] = []) {
+    for (const def of DEFAULT_AGENTS) this.register(def);
+    for (const def of extra) this.register(def);
   }
 
   register(def: AgentDefinition): this {

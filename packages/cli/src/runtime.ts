@@ -8,9 +8,11 @@
 import { realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+  builtinTools,
   createAgentRuntime,
   FileMemoryStore,
   FileSessionStore,
+  loadAgentDefinitions,
   loadLayeredSettings,
   silentLogger,
   systemClock,
@@ -67,6 +69,10 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
   const extraPreToolUseHooks = hookConfigs.flatMap(preToolUseHooksFrom);
   const extraPostToolUseHooks = hookConfigs.flatMap(postToolUseHooksFrom);
 
+  // Custom sub-agents: user-scope always; project-scope only for a trusted workspace.
+  const agentDirs = [join(config.home, "agents"), ...(trusted ? [join(root, ".zephyrcode", "agents")] : [])];
+  const { definitions: agents } = loadAgentDefinitions(agentDirs, builtinTools().map((t) => t.name));
+
   return createAgentRuntime({
     gateway,
     sessionStore: new FileSessionStore(projectDir, systemClock),
@@ -80,6 +86,7 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     settingsFiles: { user: paths.user, project: paths.project, local: paths.local },
     extraPreToolUseHooks,
     extraPostToolUseHooks,
+    agents,
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,
     contextTokens: config.contextTokens,

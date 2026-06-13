@@ -73,6 +73,7 @@ export * from "./prompts";
 export * from "./loop/agentLoop";
 export * from "./loop/transitions";
 export * from "./orchestration/agentRegistry";
+export * from "./orchestration/loadAgents";
 export * from "./orchestration/subagent";
 
 // ─── Runtime factory ──────────────────────────────────────────────────────────
