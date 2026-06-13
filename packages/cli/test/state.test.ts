@@ -115,6 +115,34 @@ describe("TUI state reducer", () => {
     expect(s.reasoning).toBe("hidden");
   });
 
+  it("hydrates scrollback from a persisted session (resume)", () => {
+    const s = applyEvent(initialState(), {
+      type: "hydrate",
+      session: {
+        id: "sess-1",
+        createdAt: 1,
+        updatedAt: 2,
+        model: "deepseek-v4-pro",
+        title: "build it",
+        cwd: "/work",
+        turns: 1,
+        costUsd: 0.01,
+        usage: { inputTokens: 10, outputTokens: 5 },
+        status: "done",
+        messages: [
+          { role: "user", content: "make a counter" },
+          { role: "assistant", content: "Done.", reasoning: "planned it", toolCalls: [{ id: "w1", name: "Write", input: { file_path: "/a.ts" } }] },
+          { role: "tool", results: [{ toolUseId: "w1", toolName: "Write", content: "Wrote /a.ts (1 line).", isError: false }] },
+        ],
+      },
+    });
+    expect(s.model).toBe("deepseek-v4-pro");
+    expect(s.status).toBe("done");
+    expect(s.items.find((i) => i.kind === "user")).toMatchObject({ text: "make a counter" });
+    expect(s.items.find((i) => i.kind === "assistant")).toMatchObject({ text: "Done.", reasoning: "planned it", streaming: false });
+    expect(s.items.find((i) => i.id === "w1")).toMatchObject({ kind: "tool", status: "ok", summary: "Wrote /a.ts (1 line)." });
+  });
+
   it("keeps a reasoning-only turn that ends in tool calls (no prose)", () => {
     const items = assistantItems([
       { type: "user_prompt", text: "go" },

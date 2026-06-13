@@ -9,7 +9,7 @@ import { useCallback, useReducer, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
-import { EFFORTS, escalateFromPrompt, isEffort, type AgentRuntime, type Effort } from "@coding-agent/core";
+import { EFFORTS, escalateFromPrompt, isEffort, type AgentRuntime, type Effort, type SessionState } from "@coding-agent/core";
 import { applyEvent, initialState, type Item, type ReasoningDisplay, type TuiState } from "./state";
 import { ItemView, PermissionPrompt, StatusBar } from "./view";
 import { theme } from "./theme";
@@ -22,11 +22,22 @@ function isFinalized(item: Item): boolean {
   return true;
 }
 
-export function App({ runtime, effort = "high" }: { runtime: AgentRuntime; effort?: string }) {
-  const [state, dispatch] = useReducer(applyEvent, undefined, () => initialState(effort));
+export function App({
+  runtime,
+  effort = "high",
+  initialSession,
+}: {
+  runtime: AgentRuntime;
+  effort?: string;
+  initialSession?: SessionState;
+}) {
+  const [state, dispatch] = useReducer(applyEvent, undefined, () => {
+    const base = initialState(effort);
+    return initialSession ? applyEvent(base, { type: "hydrate", session: initialSession }) : base;
+  });
   const [draft, setDraft] = useState("");
   const { exit } = useApp();
-  const sessionId = useRef<string | undefined>(undefined);
+  const sessionId = useRef<string | undefined>(initialSession?.id);
   const abort = useRef<AbortController | null>(null);
   const effortRef = useRef(state.effort);
   effortRef.current = state.effort;

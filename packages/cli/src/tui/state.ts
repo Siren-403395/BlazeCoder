@@ -6,7 +6,7 @@
  * old web reducer worked but adapted to the CLI event shape (no preview).
  */
 
-import type { AgentEvent } from "@coding-agent/shared";
+import type { AgentEvent, SessionState, TranscriptMessage } from "@coding-agent/shared";
 
 export type ToolStatus = "running" | "ok" | "error";
 
@@ -53,6 +53,7 @@ export type UiAction =
   | { type: "set_effort"; effort: string }
   | { type: "set_reasoning"; reasoning: ReasoningDisplay }
   | { type: "permission_resolved" }
+  | { type: "hydrate"; session: SessionState }
   | { type: "reset" };
 
 export function initialState(effort = "high", reasoning: ReasoningDisplay = "summary"): TuiState {
@@ -95,6 +96,11 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
     case "permission_resolved":
       // The user answered the prompt; the loop resumes and will emit more events.
       return { ...state, status: "running", permission: undefined };
+
+    case "hydrate": {
+      const { items, seq } = hydrateItems(state.seq, action.session.messages);
+      return { ...state, items, seq, model: action.session.model, status: "done" };
+    }
 
     case "user_prompt": {
       const [uid, seq] = id(state, "u");
@@ -239,6 +245,37 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
     default:
       return state;
   }
+}
+
+/** Rebuild scrollback items from a persisted transcript (for --resume / --continue). */
+function hydrateItems(startSeq: number, messages: TranscriptMessage[]): { items: Item[]; seq: number } {
+  const items: Item[] = [];
+  const toolIndex = new Map<string, number>();
+  let seq = startSeq;
+  for (const m of messages) {
+    if (m.role === "user") {
+      items.push({ kind: "user", id: `u${++seq}`, text: m.content });
+    } else if (m.role === "assistant") {
+      if (m.content || m.reasoning) {
+        items.push({ kind: "assistant", id: `a${++seq}`, text: m.content, reasoning: m.reasoning, streaming: false });
+      }
+      for (const c of m.toolCalls) {
+        toolIndex.set(c.id, items.length);
+        items.push({ kind: "tool", id: c.id, name: c.name, status: "running", input: c.input });
+      }
+    } else if (m.role === "tool") {
+      for (const r of m.results) {
+        const idx = toolIndex.get(r.toolUseId);
+        const it = idx === undefined ? undefined : items[idx];
+        if (idx !== undefined && it && it.kind === "tool") {
+          items[idx] = { ...it, status: r.isError ? "error" : "ok", summary: firstLine(r.content) };
+        }
+      }
+    } else if (m.role === "summary") {
+      items.push({ kind: "compact", id: `c${++seq}`, reason: "resumed from a compacted session" });
+    }
+  }
+  return { items, seq };
 }
 
 function ensureToolItems(items: Item[], toolCalls: { id: string; name: string; input: Record<string, unknown> }[]): Item[] {
