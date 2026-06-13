@@ -51,8 +51,10 @@ function posixRel(root: string, abs: string): string {
 export const globTool: Tool = {
   name: TOOL_NAMES.glob,
   readOnly: true,
-  description:
-    "Find files by name with a glob pattern (supports *, ?, and ** across directories), e.g. **/*.ts or src/**/*.tsx. Returns up to 100 absolute paths, most-recently-modified first. Skips .git and node_modules. Optionally scope to a subdirectory with path.",
+  description: `Find files by name with a glob pattern (supports *, ?, and ** across directories), e.g. **/*.ts or src/**/*.tsx. Returns up to 100 absolute paths, most-recently-modified first. Skips .git and node_modules.
+
+- To scope to a subdirectory, pass an absolute \`path\`. IMPORTANT: to search from the workspace root, OMIT \`path\` entirely — do NOT pass the strings "undefined" or "null".
+- For an open-ended, multi-round search where you'll iterate on the results, use the ${TOOL_NAMES.task} tool instead.`,
   inputSchema: {
     type: "object",
     properties: {
@@ -99,8 +101,11 @@ export const globTool: Tool = {
 export const grepTool: Tool = {
   name: TOOL_NAMES.grep,
   readOnly: true,
-  description:
-    "Search file contents with a regular expression. output_mode: 'files_with_matches' (default) lists matching files; 'content' shows matching lines as 'path:line: text'; 'count' shows per-file match counts. Optionally restrict with a path-glob and ignore_case. Honors .gitignore and skips binary files.",
+  description: `Search file contents with a regular expression. ALWAYS use this tool to search code; NEVER invoke \`grep\` or \`rg\` through ${TOOL_NAMES.bash}.
+
+- output_mode: 'files_with_matches' (default) lists matching files; 'content' shows matching lines as 'path:line: text'; 'count' shows per-file match counts.
+- The pattern is a regular expression — escape regex metacharacters (e.g. \\. \\( \\{ ) when you mean them literally.
+- Optionally restrict with a path \`glob\` (e.g. **/*.ts) and \`ignore_case\`. Honors .gitignore and skips binary files.`,
   inputSchema: {
     type: "object",
     properties: {

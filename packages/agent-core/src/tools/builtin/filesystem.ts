@@ -57,8 +57,13 @@ function resolvePath(
 export const readFileTool: Tool = {
   name: TOOL_NAMES.read,
   readOnly: true,
-  description:
-    "Read a file from the filesystem. Pass an absolute file_path. Returns content with 1-indexed line numbers (like `cat -n`). For large files, pass offset (1-indexed first line) and limit (number of lines). Reading a file is REQUIRED before you may Edit or overwrite it.",
+  description: `Read a file from the filesystem.
+
+- file_path must be an ABSOLUTE path, not relative.
+- Returns up to 2000 lines from the start by default, each prefixed with its 1-indexed line number and a tab (like \`cat -n\`). For a large file, pass offset (1-indexed first line) and limit (line count) to read a window.
+- This tool reads FILES, not directories. To list a directory use ${TOOL_NAMES.glob} or \`ls\` via ${TOOL_NAMES.bash}.
+- Lines longer than 2000 chars are truncated. An empty file reads back with a note rather than content.
+- Reading a file is REQUIRED before you may ${TOOL_NAMES.edit} it or overwrite it with ${TOOL_NAMES.write}; the line-number prefix you see here is display only — never include it in an Edit's old_string.`,
   inputSchema: {
     type: "object",
     properties: {
@@ -101,8 +106,12 @@ export const readFileTool: Tool = {
 export const writeFileTool: Tool = {
   name: TOOL_NAMES.write,
   readOnly: false,
-  description:
-    "Create a new file or fully overwrite an existing one. Pass an absolute file_path and the complete content. To overwrite an existing file you must Read it first. Prefer Edit for small changes to an existing file.",
+  description: `Create a new file, or fully overwrite an existing one, at an absolute file_path with the COMPLETE content.
+
+- To overwrite an existing file you must ${TOOL_NAMES.read} it first (so you don't discard content you haven't seen).
+- Prefer ${TOOL_NAMES.edit} for changing part of an existing file — only use ${TOOL_NAMES.write} to create a file or replace it wholesale.
+- Do NOT emit a file by shelling out (\`echo >\`, \`cat <<EOF\`) — use this tool.
+- Never write secrets/credentials; never create documentation files unless asked.`,
   inputSchema: {
     type: "object",
     properties: {
@@ -148,8 +157,11 @@ export const writeFileTool: Tool = {
 export const editFileTool: Tool = {
   name: TOOL_NAMES.edit,
   readOnly: false,
-  description:
-    "Replace an exact string in an existing file. old_string must be non-empty and appear EXACTLY once (include enough surrounding context to be unique) unless replace_all is true. You must Read the file first. old_string and new_string must differ.",
+  description: `Replace an exact string in an existing file. You must ${TOOL_NAMES.read} the file first.
+
+- When copying text from ${TOOL_NAMES.read} output, preserve the exact indentation as it appears AFTER the line-number prefix (the prefix is "padded line number + tab"). NEVER include any part of that line-number prefix in old_string or new_string.
+- The edit FAILS if old_string is not unique — include enough surrounding context to match exactly once, or set replace_all: true to change every occurrence.
+- old_string must be non-empty and must differ from new_string. Prefer several small, precise edits over one sweeping one.`,
   inputSchema: {
     type: "object",
     properties: {

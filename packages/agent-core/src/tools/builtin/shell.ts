@@ -16,8 +16,16 @@ const MAX_TIMEOUT_MS = 600_000;
 export const runCommandTool: Tool = {
   name: TOOL_NAMES.bash,
   readOnly: false,
-  description:
-    "Run a shell command in the working directory and return its stdout/stderr and exit code. Use this for builds, tests, type-checks, linters, git, package managers, and scaffolding — and to VERIFY your work after editing. Prefer the dedicated tools (Read, Glob, Grep, Edit) over their shell equivalents (cat, find, grep, sed). Quote paths with spaces. Avoid commands that need interactive input.",
+  description: `Run a shell command in the working directory; returns stdout/stderr and the exit code. This is how you install deps, build, run tests/type-checks/linters, use git, scaffold — and VERIFY your work after editing.
+
+Prefer the dedicated tools over their shell equivalents:
+- Find files by name: use ${TOOL_NAMES.glob}, NOT \`find\` or \`ls\`.
+- Search file contents: use ${TOOL_NAMES.grep}, NOT \`grep\`/\`rg\`.
+- Read a file: use ${TOOL_NAMES.read}, NOT \`cat\`/\`head\`/\`tail\`.
+- Edit a file: use ${TOOL_NAMES.edit}, NOT \`sed\`/\`awk\`; create one with ${TOOL_NAMES.write}, NOT \`echo >\`/\`cat <<EOF\`.
+
+Parallel vs sequential: independent commands → issue multiple ${TOOL_NAMES.bash} calls in one message (they run concurrently); dependent commands → one call joined with \`&&\`. Use \`;\` only when you don't care if an earlier command fails; never separate commands with newlines.
+Quote paths containing spaces. Avoid commands that need interactive input. Pass a 3-6 word \`description\` of what the command does.`,
   inputSchema: {
     type: "object",
     properties: {

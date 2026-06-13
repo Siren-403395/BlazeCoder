@@ -32,7 +32,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 - [ ] P1-ext-2     markdown SKILL loader + model-callable skill tool + /skill palette   (deps: orch-2, ext-3)
 - [ ] P1-ext-3     settings.json hooks reader + command-hook subprocess executor (trust gate)   (deps: perm-3, ext-1)
 - [ ] P1-ext-4     plan-mode allowedPrompts (pre-approved categories on plan exit)   (deps: perm-2)
-- [ ] P1-tools-3   upgrade Read/Write/Edit/Glob/Grep/Bash descriptions to reference-grade   (deps: tools-1)
+- [x] P1-tools-3   upgrade Read/Write/Edit/Glob/Grep/Bash descriptions to reference-grade   (deps: tools-1)
 - [ ] P1-tools-4   WebSearch + WebFetch behind a WebClient port, mandatory Sources citation   (deps: tools-1)
 
 ## P2 — nice-to-have
