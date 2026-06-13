@@ -95,7 +95,7 @@ export function Workspace({
         style={{ width }}
         className="flex min-h-0 shrink-0 flex-col border-l border-border bg-surface"
       >
-        <PanelHeader>Conversation</PanelHeader>
+        <PanelHeader className="px-5">Conversation</PanelHeader>
         <div className="min-h-0 flex-1">
           <ConversationStream segments={segments} phase={phase} onOpenFile={onOpenFile} />
         </div>

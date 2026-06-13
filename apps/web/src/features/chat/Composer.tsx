@@ -35,9 +35,9 @@ export function Composer({
   }
 
   return (
-    <div className="shrink-0 border-t border-border bg-surface p-3">
+    <div className="shrink-0 border-t border-border bg-surface px-5 pb-5 pt-4">
       {!value && !busy && (
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex flex-wrap gap-2">
           {EXAMPLES.map((ex) => (
             <Button
               key={ex}
@@ -75,8 +75,8 @@ export function Composer({
             }
           }}
           className={cn(
-            "block max-h-[200px] min-h-[56px] w-full resize-none rounded-card border border-border bg-bg",
-            "px-3.5 py-3 pr-12 text-[13px] leading-relaxed text-text outline-none",
+            "block max-h-[200px] min-h-[72px] w-full resize-none rounded-card border border-border bg-bg",
+            "px-4 py-3.5 pr-14 text-[13px] leading-relaxed text-text outline-none",
             "placeholder:text-faint focus:border-accent-border",
           )}
         />
@@ -85,7 +85,7 @@ export function Composer({
             label="Stop the run"
             variant="subtle"
             onClick={onStop}
-            className="absolute bottom-2.5 right-2.5 size-8"
+            className="absolute bottom-3 right-3 size-9"
           >
             <Stop size={15} weight="fill" />
           </IconButton>
@@ -95,14 +95,14 @@ export function Composer({
             variant="primary"
             onClick={submit}
             disabled={!value.trim()}
-            className="absolute bottom-2.5 right-2.5 size-8 p-0"
+            className="absolute bottom-3 right-3 size-9 p-0"
           >
             <ArrowUp size={16} weight="bold" />
           </Button>
         )}
       </div>
 
-      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-faint">
+      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-faint">
         <Kbd>⌘</Kbd>
         <Kbd>↵</Kbd>
         <span>to send</span>
