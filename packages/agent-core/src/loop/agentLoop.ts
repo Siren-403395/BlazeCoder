@@ -22,6 +22,8 @@ import { CompactionThrashError, ContextManager } from "../context/compaction";
 import { resolveEffort, type Effort } from "../effort";
 import { buildProjectRules } from "../memory/projectRules";
 import { buildSystemPrompt } from "../prompts";
+import { initialLoopState, terminalToSubtype } from "./transitions";
+import type { LoopState, Terminal } from "./transitions";
 import type { ReadLedger } from "../workspace/ledger";
 import type { ToolContext } from "../tools/registry";
 import type { ToolRegistry } from "../tools/registry";
@@ -67,6 +69,8 @@ export interface AgentLoopDeps {
   clock: Clock;
   logger: Logger;
   config: AgentLoopConfig;
+  /** Debug/test seam: invoked with the immutable LoopState at the top of each iteration. */
+  onLoopState?: (state: LoopState) => void;
 }
 
 export async function runAgentLoop(
@@ -108,20 +112,13 @@ export async function runAgentLoop(
   session.status = "running";
 
   let stopReason: StopReason = null;
+  let state: LoopState = initialLoopState();
 
-  const finish = (subtype: ResultSubtype, summary: string): AgentRunResult => {
+  // Single finish site: every exit derives its public subtype from a Terminal.
+  const finish = (terminal: Terminal, summary: string): AgentRunResult => {
+    const subtype = terminalToSubtype(terminal);
     session.status = subtype === "success" ? "done" : subtype === "cancelled" ? "idle" : "error";
-    emit({
-      type: "result",
-      subtype,
-      numTurns: session.turns,
-      sessionId: session.id,
-      stopReason,
-      totalCostUsd: session.costUsd,
-      usage: session.usage,
-      summary,
-    });
-    return {
+    const result: AgentRunResult = {
       subtype,
       numTurns: session.turns,
       sessionId: session.id,
@@ -130,10 +127,13 @@ export async function runAgentLoop(
       usage: session.usage,
       summary,
     };
+    emit({ type: "result", ...result });
+    return result;
   };
 
   while (true) {
-    if (signal.aborted) return finish("cancelled", "Run cancelled.");
+    deps.onLoopState?.(state);
+    if (signal.aborted) return finish({ reason: "aborted" }, "Run cancelled.");
 
     try {
       await contextManager.maybeCompact(
@@ -153,7 +153,7 @@ export async function runAgentLoop(
     } catch (err) {
       if (err instanceof CompactionThrashError) {
         emit({ type: "notice", level: "error", message: err.message });
-        return finish("error_compaction_thrash", err.message);
+        return finish({ reason: "compaction_thrash" }, err.message);
       }
       throw err;
     }
@@ -185,11 +185,11 @@ export async function runAgentLoop(
           })
         : await gateway.complete(request, signal);
     } catch (err) {
-      if (signal.aborted) return finish("cancelled", "Run cancelled.");
+      if (signal.aborted) return finish({ reason: "aborted" }, "Run cancelled.");
       const message = err instanceof Error ? err.message : String(err);
       logger.error("model gateway failed", { message });
       emit({ type: "notice", level: "error", message: `Model call failed: ${message}` });
-      return finish("error_during_execution", message);
+      return finish({ reason: "model_error", error: err }, message);
     }
 
     stopReason = response.stopReason;
@@ -209,19 +209,19 @@ export async function runAgentLoop(
     emit({ type: "budget", ...computeBudget(config.contextTokens, response.usage.inputTokens) });
 
     if (response.toolCalls.length === 0) {
-      return finish("success", response.text.trim() || "Done.");
+      return finish({ reason: "completed" }, response.text.trim() || "Done.");
     }
 
     session.turns += 1;
     if (session.turns > config.maxTurns) {
       const message = `Reached the maximum of ${config.maxTurns} tool-use turns.`;
       emit({ type: "notice", level: "warn", message });
-      return finish("error_max_turns", message);
+      return finish({ reason: "max_turns" }, message);
     }
     if (session.costUsd > config.maxBudgetUsd) {
       const message = `Reached the budget cap of $${config.maxBudgetUsd.toFixed(2)}.`;
       emit({ type: "notice", level: "warn", message });
-      return finish("error_max_budget_usd", message);
+      return finish({ reason: "max_budget" }, message);
     }
 
     const ctx: ToolContext = {
@@ -237,5 +237,9 @@ export async function runAgentLoop(
     };
     const results = await executor.executeTurn(response.toolCalls, ctx);
     session.messages.push({ role: "tool", results });
+
+    // Continue point: rebuild state immutably (never mutate in place) so recovery
+    // branches added later can gate on the previous transition without aliasing.
+    state = { ...state, turns: session.turns, transition: { reason: "next_turn" } };
   }
 }

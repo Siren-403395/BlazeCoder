@@ -61,6 +61,7 @@ export * from "./workspace";
 export * from "./util";
 export * from "./prompts";
 export * from "./loop/agentLoop";
+export * from "./loop/transitions";
 export * from "./orchestration/agentRegistry";
 export * from "./orchestration/subagent";
 
