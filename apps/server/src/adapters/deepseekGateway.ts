@@ -18,6 +18,8 @@ import type {
 interface OpenAiMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
+  /** Thinking-mode reasoning trace; only retained on tool-call turns (V4 requirement). */
+  reasoning_content?: string;
   tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[];
   tool_call_id?: string;
 }
@@ -27,6 +29,7 @@ interface StreamChunk {
   choices?: {
     delta?: {
       content?: string;
+      reasoning_content?: string;
       tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string } }[];
     };
     finish_reason?: string;
@@ -62,9 +65,12 @@ export class DeepSeekGateway implements ModelGateway {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: toOpenAiMessages(request),
-      temperature: request.temperature ?? 0.2,
       max_tokens: request.maxOutputTokens ?? 8000,
     };
+    // Deep-thinking mode rejects temperature/top_p/penalties, so only send
+    // temperature when thinking is off.
+    if (request.thinking) body.thinking = { type: "enabled" };
+    else body.temperature = request.temperature ?? 0.2;
     if (request.tools.length > 0) {
       body.tools = request.tools.map((t) => ({
         type: "function",
@@ -111,6 +117,7 @@ export class DeepSeekGateway implements ModelGateway {
     };
     return {
       text: typeof message?.content === "string" ? message.content : "",
+      reasoning: typeof message?.reasoning_content === "string" ? message.reasoning_content : undefined,
       toolCalls: parseToolCalls(message?.tool_calls),
       stopReason: mapStopReason(choice?.finish_reason),
       usage,
@@ -130,6 +137,7 @@ export class DeepSeekGateway implements ModelGateway {
     const decoder = new TextDecoder();
     let buffer = "";
     let text = "";
+    let reasoning = "";
     let finish: string | undefined;
     const usage = { inputTokens: 0, outputTokens: 0 };
     // Tool-call fragments arrive keyed by index across many deltas (and the
@@ -157,6 +165,11 @@ export class DeepSeekGateway implements ModelGateway {
           }
           const choice = chunk.choices?.[0];
           const delta = choice?.delta;
+          // Reasoning streams on its own channel, ahead of (and separate from) content.
+          if (delta?.reasoning_content) {
+            reasoning += delta.reasoning_content;
+            handlers.onReasoning(delta.reasoning_content);
+          }
           if (delta?.content) {
             text += delta.content;
             handlers.onText(delta.content);
@@ -186,7 +199,14 @@ export class DeepSeekGateway implements ModelGateway {
     const toolCalls = [...acc.entries()].sort((a, b) => a[0] - b[0]).map(([, a]) => toToolCall(a));
     for (const call of toolCalls) handlers.onToolCall(call);
 
-    return { text, toolCalls, stopReason: mapStopReason(finish), usage, costUsd: this.cost(usage) };
+    return {
+      text,
+      reasoning: reasoning || undefined,
+      toolCalls,
+      stopReason: mapStopReason(finish),
+      usage,
+      costUsd: this.cost(usage),
+    };
   }
 }
 
@@ -224,6 +244,9 @@ function pushMessage(out: OpenAiMessage[], message: TranscriptMessage): void {
           type: "function",
           function: { name: c.name, arguments: JSON.stringify(c.input) },
         }));
+        // V4 thinking mode requires the reasoning trace be retained on a turn
+        // that made tool calls (but never on a plain answer turn).
+        if (message.reasoning) msg.reasoning_content = message.reasoning;
       }
       out.push(msg);
       return;

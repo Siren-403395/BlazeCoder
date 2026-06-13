@@ -31,7 +31,7 @@ export function Workspace({
   phase: UiStatus;
   onOpenFile: (path: string) => void;
   busy: boolean;
-  onRun: (prompt: string) => void;
+  onRun: (prompt: string, thinking: boolean) => void;
   onStop: () => void;
   pending?: PendingPermission;
   onDecide: (behavior: "allow" | "deny") => void;

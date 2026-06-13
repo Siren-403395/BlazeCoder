@@ -83,7 +83,9 @@ function Segment({
     case "user":
       return <UserMessage text={segment.text} />;
     case "assistant":
-      return <AssistantMessage text={segment.text} />;
+      return (
+        <AssistantMessage text={segment.text} reasoning={segment.reasoning} streaming={segment.streaming} />
+      );
     case "activities":
       return (
         <div className="space-y-1.5">

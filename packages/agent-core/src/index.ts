@@ -88,6 +88,8 @@ export interface RunOptions {
   /** Resume an existing session; omit to start a new one. */
   sessionId?: string;
   title?: string;
+  /** Run the model in deep-thinking (reasoning) mode for this turn. */
+  thinking?: boolean;
 }
 
 export interface RunOutcome {
@@ -197,7 +199,7 @@ export class AgentRuntime {
     };
   }
 
-  private loopDeps(): AgentLoopDeps {
+  private loopDeps(thinking: boolean): AgentLoopDeps {
     return {
       gateway: this.gateway,
       registry: this.registry,
@@ -208,7 +210,7 @@ export class AgentRuntime {
       memory: this.memory,
       clock: this.clock,
       logger: this.logger,
-      config: this.loopConfig,
+      config: { ...this.loopConfig, thinking },
     };
   }
 
@@ -224,7 +226,7 @@ export class AgentRuntime {
       });
     }
     const workspace = new InMemoryWorkspace(session.project);
-    const result = await runAgentLoop(session, opts.prompt, workspace, this.loopDeps(), emit, signal);
+    const result = await runAgentLoop(session, opts.prompt, workspace, this.loopDeps(opts.thinking ?? false), emit, signal);
     session.project = workspace.snapshot();
     await this.store.save(session);
     return { session, result };

@@ -1,8 +1,9 @@
-import { isValidElement, memo, type ReactNode } from "react";
-import { Robot } from "@phosphor-icons/react";
+import { isValidElement, memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { Brain, CaretRight, Robot } from "@phosphor-icons/react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CodeBlock } from "@/ui";
+import { CodeBlock, Collapse, StatusDot } from "@/ui";
+import { cn } from "@/lib/cn";
 
 /** Pull the text out of a <pre>'s <code> child (react-markdown builds it first). */
 function codeText(node: ReactNode): string {
@@ -71,18 +72,71 @@ const MD_COMPONENTS: Components = {
   },
 };
 
-export const AssistantMessage = memo(function AssistantMessage({ text }: { text: string }) {
+/**
+ * The model's deep-thinking trace, in a collapsible disclosure. While the model
+ * is still thinking and has not begun the answer it auto-expands (and the trace
+ * auto-scrolls as it streams); once the answer arrives or the run ends it
+ * auto-collapses. A manual click takes over from there.
+ */
+function ThinkingBlock({ reasoning, streaming }: { reasoning: string; streaming?: boolean }) {
+  const active = !!streaming;
+  const [manual, setManual] = useState<boolean | null>(null);
+  const open = manual ?? active;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (open && active && el) el.scrollTop = el.scrollHeight;
+  }, [reasoning, open, active]);
+
+  return (
+    <div className="rounded-card border border-border bg-surface-2">
+      <button
+        type="button"
+        onClick={() => setManual(!open)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-muted transition-colors hover:text-text"
+      >
+        <Brain size={14} weight={active ? "fill" : "regular"} className="text-accent-text" />
+        <span>{active ? "Thinking" : "Thought process"}</span>
+        {active && <StatusDot tone="accent" pulse />}
+        <CaretRight size={12} className={cn("ml-auto transition-transform duration-150", open && "rotate-90")} />
+      </button>
+      <Collapse open={open}>
+        <div
+          ref={scrollRef}
+          className="max-h-60 overflow-y-auto whitespace-pre-wrap border-t border-border px-3 py-2 text-[12px] leading-relaxed text-subtle"
+        >
+          {reasoning}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
+export const AssistantMessage = memo(function AssistantMessage({
+  text,
+  reasoning,
+  streaming,
+}: {
+  text: string;
+  reasoning?: string;
+  streaming?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5 text-[11px] font-medium text-accent-text">
         <Robot size={13} weight="fill" />
         Agent
       </div>
-      <div className="space-y-2 text-[13px] leading-relaxed text-text">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-          {text}
-        </ReactMarkdown>
-      </div>
+      {reasoning ? <ThinkingBlock reasoning={reasoning} streaming={streaming} /> : null}
+      {text ? (
+        <div className="space-y-2 text-[13px] leading-relaxed text-text">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+            {text}
+          </ReactMarkdown>
+        </div>
+      ) : null}
     </div>
   );
 });

@@ -24,6 +24,7 @@ export interface AssembleParams {
   tools: ToolSchema[];
   maxOutputTokens?: number;
   temperature?: number;
+  thinking?: boolean;
 }
 
 export function assembleRequest(params: AssembleParams): ModelRequest {
@@ -35,6 +36,7 @@ export function assembleRequest(params: AssembleParams): ModelRequest {
     tools: params.tools,
     maxOutputTokens: params.maxOutputTokens,
     temperature: params.temperature,
+    thinking: params.thinking,
   };
 }
 

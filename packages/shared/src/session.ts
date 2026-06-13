@@ -16,7 +16,7 @@ export interface ToolResultRecord {
 
 export type TranscriptMessage =
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls: ToolCall[] }
+  | { role: "assistant"; content: string; reasoning?: string; toolCalls: ToolCall[] }
   | { role: "tool"; results: ToolResultRecord[] }
   /** Replaces collapsed history after compaction; rendered to the model as context. */
   | { role: "summary"; content: string };

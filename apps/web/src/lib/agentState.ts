@@ -42,6 +42,8 @@ export interface TraceEntry {
   isError?: boolean;
   /** assistant entries: true while prose is still streaming in. */
   streaming?: boolean;
+  /** assistant entries: the model's deep-thinking (reasoning) trace, streamed. */
+  reasoning?: string;
   /** notice entries */
   level?: "info" | "warn" | "error";
 }
@@ -150,6 +152,22 @@ export function applyEvent(state: AgentUiState, action: UiAction): AgentUiState 
       return append({ ...state, status: "running" }, { kind: "assistant", text: action.text, streaming: true });
     }
 
+    case "reasoning_delta": {
+      // Reasoning streams ahead of prose; fold it into the same live assistant
+      // entry (creating one with empty prose if the answer has not started yet).
+      const idx = findLastStreamingAssistant(state.trace);
+      if (idx >= 0) {
+        const trace = state.trace.slice();
+        const prev = trace[idx]!;
+        trace[idx] = { ...prev, reasoning: (prev.reasoning ?? "") + action.text };
+        return { ...state, status: "running", trace };
+      }
+      return append(
+        { ...state, status: "running" },
+        { kind: "assistant", text: "", reasoning: action.text, streaming: true },
+      );
+    }
+
     case "tool_call": {
       if (state.trace.some((t) => t.kind === "tool" && t.id === action.id)) return state;
       return append(state, {
@@ -171,9 +189,14 @@ export function applyEvent(state: AgentUiState, action: UiAction): AgentUiState 
       if (liveIdx >= 0) {
         trace = trace.slice();
         const prev = trace[liveIdx]!;
-        trace[liveIdx] = { ...prev, text: text || prev.text, streaming: false };
-      } else if (text) {
-        trace = [...trace, { id: `e${trace.length}`, kind: "assistant", text }];
+        trace[liveIdx] = {
+          ...prev,
+          text: text || prev.text,
+          reasoning: prev.reasoning ?? action.reasoning,
+          streaming: false,
+        };
+      } else if (text || action.reasoning) {
+        trace = [...trace, { id: `e${trace.length}`, kind: "assistant", text, reasoning: action.reasoning }];
       }
       for (const call of action.toolCalls) {
         if (!trace.some((t) => t.kind === "tool" && t.id === call.id)) {
@@ -344,7 +367,8 @@ export function hydrateFromSession(session: SessionState): AgentUiState {
         trace.push({ id: nextId(), kind: "user", text: message.content });
         break;
       case "assistant":
-        if (message.content.trim()) trace.push({ id: nextId(), kind: "assistant", text: message.content });
+        if (message.content.trim() || message.reasoning)
+          trace.push({ id: nextId(), kind: "assistant", text: message.content, reasoning: message.reasoning });
         for (const call of message.toolCalls) {
           trace.push({ id: call.id, kind: "tool", toolName: call.name, input: call.input, status: "ok", text: "" });
         }

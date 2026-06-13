@@ -41,10 +41,12 @@ export type AgentEvent =
       maxTurns: number;
       contextTokens: number;
     }
-  /** A model turn: assistant prose plus any tool calls it requested this turn. */
-  | { type: "assistant"; text: string; toolCalls: ToolCall[] }
+  /** A model turn: assistant prose, optional reasoning trace, and any tool calls. */
+  | { type: "assistant"; text: string; reasoning?: string; toolCalls: ToolCall[] }
   /** Incremental assistant prose during streaming; concatenate in arrival order. */
   | { type: "assistant_delta"; text: string }
+  /** Incremental reasoning (deep-thinking) trace during streaming; concatenate in order. */
+  | { type: "reasoning_delta"; text: string }
   /** A tool call surfaced live during streaming, before it executes. */
   | { type: "tool_call"; id: string; name: string; input: Record<string, unknown> }
   /** Result of executing one tool call (concise; bulky payloads use dedicated events). */
@@ -99,6 +101,8 @@ export interface RunAgentRequest {
   prompt: string;
   /** Resume an existing session; omit to start a new one. */
   sessionId?: string;
+  /** Enable the model's deep-thinking (reasoning) mode for this run. */
+  thinking?: boolean;
 }
 
 /** Request body for POST /api/agent/permission. */

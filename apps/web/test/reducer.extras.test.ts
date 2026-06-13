@@ -91,6 +91,7 @@ describe("applyEvent — extended behavior", () => {
         {
           role: "assistant",
           content: "Done.",
+          reasoning: "Planned the build.",
           toolCalls: [{ id: "w1", name: "write_file", input: { path: "/src/App.tsx" } }],
         },
         {
@@ -118,9 +119,43 @@ describe("applyEvent — extended behavior", () => {
     const tool = s.trace.find((t) => t.id === "w1");
     expect(tool?.status).toBe("ok");
     expect(tool?.text).toBe("Wrote /src/App.tsx");
+    expect(s.trace.find((t) => t.kind === "assistant")?.reasoning).toBe("Planned the build.");
     expect(s.trace.some((t) => t.kind === "user" && t.text === "build 2048")).toBe(true);
 
     expect(applyEvent(s, { type: "reset" })).toEqual(initialState);
+  });
+
+  it("streams reasoning ahead of prose into one assistant entry, then finalizes", () => {
+    const s = run([
+      { type: "reasoning_delta", text: "Let me " },
+      { type: "reasoning_delta", text: "plan." },
+      { type: "assistant_delta", text: "Here" },
+      { type: "assistant_delta", text: " goes." },
+      { type: "assistant", text: "Here goes.", reasoning: "Let me plan.", toolCalls: [] },
+    ]);
+    const assistant = s.trace.filter((t) => t.kind === "assistant");
+    expect(assistant).toHaveLength(1);
+    expect(assistant[0]?.reasoning).toBe("Let me plan.");
+    expect(assistant[0]?.text).toBe("Here goes.");
+    expect(assistant[0]?.streaming).toBe(false);
+  });
+
+  it("keeps a reasoning-only turn (thinks, then only tool calls, no prose)", () => {
+    const s = run([
+      { type: "reasoning_delta", text: "I should write the file." },
+      { type: "tool_call", id: "c1", name: "write_file", input: { path: "/a.ts" } },
+      {
+        type: "assistant",
+        text: "",
+        reasoning: "I should write the file.",
+        toolCalls: [{ id: "c1", name: "write_file", input: { path: "/a.ts" } }],
+      },
+    ]);
+    const assistant = s.trace.filter((t) => t.kind === "assistant");
+    expect(assistant).toHaveLength(1);
+    expect(assistant[0]?.reasoning).toBe("I should write the file.");
+    expect(assistant[0]?.text).toBe("");
+    expect(s.trace.filter((t) => t.kind === "tool").map((t) => t.id)).toEqual(["c1"]);
   });
 
   it("summarizes run stats", () => {

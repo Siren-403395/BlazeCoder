@@ -8,7 +8,15 @@ import {
   silentLogger,
 } from "../src/index";
 import type { AgentRuntimeOptions } from "../src/index";
-import { call, FakePreviewBuilder, reply, ScriptedGateway, type Step, writeFullProjectCalls } from "./fakes";
+import {
+  call,
+  FakePreviewBuilder,
+  reply,
+  ScriptedGateway,
+  StreamingScriptedGateway,
+  type Step,
+  writeFullProjectCalls,
+} from "./fakes";
 
 function makeRuntime(steps: Step[], extra: Partial<AgentRuntimeOptions> = {}) {
   const clock = new FixedClock(1);
@@ -79,6 +87,37 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(toolResult && toolResult.type === "tool_result" && toolResult.isError).toBe(true);
     expect(events.some((e) => e.type === "file_change")).toBe(false);
     expect(session.project.files).toHaveLength(0);
+  });
+
+  it("streams reasoning when thinking is enabled, and persists + rehydrates it", async () => {
+    const REASONING = "Let me think about this carefully before answering.";
+    const gateway = new StreamingScriptedGateway("deepseek-v4-pro", [reply("Done.", [], REASONING)]);
+    const clock = new FixedClock(1);
+    const rt = createAgentRuntime({
+      gateway,
+      previewBuilder: new FakePreviewBuilder(),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      clock,
+      logger: silentLogger,
+    });
+    const { emit, events } = sink();
+    const { session, result } = await rt.run({ prompt: "hard question", thinking: true }, emit, signal());
+
+    expect(result.subtype).toBe("success");
+    // The thinking flag reached the model request.
+    expect(gateway.lastRequest?.thinking).toBe(true);
+    // Reasoning arrived as MULTIPLE streamed deltas (never one synchronous blob).
+    const deltas = events.filter((e) => e.type === "reasoning_delta");
+    expect(deltas.length).toBeGreaterThan(1);
+    expect(deltas.map((e) => (e.type === "reasoning_delta" ? e.text : "")).join("")).toBe(REASONING);
+    // The assembled reasoning rides the final assistant event...
+    const asst = events.find((e) => e.type === "assistant");
+    expect(asst?.type === "assistant" && asst.reasoning).toBe(REASONING);
+    // ...is persisted on the transcript, and survives a reload (resume shows it).
+    const reloaded = await rt.getSession(session.id);
+    const stored = reloaded?.messages.find((m) => m.role === "assistant");
+    expect(stored?.role === "assistant" && stored.reasoning).toBe(REASONING);
   });
 
   it("resumes an existing session", async () => {

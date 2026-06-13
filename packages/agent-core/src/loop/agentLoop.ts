@@ -42,6 +42,8 @@ export interface AgentLoopConfig {
   contextTokens: number;
   temperature?: number;
   maxOutputTokens?: number;
+  /** Run the model in deep-thinking (reasoning) mode. */
+  thinking?: boolean;
 }
 
 export interface AgentLoopDeps {
@@ -132,6 +134,7 @@ export async function runAgentLoop(
       tools: toolSchemas,
       maxOutputTokens: config.maxOutputTokens,
       temperature: config.temperature,
+      thinking: config.thinking,
     });
 
     let response: ModelResponse;
@@ -140,6 +143,9 @@ export async function runAgentLoop(
         ? await gateway.stream(request, signal, {
             onText: (chunk) => {
               if (chunk) emit({ type: "assistant_delta", text: chunk });
+            },
+            onReasoning: (chunk) => {
+              if (chunk) emit({ type: "reasoning_delta", text: chunk });
             },
             onToolCall: (call) =>
               emit({ type: "tool_call", id: call.id, name: call.name, input: call.input }),
@@ -158,8 +164,13 @@ export async function runAgentLoop(
     session.usage.inputTokens += response.usage.inputTokens;
     session.usage.outputTokens += response.usage.outputTokens;
 
-    session.messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls });
-    emit({ type: "assistant", text: response.text, toolCalls: response.toolCalls });
+    session.messages.push({
+      role: "assistant",
+      content: response.text,
+      reasoning: response.reasoning,
+      toolCalls: response.toolCalls,
+    });
+    emit({ type: "assistant", text: response.text, reasoning: response.reasoning, toolCalls: response.toolCalls });
     emit({ type: "budget", ...computeBudget(config.contextTokens, response.usage.inputTokens) });
 
     if (response.toolCalls.length === 0) {

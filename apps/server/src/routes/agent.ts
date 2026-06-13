@@ -38,7 +38,11 @@ export function registerAgentRoutes(app: FastifyInstance, runtime: AgentRuntime)
     raw.on("close", () => controller.abort());
 
     try {
-      await runtime.run({ prompt, sessionId: body.sessionId }, send, controller.signal);
+      await runtime.run(
+        { prompt, sessionId: body.sessionId, thinking: body.thinking === true },
+        send,
+        controller.signal,
+      );
     } catch (err) {
       send({ type: "notice", level: "error", message: err instanceof Error ? err.message : String(err) });
     } finally {

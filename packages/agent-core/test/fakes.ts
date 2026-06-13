@@ -12,6 +12,7 @@ import type {
   ModelGateway,
   ModelRequest,
   ModelResponse,
+  ModelStreamHandlers,
   PreviewBuilder,
   PreviewBuildResult,
   Sandbox,
@@ -43,14 +44,58 @@ export class ScriptedGateway implements ModelGateway {
   }
 }
 
-export function reply(text: string, toolCalls: ToolCall[] = []): ModelResponse {
+export function reply(text: string, toolCalls: ToolCall[] = [], reasoning?: string): ModelResponse {
   return {
     text,
+    reasoning,
     toolCalls,
     stopReason: "end_turn",
     usage: { inputTokens: 10, outputTokens: 5 },
     costUsd: 0.0001,
   };
+}
+
+/** Split a string into small pieces so the fake emits several streaming deltas. */
+function streamChunks(s: string): string[] {
+  return s.match(/[\s\S]{1,8}/g) ?? [];
+}
+
+/**
+ * A scripted gateway that implements `stream`, so the loop exercises the
+ * streaming path: reasoning is emitted as multiple onReasoning deltas (ahead of
+ * the prose), then text, then tool calls. Mirrors the real adapter's ordering.
+ */
+export class StreamingScriptedGateway implements ModelGateway {
+  calls = 0;
+  lastRequest: ModelRequest | null = null;
+  constructor(
+    readonly model: string,
+    private readonly steps: Step[],
+  ) {}
+
+  private next(request: ModelRequest): ModelResponse {
+    this.lastRequest = request;
+    const step = this.steps[Math.min(this.calls, this.steps.length - 1)]!;
+    const res = typeof step === "function" ? step(request, this.calls) : step;
+    this.calls += 1;
+    return res;
+  }
+
+  async complete(request: ModelRequest): Promise<ModelResponse> {
+    return this.next(request);
+  }
+
+  async stream(
+    request: ModelRequest,
+    _signal: AbortSignal,
+    handlers: ModelStreamHandlers,
+  ): Promise<ModelResponse> {
+    const res = this.next(request);
+    if (res.reasoning) for (const ch of streamChunks(res.reasoning)) handlers.onReasoning(ch);
+    if (res.text) for (const ch of streamChunks(res.text)) handlers.onText(ch);
+    for (const c of res.toolCalls) handlers.onToolCall(c);
+    return res;
+  }
 }
 
 export function call(id: string, name: string, input: Record<string, unknown> = {}): ToolCall {

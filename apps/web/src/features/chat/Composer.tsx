@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ArrowUp, Stop } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUp, Brain, Stop } from "@phosphor-icons/react";
 import { Button, IconButton, Kbd } from "@/ui";
 import { cn } from "@/lib/cn";
 
@@ -11,11 +11,23 @@ export function Composer({
   onStop,
 }: {
   busy: boolean;
-  onSubmit: (prompt: string) => void;
+  onSubmit: (prompt: string, thinking: boolean) => void;
   onStop: () => void;
 }) {
   const [value, setValue] = useState("");
+  // Deep-thinking is a sticky chat preference, persisted across reloads.
+  const [thinking, setThinking] = useState(
+    () => typeof localStorage !== "undefined" && localStorage.getItem("ca-thinking") === "1",
+  );
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("ca-thinking", thinking ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [thinking]);
 
   function grow() {
     const el = ref.current;
@@ -27,7 +39,7 @@ export function Composer({
   function submit() {
     const prompt = value.trim();
     if (!prompt || busy) return;
-    onSubmit(prompt);
+    onSubmit(prompt, thinking);
     setValue("");
     requestAnimationFrame(() => {
       if (ref.current) ref.current.style.height = "auto";
@@ -103,10 +115,27 @@ export function Composer({
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-faint">
-        <Kbd>⌘</Kbd>
-        <Kbd>↵</Kbd>
-        <span>to send</span>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setThinking((v) => !v)}
+          aria-pressed={thinking}
+          title="Let the model reason step by step before answering"
+          className={cn(
+            "inline-flex h-7 items-center gap-1.5 rounded-control border px-2.5 text-[12px] transition-colors",
+            thinking
+              ? "border-accent-border bg-accent-subtle text-accent-text"
+              : "border-border text-muted hover:border-border-strong hover:text-text",
+          )}
+        >
+          <Brain size={14} weight={thinking ? "fill" : "regular"} />
+          Deep thinking
+        </button>
+        <div className="flex items-center gap-1.5 text-[11px] text-faint">
+          <Kbd>⌘</Kbd>
+          <Kbd>↵</Kbd>
+          <span>to send</span>
+        </div>
       </div>
     </div>
   );

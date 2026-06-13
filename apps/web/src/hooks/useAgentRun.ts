@@ -22,7 +22,7 @@ export interface AgentRun {
   busy: boolean;
   /** Effective status for the UI indicator (collapses a stopped run back to idle). */
   phase: UiStatus;
-  run: (prompt: string) => Promise<void>;
+  run: (prompt: string, opts?: { thinking?: boolean }) => Promise<void>;
   stop: () => void;
   decide: (behavior: "allow" | "deny") => Promise<void>;
   /** Load a persisted session and rehydrate the UI to resume it. */
@@ -44,7 +44,7 @@ export function useAgentRun(): AgentRun {
   const busyRef = useRef(false);
   busyRef.current = busy;
 
-  const run = useCallback(async (prompt: string) => {
+  const run = useCallback(async (prompt: string, opts?: { thinking?: boolean }) => {
     const text = prompt.trim();
     if (!text || busyRef.current) return;
     dispatch({ type: "user_prompt", text });
@@ -52,7 +52,11 @@ export function useAgentRun(): AgentRun {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      await runAgent({ prompt: text, sessionId: sessionRef.current }, dispatch, controller.signal);
+      await runAgent(
+        { prompt: text, sessionId: sessionRef.current, thinking: opts?.thinking },
+        dispatch,
+        controller.signal,
+      );
     } catch (err) {
       if (!controller.signal.aborted) {
         dispatch({

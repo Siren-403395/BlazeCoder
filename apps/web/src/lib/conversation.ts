@@ -9,7 +9,7 @@ import type { TraceEntry } from "./agentState";
 
 export type ConversationSegment =
   | { kind: "user"; id: string; text: string }
-  | { kind: "assistant"; id: string; text: string }
+  | { kind: "assistant"; id: string; text: string; reasoning?: string; streaming?: boolean }
   | { kind: "notice"; id: string; level: "info" | "warn" | "error"; text: string }
   | { kind: "compact"; id: string; text: string }
   | { kind: "activities"; id: string; items: TraceEntry[] };
@@ -36,7 +36,13 @@ export function buildConversation(trace: TraceEntry[]): ConversationSegment[] {
         segments.push({ kind: "user", id: entry.id, text: entry.text });
         break;
       case "assistant":
-        segments.push({ kind: "assistant", id: entry.id, text: entry.text });
+        segments.push({
+          kind: "assistant",
+          id: entry.id,
+          text: entry.text,
+          reasoning: entry.reasoning,
+          streaming: entry.streaming,
+        });
         break;
       case "notice":
         segments.push({

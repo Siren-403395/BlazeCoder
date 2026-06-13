@@ -45,10 +45,14 @@ export interface ModelRequest {
   tools: ToolSchema[];
   maxOutputTokens?: number;
   temperature?: number;
+  /** Enable the model's deep-thinking (reasoning) mode. */
+  thinking?: boolean;
 }
 
 export interface ModelResponse {
   text: string;
+  /** The reasoning trace for this turn, when thinking mode produced one. */
+  reasoning?: string;
   toolCalls: ToolCall[];
   stopReason: StopReason;
   usage: TokenUsage;
@@ -58,6 +62,8 @@ export interface ModelResponse {
 /** Callbacks a streaming gateway invokes as the model produces output. */
 export interface ModelStreamHandlers {
   onText(textChunk: string): void;
+  /** Incremental reasoning trace (thinking mode); separate channel from onText. */
+  onReasoning(textChunk: string): void;
   onToolCall(call: ToolCall): void;
 }
 

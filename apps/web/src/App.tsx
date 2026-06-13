@@ -115,7 +115,7 @@ export function App() {
           setTab("files");
         }}
         busy={busy}
-        onRun={(prompt) => void run(prompt)}
+        onRun={(prompt, thinking) => void run(prompt, { thinking })}
         onStop={stop}
         pending={state.pendingPermission}
         onDecide={(behavior) => void decide(behavior)}
