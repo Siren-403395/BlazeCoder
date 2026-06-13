@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# turbo
+.turbo/
+
+# env / secrets
+.env
+.env.*.local
+
+# runtime state (sessions, memories, spilled tool output)
+.data/
+**/.sessions/
+**/.memories/
+
+# logs
+*.log
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
+
+# personal study notes (not part of the repo)
+/study.md

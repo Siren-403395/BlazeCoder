@@ -1,0 +1,114 @@
+/** Shared test doubles for agent-core. */
+
+import type { AgentEvent, GeneratedProject, ProjectFile, ToolCall } from "@coding-agent/shared";
+import { emptyProject } from "@coding-agent/shared";
+import {
+  FixedClock,
+  InMemoryMemoryStore,
+  InMemoryWorkspace,
+  silentLogger,
+} from "../src/index";
+import type {
+  ModelGateway,
+  ModelRequest,
+  ModelResponse,
+  PreviewBuilder,
+  PreviewBuildResult,
+  Sandbox,
+} from "../src/index";
+import type { ToolContext } from "../src/index";
+
+export const disabledSandbox: Sandbox = {
+  available: false,
+  async run() {
+    return { stdout: "", stderr: "disabled", exitCode: 1, timedOut: false };
+  },
+};
+
+export type Step = ModelResponse | ((req: ModelRequest, callIndex: number) => ModelResponse);
+
+export class ScriptedGateway implements ModelGateway {
+  calls = 0;
+  lastRequest: ModelRequest | null = null;
+  constructor(
+    readonly model: string,
+    private readonly steps: Step[],
+  ) {}
+  async complete(request: ModelRequest): Promise<ModelResponse> {
+    this.lastRequest = request;
+    const step = this.steps[Math.min(this.calls, this.steps.length - 1)]!;
+    const res = typeof step === "function" ? step(request, this.calls) : step;
+    this.calls += 1;
+    return res;
+  }
+}
+
+export function reply(text: string, toolCalls: ToolCall[] = []): ModelResponse {
+  return {
+    text,
+    toolCalls,
+    stopReason: "end_turn",
+    usage: { inputTokens: 10, outputTokens: 5 },
+    costUsd: 0.0001,
+  };
+}
+
+export function call(id: string, name: string, input: Record<string, unknown> = {}): ToolCall {
+  return { id, name, input };
+}
+
+export class FakePreviewBuilder implements PreviewBuilder {
+  builds = 0;
+  constructor(private readonly opts: { ok?: boolean; error?: string } = {}) {}
+  async build(project: GeneratedProject): Promise<PreviewBuildResult> {
+    this.builds += 1;
+    if (this.opts.ok === false) return { ok: false, error: this.opts.error ?? "fake build error" };
+    return { ok: true, previewHtml: `<html><!-- ${project.files.length} files --></html>` };
+  }
+}
+
+export function makeCtx(overrides: Partial<ToolContext> = {}): { ctx: ToolContext; events: AgentEvent[] } {
+  const events: AgentEvent[] = [];
+  const ctx: ToolContext = {
+    sessionId: "s1",
+    workspace: overrides.workspace ?? new InMemoryWorkspace(emptyProject("t")),
+    previewBuilder: overrides.previewBuilder ?? new FakePreviewBuilder(),
+    sandbox: overrides.sandbox ?? disabledSandbox,
+    memory: overrides.memory ?? new InMemoryMemoryStore(),
+    emit: overrides.emit ?? ((e) => events.push(e)),
+    signal: overrides.signal ?? new AbortController().signal,
+    logger: overrides.logger ?? silentLogger,
+    clock: overrides.clock ?? new FixedClock(0),
+  };
+  return { ctx, events };
+}
+
+/** A complete, valid React+Vite project (passes validateProject). */
+export function fullProjectFiles(): ProjectFile[] {
+  return [
+    { path: "/package.json", language: "json", content: '{\n  "name": "app",\n  "private": true\n}\n' },
+    { path: "/index.html", language: "html", content: '<!doctype html><html><body><div id="root"></div></body></html>' },
+    { path: "/vite.config.ts", language: "ts", content: 'export default {};\n' },
+    {
+      path: "/src/main.tsx",
+      language: "tsx",
+      content:
+        'import { createRoot } from "react-dom/client";\nimport App from "./App";\nimport "./index.css";\ncreateRoot(document.getElementById("root")!).render(<App />);\n',
+    },
+    {
+      path: "/src/App.tsx",
+      language: "tsx",
+      content: 'export default function App() {\n  return <h1>Hello</h1>;\n}\n',
+    },
+    { path: "/src/index.css", language: "css", content: "body { margin: 0; }\n" },
+  ];
+}
+
+export function fullProject(): GeneratedProject {
+  return { ...emptyProject("app"), files: fullProjectFiles() };
+}
+
+/** Build the scripted tool calls that write a full project (one call per file). */
+export function writeFullProjectCalls(): ToolCall[] {
+  return fullProjectFiles().map((f, i) => call(`w${i}`, "write_file", { path: f.path, content: f.content }));
+}
