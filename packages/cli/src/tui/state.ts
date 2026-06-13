@@ -1,9 +1,12 @@
 /**
  * The TUI's pure event -> view reducer. The Ink components are a thin render of
  * this state; all the logic lives here so it can be unit-tested without a
- * terminal. It folds the normalized AgentEvent stream (plus two synthetic UI
- * actions) into a flat list of scrollback items + run status, mirroring how the
- * old web reducer worked but adapted to the CLI event shape (no preview).
+ * terminal. It folds the normalized AgentEvent stream (plus a few synthetic UI
+ * actions) into a flat list of scrollback items + run status.
+ *
+ * The model's reasoning trace is NOT rendered (Claude-Code style): instead we
+ * only track how many output chars streamed this turn (`turnChars`) so the live
+ * region can show a growing token counter while it thinks.
  */
 
 import type { AgentEvent, SessionState, TranscriptMessage } from "@coding-agent/shared";
@@ -12,7 +15,7 @@ export type ToolStatus = "running" | "ok" | "error";
 
 export type Item =
   | { kind: "user"; id: string; text: string }
-  | { kind: "assistant"; id: string; text: string; reasoning?: string; streaming: boolean }
+  | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; name: string; status: ToolStatus; input: Record<string, unknown>; summary?: string; durationMs?: number }
   | { kind: "notice"; id: string; level: "info" | "warn" | "error"; message: string }
   | { kind: "compact"; id: string; reason: string }
@@ -27,14 +30,13 @@ export interface PendingPermission {
 
 export type RunStatus = "idle" | "running" | "awaiting_permission" | "done" | "error";
 
-export type ReasoningDisplay = "hidden" | "summary" | "full";
-
 export interface TuiState {
   items: Item[];
   status: RunStatus;
   model?: string;
   effort: string;
-  reasoning: ReasoningDisplay;
+  /** Estimated output chars streamed this turn — drives the live token counter. */
+  turnChars: number;
   turns: number;
   maxTurns: number;
   costUsd: number;
@@ -51,17 +53,16 @@ export type UiAction =
   | AgentEvent
   | { type: "user_prompt"; text: string }
   | { type: "set_effort"; effort: string }
-  | { type: "set_reasoning"; reasoning: ReasoningDisplay }
   | { type: "permission_resolved" }
   | { type: "hydrate"; session: SessionState }
   | { type: "reset" };
 
-export function initialState(effort = "high", reasoning: ReasoningDisplay = "summary"): TuiState {
+export function initialState(effort = "high"): TuiState {
   return {
     items: [],
     status: "idle",
     effort,
-    reasoning,
+    turnChars: 0,
     turns: 0,
     maxTurns: 0,
     costUsd: 0,
@@ -97,13 +98,10 @@ function firstLine(text: string, max = 200): string {
 export function applyEvent(state: TuiState, action: UiAction): TuiState {
   switch (action.type) {
     case "reset":
-      return { ...initialState(state.effort, state.reasoning), model: state.model };
+      return { ...initialState(state.effort), model: state.model };
 
     case "set_effort":
       return { ...state, effort: action.effort };
-
-    case "set_reasoning":
-      return { ...state, reasoning: action.reasoning };
 
     case "permission_resolved":
       // The user answered the prompt; the loop resumes and will emit more events.
@@ -113,7 +111,7 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       const { items, seq } = hydrateItems(state.seq, action.session.messages);
       // Replace the screen entirely with the resumed transcript (bounded), so a
       // resume never stacks on top of whatever was already shown.
-      return { ...state, items: cap(items), seq, model: action.session.model, status: "done" };
+      return { ...state, items: cap(items), seq, model: action.session.model, status: "done", turnChars: 0 };
     }
 
     case "user_prompt": {
@@ -124,6 +122,7 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
         status: "running",
         permission: undefined,
         liveAssistantId: undefined,
+        turnChars: 0,
         items: cap([...state.items, { kind: "user", id: uid, text: action.text }]),
       };
     }
@@ -137,10 +136,12 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       };
 
     case "assistant_delta": {
+      const turnChars = state.turnChars + action.text.length;
       const live = state.items.find((i) => i.id === state.liveAssistantId && i.kind === "assistant");
       if (live && live.kind === "assistant") {
         return {
           ...state,
+          turnChars,
           items: state.items.map((i) =>
             i.id === live.id && i.kind === "assistant" ? { ...i, text: i.text + action.text } : i,
           ),
@@ -150,29 +151,15 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       return {
         ...state,
         seq,
+        turnChars,
         liveAssistantId: aid,
         items: [...state.items, { kind: "assistant", id: aid, text: action.text, streaming: true }],
       };
     }
 
-    case "reasoning_delta": {
-      const live = state.items.find((i) => i.id === state.liveAssistantId && i.kind === "assistant");
-      if (live && live.kind === "assistant") {
-        return {
-          ...state,
-          items: state.items.map((i) =>
-            i.id === live.id && i.kind === "assistant" ? { ...i, reasoning: (i.reasoning ?? "") + action.text } : i,
-          ),
-        };
-      }
-      const [aid, seq] = id(state, "a");
-      return {
-        ...state,
-        seq,
-        liveAssistantId: aid,
-        items: [...state.items, { kind: "assistant", id: aid, text: "", reasoning: action.text, streaming: true }],
-      };
-    }
+    case "reasoning_delta":
+      // Thinking is not rendered — only counted, so the live region shows tokens growing.
+      return { ...state, turnChars: state.turnChars + action.text.length };
 
     case "tool_call": {
       if (state.items.some((i) => i.id === action.id)) return state;
@@ -188,16 +175,12 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       const live = items.find((i) => i.id === state.liveAssistantId && i.kind === "assistant");
       if (live && live.kind === "assistant") {
         items = items.map((i) =>
-          i.id === live.id && i.kind === "assistant"
-            ? { ...i, text: action.text, reasoning: action.reasoning ?? i.reasoning, streaming: false }
-            : i,
+          i.id === live.id && i.kind === "assistant" ? { ...i, text: action.text, streaming: false } : i,
         );
-      } else if (action.text || action.reasoning) {
+      } else if (action.text) {
         const [aid, seq] = id(state, "a");
-        items = [...items, { kind: "assistant", id: aid, text: action.text, reasoning: action.reasoning, streaming: false }];
-        // Ensure tool items exist for any tool calls this turn.
-        const withTools = ensureToolItems(items, action.toolCalls);
-        return { ...state, seq, liveAssistantId: undefined, items: withTools };
+        items = [...items, { kind: "assistant", id: aid, text: action.text, streaming: false }];
+        return { ...state, seq, liveAssistantId: undefined, items: ensureToolItems(items, action.toolCalls) };
       }
       return { ...state, liveAssistantId: undefined, items: ensureToolItems(items, action.toolCalls) };
     }
@@ -270,8 +253,8 @@ function hydrateItems(startSeq: number, messages: TranscriptMessage[]): { items:
     if (m.role === "user") {
       items.push({ kind: "user", id: `u${++seq}`, text: m.content });
     } else if (m.role === "assistant") {
-      if (m.content || m.reasoning) {
-        items.push({ kind: "assistant", id: `a${++seq}`, text: m.content, reasoning: m.reasoning, streaming: false });
+      if (m.content) {
+        items.push({ kind: "assistant", id: `a${++seq}`, text: m.content, streaming: false });
       }
       for (const c of m.toolCalls) {
         toolIndex.set(c.id, items.length);

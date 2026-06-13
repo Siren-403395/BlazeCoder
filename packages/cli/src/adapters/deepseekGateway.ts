@@ -61,27 +61,7 @@ export class DeepSeekGateway implements ModelGateway {
   }
 
   private buildBody(request: ModelRequest, stream: boolean): Record<string, unknown> {
-    const body: Record<string, unknown> = {
-      model: this.model,
-      messages: toOpenAiMessages(request),
-      max_tokens: request.maxOutputTokens ?? 8000,
-    };
-    // Deep-thinking mode rejects temperature/top_p/penalties, so only send
-    // temperature when thinking is off.
-    if (request.thinking) body.thinking = { type: "enabled" };
-    else body.temperature = request.temperature ?? 0.2;
-    if (request.tools.length > 0) {
-      body.tools = request.tools.map((t) => ({
-        type: "function",
-        function: { name: t.name, description: t.description, parameters: t.inputSchema },
-      }));
-      body.tool_choice = "auto";
-    }
-    if (stream) {
-      body.stream = true;
-      body.stream_options = { include_usage: true };
-    }
-    return body;
+    return buildDeepSeekBody(this.model, request, stream);
   }
 
   private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
@@ -207,6 +187,38 @@ export class DeepSeekGateway implements ModelGateway {
       costUsd: this.cost(usage),
     };
   }
+}
+
+/**
+ * Build the OpenAI-compatible request body for DeepSeek. Pure (no `this`) so it
+ * can be unit-tested directly. Deep-thinking mode is enabled with an optional
+ * native depth `budget` (V4-Pro: "high" = Think High, "max" = Think Max); since
+ * thinking mode rejects temperature/top_p/penalties, temperature is only sent
+ * when thinking is off.
+ */
+export function buildDeepSeekBody(model: string, request: ModelRequest, stream: boolean): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model,
+    messages: toOpenAiMessages(request),
+    max_tokens: request.maxOutputTokens ?? 8000,
+  };
+  if (request.thinking) {
+    body.thinking = request.thinkingBudget ? { type: "enabled", budget: request.thinkingBudget } : { type: "enabled" };
+  } else {
+    body.temperature = request.temperature ?? 0.2;
+  }
+  if (request.tools.length > 0) {
+    body.tools = request.tools.map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description, parameters: t.inputSchema },
+    }));
+    body.tool_choice = "auto";
+  }
+  if (stream) {
+    body.stream = true;
+    body.stream_options = { include_usage: true };
+  }
+  return body;
 }
 
 function toToolCall(a: { id: string; name: string; args: string }): ToolCall {

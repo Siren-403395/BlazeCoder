@@ -18,8 +18,9 @@ export interface SlashCommand {
 
 export const COMMANDS: SlashCommand[] = [
   { name: "resume", description: "Resume a previous conversation" },
-  { name: "effort", description: "Set reasoning effort for the session", argHint: "low | medium | high | ultra", argChoices: [...EFFORTS] },
-  { name: "reasoning", description: "How much of the model's thinking to show", argHint: "hidden | summary | full", argChoices: ["hidden", "summary", "full"] },
+  { name: "effort", description: "Set reasoning depth: low (off) · high · ultra", argHint: EFFORTS.join(" | "), argChoices: [...EFFORTS] },
+  { name: "usage", description: "Show token usage and session cost" },
+  { name: "context", description: "Show how full the context window is" },
   { name: "clear", description: "Start a new session with empty context; the previous one stays on disk (resume with /resume)", aliases: ["reset"] },
   { name: "help", description: "Show available commands and keys" },
   { name: "exit", description: "Quit zephyrcode", aliases: ["quit"] },

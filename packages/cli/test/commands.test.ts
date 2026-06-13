@@ -38,8 +38,7 @@ describe("findCommand", () => {
 
 describe("argGhost (placeholder)", () => {
   it("shows the choices after `/cmd ` while the arg is empty", () => {
-    expect(argGhost("/effort ")).toBe("low | medium | high | ultra");
-    expect(argGhost("/reasoning ")).toBe("hidden | summary | full");
+    expect(argGhost("/effort ")).toBe("low | high | ultra");
   });
 
   it("hides once an argument is typed, or for commands without args", () => {

@@ -72,7 +72,7 @@ export async function runAgentLoop(
   const { gateway, registry, executor, contextManager, ledger, sandbox, memory, clock, logger, config } = deps;
   const toolSchemas = registry.schemas();
   const projectRules = buildProjectRules({ root: workspace.root, userRules: config.userRules });
-  const { thinking, maxOutputTokens } = resolveEffort(config.effort, config.maxOutputTokens);
+  const { thinking, budget, maxOutputTokens } = resolveEffort(config.effort, config.maxOutputTokens);
 
   emit({
     type: "system",
@@ -138,6 +138,7 @@ export async function runAgentLoop(
       maxOutputTokens,
       temperature: config.temperature,
       thinking,
+      thinkingBudget: budget,
     });
 
     let response: ModelResponse;

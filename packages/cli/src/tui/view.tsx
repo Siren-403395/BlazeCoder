@@ -9,7 +9,7 @@ import type { SessionSummary } from "@coding-agent/core";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
 import type { SlashCommand } from "./commands";
-import type { Item, PendingPermission, ReasoningDisplay, TuiState } from "./state";
+import type { Item, PendingPermission } from "./state";
 
 /** Finalized assistant prose, rendered as Markdown (headings, bold, lists, code). */
 function Markdown({ text }: { text: string }) {
@@ -37,41 +37,23 @@ function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   );
 }
 
-function ReasoningView({ item, mode }: { item: Extract<Item, { kind: "assistant" }>; mode: ReasoningDisplay }) {
-  if (mode === "hidden" || !item.reasoning) return null;
-  // While streaming, always show the live thinking. Once finalized, "summary"
-  // collapses it to a single dim line; "full" keeps the whole trace.
-  if (!item.streaming && mode === "summary") {
-    return <Text color={theme.accentDim}>✷ thought for a moment</Text>;
-  }
-  return (
-    <Box flexDirection="column" marginBottom={item.text ? 1 : 0}>
-      <Text color={theme.accentDim}>✷ thinking{item.streaming && !item.text ? "…" : ""}</Text>
-      <Text color={theme.faint} wrap="wrap">
-        {item.reasoning}
-      </Text>
-    </Box>
-  );
-}
-
-function AssistantView({ item, reasoning }: { item: Extract<Item, { kind: "assistant" }>; reasoning: ReasoningDisplay }) {
+function AssistantView({ item }: { item: Extract<Item, { kind: "assistant" }> }) {
   return (
     <Box flexDirection="column" marginTop={1}>
-      <ReasoningView item={item} mode={reasoning} />
       {item.text ? (
         item.streaming ? (
           <Text wrap="wrap">{item.text}</Text>
         ) : (
           <Markdown text={item.text} />
         )
-      ) : item.streaming && (!item.reasoning || reasoning === "hidden") ? (
+      ) : item.streaming ? (
         <Text color={theme.faint}>…</Text>
       ) : null}
     </Box>
   );
 }
 
-export function ItemView({ item, reasoning = "summary" }: { item: Item; reasoning?: ReasoningDisplay }) {
+export function ItemView({ item }: { item: Item }) {
   switch (item.kind) {
     case "user":
       return (
@@ -83,7 +65,7 @@ export function ItemView({ item, reasoning = "summary" }: { item: Item; reasonin
         </Box>
       );
     case "assistant":
-      return <AssistantView item={item} reasoning={reasoning} />;
+      return <AssistantView item={item} />;
     case "tool":
       return <ToolView item={item} />;
     case "notice":
@@ -102,38 +84,81 @@ export function ItemView({ item, reasoning = "summary" }: { item: Item; reasonin
     case "result":
       return (
         <Box marginTop={1}>
-          <Text color={item.subtype === "success" ? theme.success : theme.error}>
-            {item.subtype === "success" ? "● " : "● "}
-          </Text>
-          <Text color={theme.faint}>{item.subtype === "success" ? "done" : item.subtype}</Text>
+          <Text color={item.subtype === "success" ? theme.success : theme.error}>●</Text>
+          <Text color={theme.faint}> {item.subtype === "success" ? "done" : item.subtype}</Text>
         </Box>
       );
   }
 }
 
-export function StatusBar({ state }: { state: TuiState }) {
-  const pct = state.tokensTotal ? Math.round((100 * state.tokensUsed) / state.tokensTotal) : 0;
+/**
+ * The live "working…" line: an animated spinner + a rotating verb + a meta
+ * parenthetical (elapsed · tokens · phase · effort) the caller composes.
+ */
+export function LoadingLine({ word, meta }: { word: string; meta: string }) {
   return (
     <Box marginTop={1}>
-      <Text color={theme.faint}>
-        {state.model ?? "?"} · effort {state.effort} · reasoning {state.reasoning} · turn {state.turns}/
-        {state.maxTurns} · ctx {pct}% · ${state.costUsd.toFixed(4)}
+      <Text color={theme.accent}>
+        <Spinner type="dots" />
       </Text>
+      <Text color={theme.accent} italic>
+        {` ${word}…`}
+      </Text>
+      <Text color={theme.faint}>{`  (${meta})`}</Text>
     </Box>
   );
 }
 
-/** The prompt input line with a block cursor, optional faint arg-hint ghost, and a placeholder. */
-export function InputLine({
+/** The prompt input: a top rule carrying the current effort, then the editable line. */
+export function InputBox({
   value,
   cursor,
   ghost,
   placeholder,
+  effort,
+  width,
+  showCursor = true,
 }: {
   value: string;
   cursor: number;
   ghost?: string | null;
   placeholder?: string;
+  effort: string;
+  width: number;
+  showCursor?: boolean;
+}) {
+  const label = ` ✶ ${effort} `;
+  const dashes = Math.max(2, width - label.length - 1);
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Box>
+        <Text color={theme.faint}>{"─".repeat(dashes)}</Text>
+        <Text color={theme.accent}>{label}</Text>
+        <Text color={theme.faint}>─</Text>
+      </Box>
+      <InputLine value={value} cursor={cursor} ghost={ghost} placeholder={placeholder} showCursor={showCursor} />
+    </Box>
+  );
+}
+
+/** A faint product tip shown beneath the prompt. */
+export function TipLine({ tip }: { tip: string }) {
+  return <Text color={theme.faint}>{`  Tip: ${tip}`}</Text>;
+}
+
+/** The editable prompt line with a block cursor, optional faint arg-hint ghost, and a placeholder. */
+export function InputLine({
+  value,
+  cursor,
+  ghost,
+  placeholder,
+  showCursor = true,
+}: {
+  value: string;
+  cursor: number;
+  ghost?: string | null;
+  placeholder?: string;
+  showCursor?: boolean;
 }) {
   const before = value.slice(0, cursor);
   const at = value.slice(cursor, cursor + 1);
@@ -143,13 +168,13 @@ export function InputLine({
       <Text color={theme.accent}>{"❯ "}</Text>
       {value.length === 0 ? (
         <>
-          <Text inverse> </Text>
+          {showCursor ? <Text inverse> </Text> : null}
           {placeholder ? <Text color={theme.faint}>{placeholder}</Text> : null}
         </>
       ) : (
         <>
           <Text>{before}</Text>
-          <Text inverse>{at.length ? at : " "}</Text>
+          {showCursor ? <Text inverse>{at.length ? at : " "}</Text> : <Text>{at}</Text>}
           <Text>{after}</Text>
           {ghost ? <Text color={theme.faint}>{ghost}</Text> : null}
         </>

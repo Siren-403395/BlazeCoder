@@ -29,7 +29,7 @@ describe("renderMarkdown (third-party marked + marked-terminal)", () => {
 describe("AssistantView markdown integration", () => {
   it("renders FINALIZED assistant prose as markdown (syntax stripped)", () => {
     const { lastFrame, unmount } = render(
-      <ItemView item={{ kind: "assistant", id: "a", text: "## Plan\n\nDo the **thing**.", streaming: false }} reasoning="hidden" />,
+      <ItemView item={{ kind: "assistant", id: "a", text: "## Plan\n\nDo the **thing**.", streaming: false }} />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Plan");
@@ -41,7 +41,7 @@ describe("AssistantView markdown integration", () => {
 
   it("leaves STREAMING assistant text raw (no half-parsed reflow mid-stream)", () => {
     const { lastFrame, unmount } = render(
-      <ItemView item={{ kind: "assistant", id: "a", text: "Do the **thing**.", streaming: true }} reasoning="hidden" />,
+      <ItemView item={{ kind: "assistant", id: "a", text: "Do the **thing**.", streaming: true }} />,
     );
     expect(lastFrame() ?? "").toContain("**thing**"); // raw while streaming
     unmount();

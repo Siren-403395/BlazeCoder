@@ -47,6 +47,8 @@ export interface ModelRequest {
   temperature?: number;
   /** Enable the model's deep-thinking (reasoning) mode. */
   thinking?: boolean;
+  /** Native reasoning depth when thinking is on (DeepSeek-V4-Pro: high | max). */
+  thinkingBudget?: "high" | "max";
 }
 
 export interface ModelResponse {

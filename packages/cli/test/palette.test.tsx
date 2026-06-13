@@ -42,6 +42,9 @@ async function waitFor(fn: () => boolean, timeout = 3000): Promise<void> {
 // is processed; in a real terminal there is always a natural gap between keystrokes.
 const settle = () => new Promise((r) => setTimeout(r, 40));
 
+// Strip SGR codes so substring assertions don't trip over Ink's color escapes.
+const clean = (s: string | undefined) => (s ?? "").replace(new RegExp("\\x1b\\[[0-9;]*m", "g"), "");
+
 describe("command palette (interactive)", () => {
   it("shows prefix-filtered commands with descriptions as you type", async () => {
     const { lastFrame, stdin, unmount } = render(<App runtime={makeRuntime()} effort="low" />);
@@ -50,7 +53,7 @@ describe("command palette (interactive)", () => {
     await waitFor(() => (lastFrame() ?? "").includes("/effort"));
     const frame = lastFrame() ?? "";
     expect(frame).toContain("/effort");
-    expect(frame).toContain("Set reasoning effort");
+    expect(frame).toContain("Set reasoning depth");
     expect(frame).toContain("/exit");
     expect(frame).not.toContain("/resume"); // filtered out by the "e" prefix
     unmount();
@@ -60,7 +63,7 @@ describe("command palette (interactive)", () => {
     const { lastFrame, stdin, unmount } = render(<App runtime={makeRuntime()} effort="low" />);
     await new Promise((r) => setTimeout(r, 60));
     stdin.write("/effort ");
-    await waitFor(() => (lastFrame() ?? "").includes("low | medium | high | ultra"));
+    await waitFor(() => (lastFrame() ?? "").includes("low | high | ultra"));
     unmount();
   });
 });
@@ -75,12 +78,12 @@ describe("Tab completion + cursor placement", () => {
     await waitFor(() => (lastFrame() ?? "").includes("/effort"));
     await settle();
     stdin.write("\t"); // complete -> "/effort " with the cursor at the end
-    await waitFor(() => (lastFrame() ?? "").includes("low | medium | high | ultra"));
+    await waitFor(() => (lastFrame() ?? "").includes("low | high | ultra"));
     await settle();
-    stdin.write("high"); // must land AFTER the space: "/effort high"
+    stdin.write("ultra"); // must land AFTER the space: "/effort ultra"
     await settle();
     stdin.write("\r");
-    await waitFor(() => (lastFrame() ?? "").includes("effort high")); // status bar reflects the set effort
+    await waitFor(() => (lastFrame() ?? "").includes("✶ ultra")); // input border now carries the set effort
     unmount();
   });
 });
@@ -91,11 +94,13 @@ describe("command history", () => {
     await new Promise((r) => setTimeout(r, 60));
     stdin.write("/clear");
     await new Promise((r) => setTimeout(r, 20));
-    stdin.write("\r"); // submit /clear → wipes scrollback, so "/clear" appears nowhere on screen
+    stdin.write("\r"); // submit /clear → wipes scrollback; the input line goes empty
     await new Promise((r) => setTimeout(r, 60));
-    expect(lastFrame() ?? "").not.toContain("/clear");
-    stdin.write(UP); // recall "/clear" into the (otherwise empty) input line
-    await waitFor(() => (lastFrame() ?? "").includes("/clear"));
+    // The prompt line is empty now. (A rotating tip may mention "/clear", so assert
+    // on the input line specifically — "❯ /clear" — not the whole frame.)
+    expect(clean(lastFrame())).not.toContain("❯ /clear");
+    stdin.write(UP); // recall "/clear" into the input line
+    await waitFor(() => clean(lastFrame()).includes("❯ /clear"));
     unmount();
   });
 });

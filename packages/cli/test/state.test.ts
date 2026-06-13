@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEvent, initialState, reduce, type Item, type UiAction } from "../src/tui/state";
-
-function assistantItems(actions: UiAction[]) {
-  return reduce(actions).items.filter((i): i is Extract<Item, { kind: "assistant" }> => i.kind === "assistant");
-}
+import { applyEvent, initialState, reduce } from "../src/tui/state";
 
 describe("TUI state reducer", () => {
   it("records the prompt and enters running", () => {
@@ -27,25 +23,45 @@ describe("TUI state reducer", () => {
     expect(s.tokensTotal).toBe(65536);
   });
 
-  it("assembles a streamed turn (reasoning + prose) into ONE assistant item, then finalizes", () => {
-    const items = assistantItems([
+  it("assembles a streamed turn into ONE assistant item and counts streamed chars", () => {
+    const s = reduce([
       { type: "user_prompt", text: "go" },
       { type: "reasoning_delta", text: "Let me " },
       { type: "reasoning_delta", text: "plan." },
       { type: "assistant_delta", text: "Here" },
       { type: "assistant_delta", text: " it is." },
-      { type: "assistant", text: "Here it is.", reasoning: "Let me plan.", toolCalls: [] },
+      { type: "assistant", text: "Here it is.", toolCalls: [] },
     ]);
+    const items = s.items.filter((i) => i.kind === "assistant");
     expect(items).toHaveLength(1);
-    expect(items[0]!.text).toBe("Here it is.");
-    expect(items[0]!.reasoning).toBe("Let me plan.");
-    expect(items[0]!.streaming).toBe(false);
+    expect(items[0]).toMatchObject({ text: "Here it is.", streaming: false });
+    expect(items[0]).not.toHaveProperty("reasoning"); // thinking is not stored, only counted
+    expect(s.turnChars).toBe(23); // 7 + 5 (reasoning) + 4 + 7 (prose) all counted
+  });
+
+  it("does not render a reasoning-only turn as a bubble, but still counts its tokens", () => {
+    const s = reduce([
+      { type: "user_prompt", text: "go" },
+      { type: "reasoning_delta", text: "I should write the file." },
+      { type: "tool_call", id: "c1", name: "Write", input: { file_path: "/a.ts" } },
+      { type: "assistant", text: "", toolCalls: [{ id: "c1", name: "Write", input: { file_path: "/a.ts" } }] },
+    ]);
+    expect(s.items.filter((i) => i.kind === "assistant")).toHaveLength(0);
+    expect(s.items.filter((i) => i.kind === "tool")).toHaveLength(1);
+    expect(s.turnChars).toBe("I should write the file.".length);
+  });
+
+  it("resets the per-turn token estimate on a new prompt", () => {
+    let s = reduce([{ type: "user_prompt", text: "go" }, { type: "reasoning_delta", text: "hmmm" }]);
+    expect(s.turnChars).toBe(4);
+    s = applyEvent(s, { type: "user_prompt", text: "again" });
+    expect(s.turnChars).toBe(0);
   });
 
   it("tracks a tool from running to ok in place (no duplicate)", () => {
     const s = reduce([
       { type: "user_prompt", text: "go" },
-      { type: "assistant", text: "", reasoning: undefined, toolCalls: [{ id: "c1", name: "Write", input: { file_path: "/a.ts" } }] },
+      { type: "assistant", text: "", toolCalls: [{ id: "c1", name: "Write", input: { file_path: "/a.ts" } }] },
       { type: "tool_call", id: "c1", name: "Write", input: { file_path: "/a.ts" } },
       { type: "tool_result", toolUseId: "c1", name: "Write", content: "Wrote /a.ts (1 line).", isError: false, durationMs: 5 },
     ]);
@@ -94,10 +110,9 @@ describe("TUI state reducer", () => {
     expect(s.items.at(-1)).toMatchObject({ kind: "result", subtype: "success", summary: "Done." });
   });
 
-  it("reset clears the transcript but keeps model, effort, and reasoning", () => {
+  it("reset clears the transcript but keeps model and effort", () => {
     const s = reduce([
       { type: "set_effort", effort: "ultra" },
-      { type: "set_reasoning", reasoning: "full" },
       { type: "system", subtype: "init", sessionId: "s", model: "m", tools: [], maxTurns: 24, contextTokens: 100 },
       { type: "user_prompt", text: "go" },
     ]);
@@ -105,17 +120,10 @@ describe("TUI state reducer", () => {
     expect(cleared.items).toHaveLength(0);
     expect(cleared.model).toBe("m");
     expect(cleared.effort).toBe("ultra");
-    expect(cleared.reasoning).toBe("full");
     expect(cleared.status).toBe("idle");
   });
 
-  it("defaults reasoning to summary and lets /reasoning change it", () => {
-    expect(initialState().reasoning).toBe("summary");
-    const s = applyEvent(initialState(), { type: "set_reasoning", reasoning: "hidden" });
-    expect(s.reasoning).toBe("hidden");
-  });
-
-  it("hydrates scrollback from a persisted session (resume)", () => {
+  it("hydrates scrollback from a persisted session (resume), without rendering reasoning", () => {
     const s = applyEvent(initialState(), {
       type: "hydrate",
       session: {
@@ -139,20 +147,9 @@ describe("TUI state reducer", () => {
     expect(s.model).toBe("deepseek-v4-pro");
     expect(s.status).toBe("done");
     expect(s.items.find((i) => i.kind === "user")).toMatchObject({ text: "make a counter" });
-    expect(s.items.find((i) => i.kind === "assistant")).toMatchObject({ text: "Done.", reasoning: "planned it", streaming: false });
+    const assistant = s.items.find((i) => i.kind === "assistant");
+    expect(assistant).toMatchObject({ text: "Done.", streaming: false });
+    expect(assistant).not.toHaveProperty("reasoning");
     expect(s.items.find((i) => i.id === "w1")).toMatchObject({ kind: "tool", status: "ok", summary: "Wrote /a.ts (1 line)." });
-  });
-
-  it("keeps a reasoning-only turn that ends in tool calls (no prose)", () => {
-    const items = assistantItems([
-      { type: "user_prompt", text: "go" },
-      { type: "reasoning_delta", text: "I should write the file." },
-      { type: "tool_call", id: "c1", name: "Write", input: { file_path: "/a.ts" } },
-      { type: "assistant", text: "", reasoning: "I should write the file.", toolCalls: [{ id: "c1", name: "Write", input: { file_path: "/a.ts" } }] },
-    ]);
-    expect(items).toHaveLength(1);
-    expect(items[0]!.text).toBe("");
-    expect(items[0]!.reasoning).toBe("I should write the file.");
-    expect(items[0]!.streaming).toBe(false);
   });
 });

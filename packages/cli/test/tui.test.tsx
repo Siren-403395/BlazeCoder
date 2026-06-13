@@ -48,31 +48,11 @@ describe("ItemView", () => {
     unmount();
   });
 
-  it("renders an assistant message with a full thinking block", () => {
+  it("renders a finalized assistant message", () => {
     const { lastFrame, unmount } = render(
-      <ItemView
-        item={{ kind: "assistant", id: "a", text: "All set.", reasoning: "First I planned it.", streaming: false }}
-        reasoning="full"
-      />,
+      <ItemView item={{ kind: "assistant", id: "a", text: "All set.", streaming: false }} />,
     );
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("thinking");
-    expect(frame).toContain("First I planned it.");
-    expect(frame).toContain("All set.");
-    unmount();
-  });
-
-  it("collapses the thinking block to one line in summary mode once finalized", () => {
-    const { lastFrame, unmount } = render(
-      <ItemView
-        item={{ kind: "assistant", id: "a", text: "All set.", reasoning: "First I planned it.", streaming: false }}
-        reasoning="summary"
-      />,
-    );
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("thought for a moment");
-    expect(frame).not.toContain("First I planned it.");
-    expect(frame).toContain("All set.");
+    expect(lastFrame() ?? "").toContain("All set.");
     unmount();
   });
 
@@ -108,8 +88,8 @@ describe("App end-to-end (scripted runtime)", () => {
     await new Promise((r) => setTimeout(r, 30)); // let the keystrokes land before Enter
     stdin.write("\r");
 
-    // Wait until the scripted run has finished (status bar shows a completed turn).
-    await waitFor(() => (lastFrame() ?? "").includes("turn 1/"));
+    // Wait until the scripted run has finished (the result line shows "done").
+    await waitFor(() => (lastFrame() ?? "").includes("done"));
 
     const frame = lastFrame() ?? "";
     expect(frame).toContain("make notes"); // the user prompt landed in scrollback

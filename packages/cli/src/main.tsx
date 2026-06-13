@@ -13,7 +13,7 @@ import { runHeadless, type OutputFormat } from "./headless";
 import { isEffort, type Effort } from "@coding-agent/core";
 
 const VERSION = "0.1.0";
-const EFFORTS = ["low", "medium", "high", "ultra"];
+const EFFORTS = ["low", "high", "ultra"];
 
 interface Args {
   cwd?: string;

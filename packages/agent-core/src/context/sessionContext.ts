@@ -23,6 +23,7 @@ export interface AssembleParams {
   maxOutputTokens?: number;
   temperature?: number;
   thinking?: boolean;
+  thinkingBudget?: "high" | "max";
 }
 
 export function assembleRequest(params: AssembleParams): ModelRequest {
@@ -36,6 +37,7 @@ export function assembleRequest(params: AssembleParams): ModelRequest {
     maxOutputTokens: params.maxOutputTokens,
     temperature: params.temperature,
     thinking: params.thinking,
+    thinkingBudget: params.thinkingBudget,
   };
 }
 

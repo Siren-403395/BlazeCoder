@@ -1,21 +1,20 @@
 /**
  * The root TUI component. Owns the reducer, drives the AgentRuntime in-process
  * (no HTTP), and renders a BOUNDED WINDOW of recent scrollback items plus a live
- * region with a custom prompt input.
+ * region: an animated "working…" line while running, a bordered prompt that
+ * carries the current effort on its top rule, and a rotating product tip.
  *
  * We deliberately do NOT use Ink's <Static>: it is append-only (its internal
  * index never rewinds) and its `fullStaticOutput` buffer grows without bound and
- * has no reset, which makes (a) /resume visibly stack one transcript on top of
- * the previous one and (b) very long sessions blow the render up. Rendering a
- * trailing window instead lets `hydrate` cleanly REPLACE the screen on resume and
- * keeps the painted height finite. The input is hand-rolled (value + cursor)
- * rather than ink-text-input so we fully control the cursor for Tab-completion,
- * command history, and @-mention file completion.
+ * has no reset, which makes /resume visibly stack transcripts and long sessions
+ * blow the render up. Rendering a trailing window instead lets `hydrate` cleanly
+ * REPLACE the screen and keeps the painted height finite. The input is a
+ * hand-rolled editor (own value + cursor) so we fully control the cursor for
+ * Tab-completion, command history, and @-mention file completion.
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { Box, Text, useApp, useInput } from "ink";
-import Spinner from "ink-spinner";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import {
   EFFORTS,
   escalateFromPrompt,
@@ -25,12 +24,11 @@ import {
   type SessionState,
   type SessionSummary,
 } from "@coding-agent/core";
-import { applyEvent, initialState, type ReasoningDisplay } from "./state";
+import { applyEvent, initialState } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
-import { CommandPalette, FileCompletion, InputLine, ItemView, PermissionPrompt, SessionPicker, StatusBar } from "./view";
+import { CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine } from "./view";
+import { freshSeed, loadingWord, tipAt } from "./flavor";
 import { theme } from "./theme";
-
-const REASONING_MODES: ReasoningDisplay[] = ["hidden", "summary", "full"];
 
 /** Cap the number of scrollback items painted at once so the frame stays finite. */
 const MAX_VISIBLE_ITEMS = 50;
@@ -38,6 +36,14 @@ const MAX_VISIBLE_ITEMS = 50;
 type Completion =
   | { kind: "command"; matches: { name: string; argHint?: string }[] }
   | { kind: "file"; matches: string[]; start: number };
+
+function formatElapsed(sec: number): string {
+  return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
+}
+
+function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
 
 export function App({
   runtime,
@@ -55,11 +61,16 @@ export function App({
   const [draft, setDraft] = useState("");
   const [cursor, setCursor] = useState(0);
   const [compIndex, setCompIndex] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const [picker, setPicker] = useState<{ sessions: SessionSummary[]; index: number } | null>(null);
   const { exit } = useApp();
+  const { stdout } = useStdout();
+  const width = Math.max(40, stdout?.columns ?? 80);
 
   const sessionId = useRef<string | undefined>(initialSession?.id);
   const abort = useRef<AbortController | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const effortRef = useRef(state.effort);
   effortRef.current = state.effort;
   const files = useRef<string[]>([]);
@@ -67,8 +78,18 @@ export function App({
   const history = useRef<string[]>([]);
   const histCursor = useRef(0); // 0 = live draft; n = n-th most recent submission
   const liveDraft = useRef("");
+  const wordSeed = useRef(0); // varies the loading-verb sequence per run
+  const tipIndex = useRef(Math.floor(Math.random() * 1000));
 
   const busy = state.status === "running" || state.status === "awaiting_permission";
+
+  // Tick a one-second clock while running, for the elapsed time + verb rotation.
+  useEffect(() => {
+    if (!busy) return;
+    setElapsed(0);
+    const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(timer);
+  }, [busy]);
 
   // Load the workspace file list for @-completion (on mount, and after each run).
   const loadFiles = useCallback(async () => {
@@ -132,10 +153,27 @@ export function App({
           if (isEffort(arg)) dispatch({ type: "set_effort", effort: arg });
           else dispatch({ type: "notice", level: "warn", message: `Usage: /effort <${EFFORTS.join("|")}>` });
           return;
-        case "reasoning":
-          if ((REASONING_MODES as string[]).includes(arg)) dispatch({ type: "set_reasoning", reasoning: arg as ReasoningDisplay });
-          else dispatch({ type: "notice", level: "warn", message: `Usage: /reasoning <${REASONING_MODES.join("|")}>` });
+        case "usage": {
+          const s = stateRef.current;
+          dispatch({
+            type: "notice",
+            level: "info",
+            message: `${s.model ?? "?"} · effort ${s.effort} · $${s.costUsd.toFixed(4)} this session · ${s.turns} turn${s.turns === 1 ? "" : "s"}`,
+          });
           return;
+        }
+        case "context": {
+          const { tokensUsed, tokensTotal } = stateRef.current;
+          const pct = tokensTotal ? Math.round((100 * tokensUsed) / tokensTotal) : 0;
+          dispatch({
+            type: "notice",
+            level: "info",
+            message: tokensTotal
+              ? `Context ${pct}% — ${tokensUsed} / ${tokensTotal} tokens`
+              : "Context usage will appear after the first turn.",
+          });
+          return;
+        }
         case "resume":
           await openResume();
           return;
@@ -144,7 +182,7 @@ export function App({
             type: "notice",
             level: "info",
             message:
-              "/resume · /effort <level> · /reasoning <hidden|summary|full> · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
+              "/resume · /effort <low|high|ultra> · /usage · /context · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
           });
           return;
         default:
@@ -161,6 +199,7 @@ export function App({
       if (!text) return;
       if (history.current[history.current.length - 1] !== text) history.current.push(text);
       histCursor.current = 0;
+      tipIndex.current += 1; // rotate the tip after each submission
 
       if (text.startsWith("/")) {
         const m = /^\/(\S+)\s*(.*)$/.exec(text);
@@ -169,6 +208,7 @@ export function App({
       }
 
       dispatch({ type: "user_prompt", text });
+      wordSeed.current = freshSeed();
       const turnEffort = escalateFromPrompt(text, effortRef.current as Effort);
       const ac = new AbortController();
       abort.current = ac;
@@ -300,38 +340,49 @@ export function App({
   const hidden = Math.max(0, state.items.length - MAX_VISIBLE_ITEMS);
   const visible = hidden > 0 ? state.items.slice(-MAX_VISIBLE_ITEMS) : state.items;
 
+  // Live "working…" line content.
+  const word = loadingWord(wordSeed.current, Math.floor(elapsed / 3));
+  const tokens = Math.round(state.turnChars / 4);
+  const runningTool = [...state.items].reverse().find((i) => i.kind === "tool" && i.status === "running");
+  const phase = runningTool && runningTool.kind === "tool" ? `running ${runningTool.name}` : "thinking";
+  const meta = `${formatElapsed(elapsed)} · ↓ ${formatTokens(tokens)} tokens · ${phase} at ${state.effort} effort`;
+  const tip = tipAt(tipIndex.current);
+
   return (
     <Box flexDirection="column">
       {hidden > 0 ? (
         <Text color={theme.faint}>{`⋯ ${hidden} earlier message${hidden === 1 ? "" : "s"} hidden`}</Text>
       ) : null}
+      {visible.map((item) => (
+        <ItemView key={item.id} item={item} />
+      ))}
 
-      <Box flexDirection="column">
-        {visible.map((item) => (
-          <ItemView key={item.id} item={item} reasoning={state.reasoning} />
-        ))}
+      {busy && !state.permission && !picker ? <LoadingLine word={word} meta={meta} /> : null}
 
-        {picker ? (
-          <SessionPicker sessions={picker.sessions} index={picker.index} />
-        ) : state.permission ? (
-          <PermissionPrompt p={state.permission} />
-        ) : busy ? (
-          <Box marginTop={1}>
-            <Text color={theme.accent}>
-              <Spinner type="dots" />
-            </Text>
-            <Text color={theme.faint}> working… (esc to interrupt)</Text>
-          </Box>
-        ) : (
-          <Box marginTop={1} flexDirection="column">
-            <InputLine value={draft} cursor={cursor} ghost={ghost} placeholder="Ask, or / for commands, @ for files" />
-            {completion?.kind === "command" ? <CommandPalette matches={pal.matches} index={cidx} /> : null}
-            {completion?.kind === "file" ? <FileCompletion files={completion.matches} index={cidx} /> : null}
-          </Box>
-        )}
-
-        <StatusBar state={state} />
-      </Box>
+      {picker ? (
+        <SessionPicker sessions={picker.sessions} index={picker.index} />
+      ) : state.permission ? (
+        <PermissionPrompt p={state.permission} />
+      ) : (
+        <Box flexDirection="column">
+          <InputBox
+            value={draft}
+            cursor={cursor}
+            ghost={ghost}
+            placeholder={busy ? "working… (esc to interrupt)" : "Ask, or / for commands, @ for files"}
+            effort={state.effort}
+            width={width}
+            showCursor={!busy}
+          />
+          {completion?.kind === "command" ? (
+            <CommandPalette matches={pal.matches} index={cidx} />
+          ) : completion?.kind === "file" ? (
+            <FileCompletion files={completion.matches} index={cidx} />
+          ) : (
+            <TipLine tip={tip} />
+          )}
+        </Box>
+      )}
     </Box>
   );
 }
