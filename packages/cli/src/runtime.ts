@@ -21,6 +21,8 @@ import { StubGateway } from "./adapters/stubGateway";
 import { LocalProcessSandbox } from "./adapters/sandbox";
 import type { CliConfig } from "./config";
 import { projectStateDir, settingsPaths } from "./projects";
+import { hooksDisabled, isWorkspaceTrusted, readHooks } from "./settings";
+import { postToolUseHooksFrom, preToolUseHooksFrom } from "./adapters/commandHook";
 
 /** Canonicalize a path so the project key matches the workspace root exactly. */
 function canonical(p: string): string {
@@ -55,6 +57,16 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
   const sourceRootDir = (source: RuleSource): string | undefined =>
     source === "user" ? config.home : source === "project" || source === "local" ? root : undefined;
 
+  // Settings-driven command hooks run arbitrary shell, so PROJECT/LOCAL hooks load
+  // ONLY for a trusted workspace; the user (home) scope is implicitly trusted. The
+  // ZEPHYRCODE_DISABLE_HOOKS env var is a global kill switch.
+  const trusted = isWorkspaceTrusted(projectDir);
+  const hookConfigs = hooksDisabled()
+    ? []
+    : [readHooks(paths.user), ...(trusted ? [readHooks(paths.project), readHooks(paths.local)] : [])];
+  const extraPreToolUseHooks = hookConfigs.flatMap(preToolUseHooksFrom);
+  const extraPostToolUseHooks = hookConfigs.flatMap(postToolUseHooksFrom);
+
   return createAgentRuntime({
     gateway,
     sessionStore: new FileSessionStore(projectDir, systemClock),
@@ -66,6 +78,8 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     rules: settings.rules,
     sourceRootDir,
     settingsFiles: { user: paths.user, project: paths.project, local: paths.local },
+    extraPreToolUseHooks,
+    extraPostToolUseHooks,
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,
     contextTokens: config.contextTokens,

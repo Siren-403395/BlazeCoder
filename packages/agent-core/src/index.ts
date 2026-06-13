@@ -29,7 +29,7 @@ import type { AgentDefinition } from "./orchestration/agentRegistry";
 import { runSubagent } from "./orchestration/subagent";
 import type { SubagentRunResult } from "./orchestration/subagent";
 import { HookBus } from "./permissions/hooks";
-import type { PreToolUseHook } from "./permissions/hooks";
+import type { PostToolUseHook, PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
 import type { BrokerDecision, PermissionMode } from "./permissions/engine";
 import type { PermissionRule, RuleSource } from "@coding-agent/shared";
@@ -94,6 +94,9 @@ export interface AgentRuntimeOptions {
   tools?: Tool[];
   /** Custom sub-agent definitions (merged over the built-ins) for the Task tool. */
   agents?: AgentDefinition[];
+  /** Extra PreToolUse/PostToolUse hooks (e.g. settings-driven command hooks), registered after the built-in secrets guard. */
+  extraPreToolUseHooks?: PreToolUseHook[];
+  extraPostToolUseHooks?: PostToolUseHook[];
   system?: string;
   userRules?: string;
   permissionMode?: PermissionMode;
@@ -213,7 +216,10 @@ export class AgentRuntime {
       ...(opts.tools ?? builtinTools()),
       makeTaskTool(this.agentRegistry),
     ]);
+    // secretsHook FIRST (a deny it returns is final), then any settings-driven hooks.
     this.hooks = new HookBus().onPreToolUse(secretsHook);
+    for (const h of opts.extraPreToolUseHooks ?? []) this.hooks.onPreToolUse(h);
+    for (const h of opts.extraPostToolUseHooks ?? []) this.hooks.onPostToolUse(h);
     this.broker = new PermissionBroker();
     this.engine = new PermissionEngine({
       mode: opts.permissionMode ?? "acceptEdits",
