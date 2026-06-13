@@ -2,16 +2,14 @@
   "name": "coding-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "A Claude-Code-style coding agent: an agentic harness (loop + tools + context engineering) that turns natural language into a runnable, previewable project.",
+  "description": "A Claude-Code-style command-line coding agent: an agentic harness (loop + tools + context engineering) that edits real files and runs real commands in a local terminal (TUI).",
   "type": "module",
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev --parallel",
-    "dev:server": "pnpm --filter @coding-agent/server dev",
-    "dev:web": "pnpm --filter @coding-agent/web dev",
+    "ca": "pnpm --filter @coding-agent/cli exec ca",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

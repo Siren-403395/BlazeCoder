@@ -2,8 +2,9 @@
  * Ports — the injected boundary of agent-core.
  *
  * agent-core depends ONLY on these interfaces (plus @coding-agent/shared types and
- * Node built-ins). No Fastify, no React, no DeepSeek import reaches the loop. Every
- * port has an in-memory fake for tests; the server app provides the real adapters.
+ * Node built-ins). No TUI, no HTTP, no DeepSeek import reaches the loop. Every
+ * port has an in-memory fake for tests; the CLI package provides the real adapters
+ * (DeepSeek gateway, OS sandbox) and wires the runtime in-process.
  */
 
 import type {
@@ -89,19 +90,7 @@ export interface Workspace {
   snapshot(): GeneratedProject;
 }
 
-// ─── Preview builder (esbuild bundle → self-contained iframe HTML) ────────────
-
-export interface PreviewBuildResult {
-  ok: boolean;
-  previewHtml?: string;
-  error?: string;
-}
-
-export interface PreviewBuilder {
-  build(project: GeneratedProject): Promise<PreviewBuildResult>;
-}
-
-// ─── Sandbox (shell execution backstop; disabled by default) ──────────────────
+// ─── Sandbox (shell execution; the real adapter runs commands under an OS sandbox) ─
 
 export interface SandboxResult {
   stdout: string;

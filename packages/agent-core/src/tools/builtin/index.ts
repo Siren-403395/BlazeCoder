@@ -7,7 +7,6 @@
 import type { Tool } from "../registry";
 import { deleteFileTool, editFileTool, listFilesTool, readFileTool, writeFileTool } from "./filesystem";
 import { globTool, grepTool } from "./search";
-import { buildPreviewTool } from "./preview";
 import { runCommandTool } from "./shell";
 import { memoryTool } from "../../memory/memoryTool";
 
@@ -20,7 +19,6 @@ export function builtinTools(): Tool[] {
     deleteFileTool,
     grepTool,
     globTool,
-    buildPreviewTool,
     runCommandTool,
     memoryTool,
   ];
@@ -34,7 +32,6 @@ export {
   deleteFileTool,
   grepTool,
   globTool,
-  buildPreviewTool,
   runCommandTool,
   memoryTool,
 };

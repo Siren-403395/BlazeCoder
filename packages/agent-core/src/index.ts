@@ -15,7 +15,6 @@ import type {
   Logger,
   MemoryStore,
   ModelGateway,
-  PreviewBuilder,
   Sandbox,
   SessionState,
   SessionStore,
@@ -62,7 +61,6 @@ export * from "./orchestration/subagent";
 
 export interface AgentRuntimeOptions {
   gateway: ModelGateway;
-  previewBuilder: PreviewBuilder;
   sessionStore: SessionStore;
   memory: MemoryStore;
   sandbox?: Sandbox;
@@ -146,7 +144,6 @@ export class AgentRuntime {
   readonly hooks: HookBus;
   private readonly store: SessionStore;
   private readonly gateway: ModelGateway;
-  private readonly previewBuilder: PreviewBuilder;
   private readonly memory: MemoryStore;
   private readonly sandbox: Sandbox;
   private readonly clock: Clock;
@@ -160,7 +157,6 @@ export class AgentRuntime {
   constructor(opts: AgentRuntimeOptions) {
     this.store = opts.sessionStore;
     this.gateway = opts.gateway;
-    this.previewBuilder = opts.previewBuilder;
     this.memory = opts.memory;
     this.sandbox = opts.sandbox ?? disabledSandbox;
     this.clock = opts.clock ?? systemClock;
@@ -205,7 +201,6 @@ export class AgentRuntime {
       registry: this.registry,
       executor: this.executor,
       contextManager: this.contextManager,
-      previewBuilder: this.previewBuilder,
       sandbox: this.sandbox,
       memory: this.memory,
       clock: this.clock,

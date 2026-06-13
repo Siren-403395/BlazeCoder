@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "@coding-agent/shared";
 import {
-  buildPreviewTool,
   deleteFileTool,
   editFileTool,
   globTool,
@@ -10,7 +9,7 @@ import {
   readFileTool,
   writeFileTool,
 } from "../src/index";
-import { FakePreviewBuilder, fullProject, makeCtx } from "./fakes";
+import { makeCtx } from "./fakes";
 
 describe("filesystem tools", () => {
   it("write_file creates a file and emits file_change", async () => {
@@ -96,25 +95,5 @@ describe("search tools", () => {
     expect(res.content).toContain("/src/a.tsx");
     expect(res.content).toContain("/src/deep/b.tsx");
     expect(res.content).not.toContain("/src/c.ts");
-  });
-});
-
-describe("build_preview tool", () => {
-  it("builds when the project is valid and emits a preview event", async () => {
-    const builder = new FakePreviewBuilder();
-    const { ctx, events } = makeCtx({ previewBuilder: builder, workspace: undefined });
-    for (const f of fullProject().files) ctx.workspace.write(f);
-    const res = await buildPreviewTool.execute({}, ctx);
-    expect(res.isError).toBeFalsy();
-    expect(builder.builds).toBe(1);
-    expect(events.some((e) => e.type === "preview" && e.ok === true)).toBe(true);
-  });
-
-  it("blocks and reports when required files are missing", async () => {
-    const { ctx, events } = makeCtx();
-    ctx.workspace.write({ path: "/src/App.tsx", language: "tsx", content: "export default () => null" });
-    const res = await buildPreviewTool.execute({}, ctx);
-    expect(res.isError).toBe(true);
-    expect(events.some((e) => e.type === "preview" && e.ok === false)).toBe(true);
   });
 });

@@ -1,11 +1,11 @@
 /**
- * The normalized agent event stream — the ONLY contract the frontend consumes.
+ * The normalized agent event stream — the ONLY contract the TUI consumes.
  *
  * Modeled on the Claude Agent SDK message types:
  *   init → assistant(text + tool_use) → tool_result → compact_boundary
  *        → permission_request → result
- * Bulky/structured artifacts (preview HTML, file contents) ride dedicated events
- * or the final result — never the streaming text deltas.
+ * Bulky/structured artifacts (file contents) ride dedicated events or the final
+ * result — never the streaming text deltas.
  */
 
 import type { FileLanguage } from "./projectSchema";
@@ -58,7 +58,7 @@ export type AgentEvent =
       isError: boolean;
       durationMs: number;
     }
-  /** Emitted by write/edit/delete tools so the frontend file tree + code view stay live. */
+  /** Emitted by write/edit/delete tools so the TUI's file/diff view stays live. */
   | {
       type: "file_change";
       op: "write" | "edit" | "delete";
@@ -66,8 +66,6 @@ export type AgentEvent =
       language?: FileLanguage;
       content?: string;
     }
-  /** Emitted by build_preview; carries the self-contained iframe HTML or a build error. */
-  | { type: "preview"; ok: boolean; previewHtml?: string; error?: string }
   /** Context budget gauge update (after each turn / compaction). */
   | { type: "budget"; totalTokens: number; usedTokens: number; remainingTokens: number }
   /** A compaction occurred between two turns. */
@@ -95,21 +93,3 @@ export type AgentEvent =
     };
 
 export type AgentEventType = AgentEvent["type"];
-
-/** Request body for POST /api/agent/run. */
-export interface RunAgentRequest {
-  prompt: string;
-  /** Resume an existing session; omit to start a new one. */
-  sessionId?: string;
-  /** Enable the model's deep-thinking (reasoning) mode for this run. */
-  thinking?: boolean;
-}
-
-/** Request body for POST /api/agent/permission. */
-export interface PermissionDecisionRequest {
-  requestId: string;
-  behavior: "allow" | "deny";
-  /** Optional edited tool input when allowing. */
-  updatedInput?: Record<string, unknown>;
-  message?: string;
-}

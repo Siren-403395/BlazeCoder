@@ -13,7 +13,6 @@ import type {
   JSONSchema,
   Logger,
   MemoryStore,
-  PreviewBuilder,
   Sandbox,
   Workspace,
 } from "../ports";
@@ -21,7 +20,6 @@ import type {
 export interface ToolContext {
   sessionId: string;
   workspace: Workspace;
-  previewBuilder: PreviewBuilder;
   sandbox: Sandbox;
   memory: MemoryStore;
   /** Tools emit dedicated events (file_change, preview, notice) through this sink. */

@@ -10,7 +10,6 @@ import {
 import type { AgentRuntimeOptions } from "../src/index";
 import {
   call,
-  FakePreviewBuilder,
   reply,
   ScriptedGateway,
   StreamingScriptedGateway,
@@ -22,7 +21,6 @@ function makeRuntime(steps: Step[], extra: Partial<AgentRuntimeOptions> = {}) {
   const clock = new FixedClock(1);
   return createAgentRuntime({
     gateway: new ScriptedGateway("deepseek-chat", steps),
-    previewBuilder: new FakePreviewBuilder(),
     sessionStore: new InMemorySessionStore(clock),
     memory: new InMemoryMemoryStore(),
     clock,
@@ -39,24 +37,22 @@ function sink() {
 const signal = () => new AbortController().signal;
 
 describe("AgentRuntime end-to-end (scripted model)", () => {
-  it("writes a full project, builds a preview, and finishes successfully", async () => {
+  it("writes a full project across a turn and finishes successfully", async () => {
     const rt = makeRuntime([
       reply("Creating files.", writeFullProjectCalls()),
-      reply("Building.", [call("p", "build_preview")]),
-      reply("Done — a Hello app.", []),
+      reply("Done, a Hello app.", []),
     ]);
     const { emit, events } = sink();
     const { session, result } = await rt.run({ prompt: "make a hello app" }, emit, signal());
 
     expect(result.subtype).toBe("success");
-    expect(result.numTurns).toBe(2);
+    expect(result.numTurns).toBe(1);
     expect(result.totalCostUsd).toBeGreaterThan(0);
     expect(session.project.files).toHaveLength(6);
 
     expect(events[0]!.type).toBe("system");
     expect(events.at(-1)!.type).toBe("result");
     expect(events.filter((e) => e.type === "file_change")).toHaveLength(6);
-    expect(events.some((e) => e.type === "preview" && e.ok === true)).toBe(true);
     expect(events.some((e) => e.type === "budget")).toBe(true);
 
     const sessions = await rt.listSessions();
@@ -95,7 +91,6 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     const clock = new FixedClock(1);
     const rt = createAgentRuntime({
       gateway,
-      previewBuilder: new FakePreviewBuilder(),
       sessionStore: new InMemorySessionStore(clock),
       memory: new InMemoryMemoryStore(),
       clock,

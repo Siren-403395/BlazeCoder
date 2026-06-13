@@ -13,8 +13,6 @@ import type {
   ModelRequest,
   ModelResponse,
   ModelStreamHandlers,
-  PreviewBuilder,
-  PreviewBuildResult,
   Sandbox,
 } from "../src/index";
 import type { ToolContext } from "../src/index";
@@ -102,22 +100,11 @@ export function call(id: string, name: string, input: Record<string, unknown> = 
   return { id, name, input };
 }
 
-export class FakePreviewBuilder implements PreviewBuilder {
-  builds = 0;
-  constructor(private readonly opts: { ok?: boolean; error?: string } = {}) {}
-  async build(project: GeneratedProject): Promise<PreviewBuildResult> {
-    this.builds += 1;
-    if (this.opts.ok === false) return { ok: false, error: this.opts.error ?? "fake build error" };
-    return { ok: true, previewHtml: `<html><!-- ${project.files.length} files --></html>` };
-  }
-}
-
 export function makeCtx(overrides: Partial<ToolContext> = {}): { ctx: ToolContext; events: AgentEvent[] } {
   const events: AgentEvent[] = [];
   const ctx: ToolContext = {
     sessionId: "s1",
     workspace: overrides.workspace ?? new InMemoryWorkspace(emptyProject("t")),
-    previewBuilder: overrides.previewBuilder ?? new FakePreviewBuilder(),
     sandbox: overrides.sandbox ?? disabledSandbox,
     memory: overrides.memory ?? new InMemoryMemoryStore(),
     emit: overrides.emit ?? ((e) => events.push(e)),

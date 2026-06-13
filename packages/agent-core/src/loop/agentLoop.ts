@@ -13,7 +13,6 @@ import type {
   MemoryStore,
   ModelGateway,
   ModelResponse,
-  PreviewBuilder,
   Sandbox,
   SessionState,
   Workspace,
@@ -51,7 +50,6 @@ export interface AgentLoopDeps {
   registry: ToolRegistry;
   executor: ToolExecutor;
   contextManager: ContextManager;
-  previewBuilder: PreviewBuilder;
   sandbox: Sandbox;
   memory: MemoryStore;
   clock: Clock;
@@ -67,7 +65,7 @@ export async function runAgentLoop(
   emit: EventSink,
   signal: AbortSignal,
 ): Promise<AgentRunResult> {
-  const { gateway, registry, executor, contextManager, previewBuilder, sandbox, memory, clock, logger, config } = deps;
+  const { gateway, registry, executor, contextManager, sandbox, memory, clock, logger, config } = deps;
   const toolSchemas = registry.schemas();
 
   emit({
@@ -192,7 +190,6 @@ export async function runAgentLoop(
     const ctx: ToolContext = {
       sessionId: session.id,
       workspace,
-      previewBuilder,
       sandbox,
       memory,
       emit,
