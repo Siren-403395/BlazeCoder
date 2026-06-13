@@ -5,7 +5,9 @@
 
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
+import type { SessionSummary } from "@coding-agent/core";
 import { theme, toolDetail } from "./theme";
+import type { SlashCommand } from "./commands";
 import type { Item, PendingPermission, ReasoningDisplay, TuiState } from "./state";
 
 function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
@@ -105,6 +107,61 @@ export function StatusBar({ state }: { state: TuiState }) {
         {state.model ?? "?"} · effort {state.effort} · reasoning {state.reasoning} · turn {state.turns}/
         {state.maxTurns} · ctx {pct}% · ${state.costUsd.toFixed(4)}
       </Text>
+    </Box>
+  );
+}
+
+/** The autocomplete palette shown while typing a slash command (mirrors the screenshot). */
+export function CommandPalette({ matches, index }: { matches: SlashCommand[]; index: number }) {
+  const width = Math.max(...matches.map((c) => c.name.length)) + 3;
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      {matches.map((c, i) => {
+        const selected = i === index;
+        return (
+          <Box key={c.name}>
+            <Text color={selected ? theme.accent : theme.user} bold={selected}>
+              {(selected ? "❯ /" : "  /") + c.name.padEnd(width)}
+            </Text>
+            <Text color={theme.faint}>{c.description}</Text>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+function stamp(ms: number): string {
+  try {
+    return new Date(ms).toISOString().slice(0, 16).replace("T", " ");
+  } catch {
+    return String(ms);
+  }
+}
+
+/** Interactive list to pick a past session to resume. */
+export function SessionPicker({ sessions, index }: { sessions: SessionSummary[]; index: number }) {
+  return (
+    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.accent} paddingX={1}>
+      <Text color={theme.accent} bold>
+        Resume a conversation
+      </Text>
+      {sessions.length === 0 ? (
+        <Text color={theme.faint}>No saved sessions yet.</Text>
+      ) : (
+        sessions.map((s, i) => {
+          const selected = i === index;
+          return (
+            <Box key={s.id}>
+              <Text color={selected ? theme.accent : theme.muted} bold={selected}>
+                {(selected ? "❯ " : "  ") + (s.title || s.id)}
+              </Text>
+              <Text color={theme.faint}>{`  ${stamp(s.updatedAt)} · ${s.turns} turn${s.turns === 1 ? "" : "s"}`}</Text>
+            </Box>
+          );
+        })
+      )}
+      <Text color={theme.faint}>↑↓ select · Enter open · Esc cancel</Text>
     </Box>
   );
 }

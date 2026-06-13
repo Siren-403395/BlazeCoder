@@ -12,4 +12,5 @@ export * from "./config";
 export * from "./runtime";
 export * from "./headless";
 export * from "./tui/state";
+export * from "./tui/commands";
 export { App } from "./tui/App";
