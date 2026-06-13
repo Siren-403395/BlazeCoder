@@ -1,0 +1,180 @@
+/*
+ * Stylesheet entry. Order matters:
+ *   1. self-hosted fonts (no external <link>)
+ *   2. Tailwind (preflight + utilities)
+ *   3. design tokens (raw CSS variables)
+ *   4. @theme  - map tokens into Tailwind's utility namespace (theme-reactive)
+ *   5. @utility - a few composite utilities tokens can't express
+ *   6. base + components layers
+ */
+
+@import "@fontsource-variable/geist/index.css";
+@import "@fontsource-variable/geist-mono/index.css";
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Tokens → Tailwind utilities. `inline` keeps utilities referencing the live
+   CSS variable, so `bg-surface` etc. flip with [data-theme]. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-overlay: var(--overlay);
+
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-faint: var(--text-faint);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-text: var(--accent-text);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-subtle: var(--success-subtle);
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-info: var(--info);
+  --color-info-text: var(--info-text);
+  --color-info-subtle: var(--info-subtle);
+  --color-warn: var(--warn);
+  --color-warn-subtle: var(--warn-subtle);
+
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-control: 0.5rem; /* 8px  - buttons, inputs, chips (interactive)  */
+  --radius-card: 0.75rem; /* 12px - panels, cards, popovers (containers)   */
+}
+
+/* Composite utilities (token-driven elevation). */
+@utility shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+@utility shadow-pop {
+  box-shadow: var(--shadow-pop);
+}
+@utility shadow-float {
+  box-shadow: var(--shadow-float);
+}
+@utility edge-hi {
+  box-shadow: var(--edge-hi);
+}
+
+@layer base {
+  /* v4 borders default to currentColor - pin them to the hairline token so a
+     bare `border` utility means our 1px line. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-feature-settings: "cv01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--accent-subtle);
+    color: var(--text);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* Thin, self-effacing scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+    background-clip: padding-box;
+  }
+
+  /* Numerals line up in tabular contexts (budget, durations, costs). */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Skeleton shimmer for loading states. */
+  .shimmer {
+    background: linear-gradient(
+      100deg,
+      var(--surface-2) 30%,
+      var(--surface-3) 50%,
+      var(--surface-2) 70%
+    );
+    background-size: 200% 100%;
+    animation: ca-shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes ca-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ca-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+/* Global reduced-motion safety net (in addition to per-component handling). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

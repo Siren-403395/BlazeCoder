@@ -1,7 +1,7 @@
 /**
  * Client-side project export (salvaged from V1). The frontend accumulates the
  * file graph from file_change events, so exporting a runnable zip is a pure
- * client action — no backend round-trip.
+ * client action - no backend round-trip.
  */
 
 import JSZip from "jszip";
