@@ -1,18 +1,23 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "@coding-agent/shared";
 import { HookBus, PermissionBroker, PermissionEngine } from "../src/index";
-import type { BrokerDecision, EventSink, PermissionMode, Tool } from "../src/index";
+import type { BrokerDecision, EventSink, PermissionMode, PermissionRule, Tool } from "../src/index";
 
 function tool(name: string, readOnly: boolean): Tool {
   return { name, readOnly, description: "d", inputSchema: { type: "object" }, execute: async () => ({ content: "" }) };
 }
 
-function makeEngine(opts: { mode?: PermissionMode; deny?: string[]; hooks?: HookBus } = {}) {
+function makeEngine(
+  opts: { mode?: PermissionMode; deny?: string[]; allow?: string[]; ask?: string[]; rules?: PermissionRule[]; hooks?: HookBus } = {},
+) {
   const broker = new PermissionBroker();
   const hooks = opts.hooks ?? new HookBus();
   const engine = new PermissionEngine({
     mode: opts.mode ?? "default",
     deny: opts.deny,
+    allow: opts.allow,
+    ask: opts.ask,
+    rules: opts.rules,
     hookBus: hooks,
     broker,
     idGen: () => "req1",
@@ -97,5 +102,51 @@ describe("PermissionEngine", () => {
     const res = await engine.check(tool("write_file", false), { path: "/blocked" }, { emit: () => {}, signal });
     expect(res.behavior).toBe("deny");
     expect(res.behavior === "deny" && res.message).toBe("blocked");
+    expect(res.decisionReason.type).toBe("hook");
+  });
+});
+
+describe("PermissionEngine — layered rules (behavior priority)", () => {
+  it("a deny rule in 'user' beats an allow rule in 'local'", async () => {
+    const rules: PermissionRule[] = [
+      { source: "local", behavior: "allow", value: { toolName: "Bash", ruleContent: "git push:*" } },
+      { source: "user", behavior: "deny", value: { toolName: "Bash", ruleContent: "git push:*" } },
+    ];
+    const { engine } = makeEngine({ mode: "bypassPermissions", rules });
+    const res = await engine.check(tool("Bash", false), { command: "git push origin main" }, { emit: () => {}, signal });
+    expect(res.behavior).toBe("deny");
+    expect(res.decisionReason.type).toBe("rule");
+    expect(res.decisionReason.type === "rule" && res.decisionReason.rule.source).toBe("user");
+  });
+
+  it("an allow rule lets a specific command through while an ask rule prompts for another", async () => {
+    const { engine, broker } = makeEngine({
+      mode: "default",
+      allow: ["Bash(git status:*)"],
+      ask: ["Bash(git push:*)"],
+    });
+    const allowed = await engine.check(tool("Bash", false), { command: "git status" }, { emit: () => {}, signal });
+    expect(allowed.behavior).toBe("allow");
+    expect(allowed.decisionReason.type).toBe("rule");
+
+    let asked = false;
+    const pushed = await engine.check(tool("Bash", false), { command: "git push origin main" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          asked = true;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(asked).toBe(true);
+    expect(pushed.behavior).toBe("deny");
+  });
+
+  it("an allow rule auto-approves without prompting (decisionReason=rule)", async () => {
+    const { engine } = makeEngine({ mode: "default", allow: ["Bash(npm test:*)"] });
+    const res = await engine.check(tool("Bash", false), { command: "npm test" }, { emit: () => {}, signal });
+    expect(res.behavior).toBe("allow");
+    expect(res.decisionReason).toEqual({ type: "rule", rule: { source: "cliArg", behavior: "allow", value: { toolName: "Bash", ruleContent: "npm test:*" } } });
   });
 });
