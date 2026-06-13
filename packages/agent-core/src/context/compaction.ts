@@ -9,7 +9,7 @@
 import type { Clock, EventSink, Logger, ModelGateway, SessionState, ToolSchema, Workspace } from "../ports";
 import type { ReadLedger } from "../workspace/ledger";
 import { TOOL_NAMES } from "../tools/toolNames";
-import { assembleRequest, estimateRequestTokens } from "./sessionContext";
+import { assembleRequest, estimateMessageTokens, estimateRequestTokens } from "./sessionContext";
 import { buildPostCompactFileMessage, buildSummaryRequest, stripAnalysis } from "./rehydration";
 
 export interface CompactionConfig {
@@ -24,10 +24,19 @@ export interface CompactionConfig {
   bufferTokens: number;
   /** Most-recent tool-result messages kept verbatim. */
   keepRecentToolResults: number;
-  /** Recent messages preserved when summarizing the head. */
+  /** Recent messages preserved when summarizing the head (legacy fixed-count fallback). */
   keepRecentMessages: number;
   /** Consecutive low-yield summarizations before giving up. */
   maxThrash: number;
+  /**
+   * Token-floored keep-window for summarization. When set (the real runtime), the
+   * kept tail expands back from the end until it holds at least summaryKeepMinTokens
+   * AND summaryKeepMinMessages non-tool messages, capped at summaryKeepMaxTokens.
+   * When unset, the fixed keepRecentMessages count is used (tests).
+   */
+  summaryKeepMinTokens?: number;
+  summaryKeepMinMessages?: number;
+  summaryKeepMaxTokens?: number;
 }
 
 export const DEFAULT_COMPACTION: CompactionConfig = {
@@ -39,6 +48,9 @@ export const DEFAULT_COMPACTION: CompactionConfig = {
   keepRecentToolResults: 3,
   keepRecentMessages: 4,
   maxThrash: 3,
+  summaryKeepMinTokens: 10_000,
+  summaryKeepMinMessages: 5,
+  summaryKeepMaxTokens: 40_000,
 };
 
 export class CompactionThrashError extends Error {
@@ -153,7 +165,7 @@ export class ContextManager {
       return;
     }
     const before = after;
-    await this.summarize(session, signal);
+    await this.summarize(session, signal, { preTokens: before, clearedToolUseIds: clearedIds });
     await this.rehydrateFiles(session, params.ledger, params.workspace);
     after = this.estimate(session, params);
     emit({
@@ -215,19 +227,66 @@ export class ContextManager {
     return cleared;
   }
 
-  private async summarize(session: SessionState, signal: AbortSignal): Promise<void> {
-    const keep = this.config.keepRecentMessages;
-    if (session.messages.length <= keep + 1) return;
+  /**
+   * The index where the kept tail begins. Token-floored window when configured
+   * (expand back until ≥minTokens AND ≥minMessages non-tool messages, capped at
+   * maxTokens); otherwise the fixed keepRecentMessages count.
+   */
+  private computeSplit(messages: SessionState["messages"]): number {
+    const cfg = this.config;
+    if (cfg.summaryKeepMaxTokens != null) {
+      const minTokens = cfg.summaryKeepMinTokens ?? 10_000;
+      const minMsgs = cfg.summaryKeepMinMessages ?? 5;
+      let split = messages.length;
+      let tokens = 0;
+      let textMsgs = 0;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const mt = estimateMessageTokens(messages[i]!);
+        if (tokens >= minTokens && textMsgs >= minMsgs) break;
+        if (tokens + mt > cfg.summaryKeepMaxTokens) break;
+        tokens += mt;
+        if (messages[i]!.role !== "tool") textMsgs += 1;
+        split = i;
+      }
+      return this.adjustSplit(messages, split);
+    }
+    return this.adjustSplit(messages, messages.length - cfg.keepRecentMessages);
+  }
 
-    let split = session.messages.length - keep;
-    // Don't let the tail begin with an orphaned tool-result message.
-    while (split < session.messages.length && session.messages[split]?.role === "tool") split += 1;
+  /**
+   * Move the split BACK so the kept tail never starts with an orphaned tool result:
+   * a tool message's matching assistant tool_use must travel with it (DeepSeek
+   * rejects an orphaned tool_result, just as it rejects an orphaned tool_use).
+   */
+  private adjustSplit(messages: SessionState["messages"], split: number): number {
+    let s = Math.max(0, Math.min(split, messages.length));
+    while (s > 0 && messages[s]?.role === "tool") s -= 1;
+    return s;
+  }
+
+  private async summarize(
+    session: SessionState,
+    signal: AbortSignal,
+    meta: { preTokens: number; clearedToolUseIds: string[] },
+  ): Promise<void> {
+    const split = this.computeSplit(session.messages);
     if (split <= 0 || split >= session.messages.length) return;
 
     const head = session.messages.slice(0, split);
     const tail = session.messages.slice(split);
     const response = await this.gateway!.complete(buildSummaryRequest(head), signal);
     const content = stripAnalysis(response.text) || "(summary unavailable)";
-    session.messages = [{ role: "summary", content }, ...tail];
+    session.messages = [
+      {
+        role: "summary",
+        content,
+        boundary: {
+          compactType: "auto",
+          preTokens: meta.preTokens,
+          clearedToolUseIds: meta.clearedToolUseIds.length ? meta.clearedToolUseIds : undefined,
+        },
+      },
+      ...tail,
+    ];
   }
 }

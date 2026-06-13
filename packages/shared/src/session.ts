@@ -18,7 +18,12 @@ export type TranscriptMessage =
   | { role: "assistant"; content: string; reasoning?: string; toolCalls: ToolCall[] }
   | { role: "tool"; results: ToolResultRecord[] }
   /** Replaces collapsed history after compaction; rendered to the model as context. */
-  | { role: "summary"; content: string };
+  | {
+      role: "summary";
+      content: string;
+      /** Marks where a compaction happened (for the UI + telemetry). */
+      boundary?: { compactType: "auto" | "manual"; preTokens: number; clearedToolUseIds?: string[] };
+    };
 
 export type SessionStatus = "idle" | "running" | "awaiting_permission" | "done" | "error";
 

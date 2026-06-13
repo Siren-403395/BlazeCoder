@@ -213,6 +213,45 @@ describe("ContextManager compaction", () => {
     expect(fired).toBe(1);
   });
 
+  it("keeps an assistant tool_use with its tool_result across the split, and marks the boundary", async () => {
+    const gw = new ScriptedGateway("m", [reply("SUMMARY")]);
+    const cm = new ContextManager(
+      {
+        contextTokens: 100,
+        outputReservePad: 0,
+        outputReserveCap: 0,
+        clearThreshold: 0.1,
+        bufferTokens: 95,
+        keepRecentToolResults: 1,
+        keepRecentMessages: 1,
+        maxThrash: 5,
+        // Token-floored window: keep just enough that the split lands ON the tool
+        // message, so adjustSplit must move back to include its assistant tool_use.
+        summaryKeepMinTokens: 1,
+        summaryKeepMinMessages: 0,
+        summaryKeepMaxTokens: 10_000,
+      },
+      new FixedClock(),
+      silentLogger,
+      gw,
+    );
+    const s = session([
+      { role: "user", content: "OLD".repeat(40) },
+      { role: "user", content: "the prompt" },
+      { role: "assistant", content: "", toolCalls: [{ id: "a1", name: "Read", input: {} }] },
+      { role: "tool", results: [{ toolUseId: "a1", toolName: "Read", content: "BIG".repeat(200), isError: false }] },
+    ]);
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, () => {}, signal);
+
+    expect(s.messages[0]!.role).toBe("summary");
+    // The kept tail starts with the ASSISTANT tool_use, NOT an orphaned tool_result.
+    expect(s.messages[1]!.role).toBe("assistant");
+    expect(s.messages[2]!.role).toBe("tool");
+    const summary = s.messages[0] as Extract<TranscriptMessage, { role: "summary" }>;
+    expect(summary.boundary).toMatchObject({ compactType: "auto" });
+    expect(typeof summary.boundary?.preTokens).toBe("number");
+  });
+
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {
     const cm = new ContextManager(
       { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },

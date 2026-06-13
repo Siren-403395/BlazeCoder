@@ -20,7 +20,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 - [x] P0-ext-1     wire the 4 dead HookBus lifecycle events (PreCompact/SessionStart/SessionEnd/Stop)
 
 ## P1 — strong additions
-- [ ] P1-context-3 compaction boundary marker + tool_use/tool_result pairing across the split   (deps: context-2)
+- [x] P1-context-3 compaction boundary marker + tool_use/tool_result pairing across the split   (deps: context-2)
 - [ ] P1-context-4 consecutive-failure circuit breaker + PROMPT_TOO_LONG head-truncation escape   (deps: context-2)
 - [x] P1-context-5 harden summarization prompt (no-tools guard, analysis scratchpad, all-user-msgs, next-step)   (deps: context-4)
 - [ ] P1-perm-4    always-allow suggestions + [once/always-local/always-project/no] ask flow   (deps: perm-3)
