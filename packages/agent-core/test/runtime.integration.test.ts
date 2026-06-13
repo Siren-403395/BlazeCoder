@@ -8,7 +8,7 @@ import {
   InMemoryWorkspace,
   silentLogger,
 } from "../src/index";
-import type { AgentRuntimeOptions, ModelGateway } from "../src/index";
+import type { AgentRuntimeOptions, ModelGateway, ModelResponse } from "../src/index";
 import {
   call,
   reply,
@@ -189,6 +189,28 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(session.messages.some((m) => m.role === "user" && m.content === "SESSION_CONTEXT_MARKER")).toBe(true);
     // The throwing SessionEnd hook only produced a warn notice.
     expect(events.some((e) => e.type === "notice" && e.level === "warn" && /SessionEnd/.test(e.message))).toBe(true);
+  });
+
+  it("recovers from output truncation (escalate budget, then nudge to resume, then complete)", async () => {
+    const truncated = (text: string): ModelResponse => ({
+      text,
+      toolCalls: [],
+      stopReason: "max_tokens",
+      usage: { inputTokens: 10, outputTokens: 5 },
+      costUsd: 0,
+    });
+    // max_tokens (escalate) → max_tokens (nudge resume) → end_turn (complete).
+    const rt = makeRuntime([truncated("partial 1"), truncated("partial 2"), reply("final answer", [])]);
+    const { emit, events } = sink();
+    const { session, result } = await rt.run({ prompt: "write a long thing" }, emit, signal());
+
+    expect(result.subtype).toBe("success");
+    expect(result.summary).toBe("final answer");
+    // First truncation → an info notice about a larger budget; second → a warn resume nudge.
+    expect(events.some((e) => e.type === "notice" && e.level === "info" && /larger output budget/.test(e.message))).toBe(true);
+    expect(events.some((e) => e.type === "notice" && e.level === "warn" && /resume/i.test(e.message))).toBe(true);
+    // The resume nudge landed in the transcript.
+    expect(session.messages.some((m) => m.role === "user" && /Output token limit hit/.test(m.content))).toBe(true);
   });
 
   it("resumes an existing session", async () => {

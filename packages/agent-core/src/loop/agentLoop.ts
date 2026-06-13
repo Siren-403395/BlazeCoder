@@ -19,7 +19,7 @@ import type {
 } from "../ports";
 import { assembleRequest, computeBudget } from "../context/sessionContext";
 import { CompactionThrashError, ContextManager } from "../context/compaction";
-import { resolveEffort, type Effort } from "../effort";
+import { escalateOutputTokens, resolveEffort, type Effort } from "../effort";
 import { buildProjectRules } from "../memory/projectRules";
 import { buildSystemPrompt } from "../prompts";
 import { initialLoopState, terminalToSubtype } from "./transitions";
@@ -91,7 +91,9 @@ export async function runAgentLoop(
   const { gateway, registry, executor, contextManager, ledger, sandbox, memory, clock, logger, config } = deps;
   const toolSchemas = registry.schemas();
   const projectRules = buildProjectRules({ root: workspace.root, userRules: config.userRules });
-  const { thinking, budget, maxOutputTokens } = resolveEffort(config.effort, config.maxOutputTokens);
+  const { thinking, budget } = resolveEffort(config.effort, config.maxOutputTokens);
+  // Mutable: output-truncation recovery escalates this within the run.
+  let maxOutputTokens = resolveEffort(config.effort, config.maxOutputTokens).maxOutputTokens;
 
   // Build the system prompt per-run: sections gate on the tools actually registered
   // and on this run's effort. Joined to one string here (DeepSeek takes one system
@@ -209,6 +211,30 @@ export async function runAgentLoop(
     // Authoritative count for the NEXT turn's compaction gate (beats the heuristic).
     session.lastRealInputTokens = response.usage.inputTokens;
 
+    // Output-truncation recovery: the model hit its output budget mid-answer with no
+    // tool calls. Recover instead of mistaking the truncated text for a finished turn.
+    if (response.toolCalls.length === 0 && response.stopReason === "max_tokens" && state.recoveryCount < 3) {
+      const escalated = state.recoveryCount === 0 ? escalateOutputTokens(maxOutputTokens) : undefined;
+      if (escalated) {
+        // First time: silently retry the SAME request with a bigger budget (discard the
+        // truncated turn — it never enters the transcript).
+        maxOutputTokens = escalated;
+        emit({ type: "notice", level: "info", message: `Output truncated; retrying with a larger output budget (${escalated} tokens).` });
+        state = { ...state, transition: { reason: "output_truncation_recovery", attempt: state.recoveryCount + 1 }, recoveryCount: state.recoveryCount + 1 };
+        continue;
+      }
+      // Already escalated (or at the ceiling): keep the partial work and nudge the model to resume.
+      session.messages.push({ role: "assistant", content: response.text, reasoning: response.reasoning, toolCalls: [] });
+      emit({ type: "assistant", text: response.text, reasoning: response.reasoning, toolCalls: [] });
+      session.messages.push({
+        role: "user",
+        content: "Output token limit hit. Resume directly — no apology, no recap. Pick up mid-thought; break the remaining work into smaller pieces.",
+      });
+      emit({ type: "notice", level: "warn", message: "Output truncated again; asked the model to resume in smaller pieces." });
+      state = { ...state, transition: { reason: "output_truncation_recovery", attempt: state.recoveryCount + 1 }, recoveryCount: state.recoveryCount + 1 };
+      continue;
+    }
+
     session.messages.push({
       role: "assistant",
       content: response.text,
@@ -219,6 +245,9 @@ export async function runAgentLoop(
     emit({ type: "budget", ...computeBudget(config.contextTokens, response.usage.inputTokens) });
 
     if (response.toolCalls.length === 0) {
+      if (response.stopReason === "max_tokens") {
+        emit({ type: "notice", level: "warn", message: "Output may be truncated — the response hit the output-token limit." });
+      }
       return finish({ reason: "completed" }, response.text.trim() || "Done.");
     }
 

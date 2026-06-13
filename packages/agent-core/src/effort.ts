@@ -45,6 +45,19 @@ export function resolveEffort(effort: Effort = "high", baseMaxOutputTokens = 800
   }
 }
 
+/** Hard ceiling for the output-token budget when recovering from truncation. */
+export const OUTPUT_TOKEN_CEILING = 32_000;
+
+/**
+ * Compute a larger output budget after the model truncated (stopReason max_tokens).
+ * Quadruples the current budget, capped at OUTPUT_TOKEN_CEILING. Returns undefined
+ * when already at the ceiling (no more room to escalate).
+ */
+export function escalateOutputTokens(current: number): number | undefined {
+  if (current >= OUTPUT_TOKEN_CEILING) return undefined;
+  return Math.min(current * 4, OUTPUT_TOKEN_CEILING);
+}
+
 const ESCALATE_RE = /\b(ultrathink|think (?:harder|hard|more|deeply|a lot|step by step))\b/i;
 
 /**

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ContextManager,
   DEFAULT_COMPACTION,
+  escalateOutputTokens,
+  OUTPUT_TOKEN_CEILING,
   FixedClock,
   HookBus,
   InMemoryMemoryStore,
@@ -29,6 +31,12 @@ describe("terminalToSubtype", () => {
     expect(terminalToSubtype({ reason: "aborted" })).toBe("cancelled");
     expect(terminalToSubtype({ reason: "model_error" })).toBe("error_during_execution");
     expect(terminalToSubtype({ reason: "context_overflow" })).toBe("error_during_execution");
+  });
+
+  it("escalateOutputTokens quadruples then caps at the ceiling", () => {
+    expect(escalateOutputTokens(8000)).toBe(OUTPUT_TOKEN_CEILING); // 32000 (min(32000, ceiling))
+    expect(escalateOutputTokens(OUTPUT_TOKEN_CEILING)).toBeUndefined(); // already capped
+    expect(escalateOutputTokens(2000)).toBe(8000);
   });
 
   it("initialLoopState starts fresh", () => {
