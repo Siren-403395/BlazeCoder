@@ -3,7 +3,7 @@ import { ArrowUp, Stop } from "@phosphor-icons/react";
 import { Button, IconButton, Kbd } from "@/ui";
 import { cn } from "@/lib/cn";
 
-const EXAMPLES = ["Build a 2048 game", "A pomodoro timer", "Markdown note app", "BMI calculator"];
+const EXAMPLES = ["Build a 2048 game", "A pomodoro timer", "Markdown note app"];
 
 export function Composer({
   busy,

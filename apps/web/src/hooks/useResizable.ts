@@ -1,8 +1,9 @@
 /**
- * A horizontal resize handle for a left panel. `width` is its width in px,
- * measured from the parent container's left edge during a pointer drag, clamped
- * and persisted. The container is the resize handle's parent element, so no ref
- * threading is needed.
+ * A horizontal resize handle for a side panel. `width` is the panel's width in
+ * px, measured during a pointer drag from whichever container edge the panel is
+ * anchored to (`side`), then clamped and persisted. The container is the resize
+ * handle's parent element, so no ref threading is needed. A right-anchored panel
+ * grows as the handle is dragged left, so keyboard arrows invert accordingly.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -12,13 +13,15 @@ interface Options {
   initial: number;
   min: number;
   max: number;
+  /** Which container edge the panel hugs. Defaults to "left". */
+  side?: "left" | "right";
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function useResizable({ storageKey, initial, min, max }: Options) {
+export function useResizable({ storageKey, initial, min, max, side = "left" }: Options) {
   const [width, setWidth] = useState<number>(() => {
     if (typeof localStorage === "undefined") return initial;
     const saved = Number(localStorage.getItem(storageKey));
@@ -40,7 +43,7 @@ export function useResizable({ storageKey, initial, min, max }: Options) {
       e.preventDefault();
       const container = e.currentTarget.parentElement;
       if (!container) return;
-      const left = container.getBoundingClientRect().left;
+      const rect = container.getBoundingClientRect();
       draggingRef.current = true;
       setDragging(true);
       document.body.style.userSelect = "none";
@@ -48,7 +51,8 @@ export function useResizable({ storageKey, initial, min, max }: Options) {
 
       const onMove = (ev: PointerEvent) => {
         if (!draggingRef.current) return;
-        setWidth(clamp(ev.clientX - left, min, max));
+        const next = side === "right" ? rect.right - ev.clientX : ev.clientX - rect.left;
+        setWidth(clamp(next, min, max));
       };
       const onUp = () => {
         draggingRef.current = false;
@@ -61,18 +65,22 @@ export function useResizable({ storageKey, initial, min, max }: Options) {
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [min, max],
+    [min, max, side],
   );
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // A right-anchored panel grows when the handle moves left, so the arrow
+      // keys mean the opposite of what they do for a left-anchored panel.
+      const dir = side === "right" ? -1 : 1;
+      const step = e.shiftKey ? 1 : 16;
       let delta = 0;
       switch (e.key) {
         case "ArrowLeft":
-          delta = e.shiftKey ? -1 : -16;
+          delta = -step * dir;
           break;
         case "ArrowRight":
-          delta = e.shiftKey ? 1 : 16;
+          delta = step * dir;
           break;
         case "Home":
           e.preventDefault();
@@ -88,7 +96,7 @@ export function useResizable({ storageKey, initial, min, max }: Options) {
       e.preventDefault();
       setWidth((w) => clamp(w + delta, min, max));
     },
-    [min, max],
+    [min, max, side],
   );
 
   return { width, dragging, onPointerDown, onKeyDown, min, max };

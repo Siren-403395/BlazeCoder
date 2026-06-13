@@ -50,29 +50,24 @@ export function Workspace({
     initial: 440,
     min: 340,
     max: 680,
+    side: "right",
   });
 
+  // Cursor-style layout: the workspace fills the left, the conversation is a
+  // resizable right rail. DOM order is left to right.
   return (
     <div className="flex min-h-0 flex-1">
-      <div
-        style={{ width }}
-        className="flex min-h-0 shrink-0 flex-col border-r border-border bg-surface"
-      >
-        <PanelHeader>Conversation</PanelHeader>
-        <div className="min-h-0 flex-1">
-          <ConversationStream segments={segments} phase={phase} onOpenFile={onOpenFile} />
-        </div>
-        {pending && (
-          <div className="px-3 pt-3">
-            <PermissionCard
-              pending={pending}
-              onAllow={() => onDecide("allow")}
-              onDeny={() => onDecide("deny")}
-            />
-          </div>
-        )}
-        <Composer busy={busy} onSubmit={onRun} onStop={onStop} />
-      </div>
+      <WorkspacePanel
+        tab={tab}
+        onTab={onTab}
+        previewHtml={previewHtml}
+        previewError={previewError}
+        building={building}
+        files={files}
+        selected={selected}
+        onSelect={onSelect}
+        trace={trace}
+      />
 
       <div
         role="separator"
@@ -96,17 +91,25 @@ export function Workspace({
         />
       </div>
 
-      <WorkspacePanel
-        tab={tab}
-        onTab={onTab}
-        previewHtml={previewHtml}
-        previewError={previewError}
-        building={building}
-        files={files}
-        selected={selected}
-        onSelect={onSelect}
-        trace={trace}
-      />
+      <div
+        style={{ width }}
+        className="flex min-h-0 shrink-0 flex-col border-l border-border bg-surface"
+      >
+        <PanelHeader>Conversation</PanelHeader>
+        <div className="min-h-0 flex-1">
+          <ConversationStream segments={segments} phase={phase} onOpenFile={onOpenFile} />
+        </div>
+        {pending && (
+          <div className="px-3 pt-3">
+            <PermissionCard
+              pending={pending}
+              onAllow={() => onDecide("allow")}
+              onDeny={() => onDecide("deny")}
+            />
+          </div>
+        )}
+        <Composer busy={busy} onSubmit={onRun} onStop={onStop} />
+      </div>
     </div>
   );
 }
