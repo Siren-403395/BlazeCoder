@@ -69,6 +69,10 @@ export interface AgentLoopDeps {
   clock: Clock;
   logger: Logger;
   config: AgentLoopConfig;
+  /** Spawn a sub-agent (threaded into the Task tool's ToolContext). */
+  spawn?: ToolContext["spawn"];
+  /** Nesting depth for this run; 0 = main agent. */
+  depth?: number;
   /** Debug/test seam: invoked with the immutable LoopState at the top of each iteration. */
   onLoopState?: (state: LoopState) => void;
 }
@@ -234,6 +238,8 @@ export async function runAgentLoop(
       signal,
       logger,
       clock,
+      spawn: deps.spawn,
+      depth: deps.depth ?? 0,
     };
     const results = await executor.executeTurn(response.toolCalls, ctx);
     session.messages.push({ role: "tool", results });

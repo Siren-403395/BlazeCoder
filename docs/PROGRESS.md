@@ -16,7 +16,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 - [x] P0-harness-1 model-call retry/backoff/timeout in DeepSeek gateway + api_retry event
 - [x] P0-harness-2 typed transition/Terminal state machine in the loop
 - [x] P0-tools-2   TodoWrite tool (reference-grade prompt, content/activeForm, verify nudge, todos event)   (deps: tools-1)
-- [ ] P0-orch-2    wire runSubagent as a model-callable Task tool via AgentRegistry, no-nest   (deps: tools-1)
+- [x] P0-orch-2    wire runSubagent as a model-callable Task tool via AgentRegistry, no-nest   (deps: tools-1)
 - [ ] P0-ext-1     wire the 4 dead HookBus lifecycle events (PreCompact/SessionStart/SessionEnd/Stop)
 
 ## P1 — strong additions

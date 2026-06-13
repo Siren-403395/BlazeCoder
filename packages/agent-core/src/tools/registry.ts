@@ -17,6 +17,8 @@ import type {
   Workspace,
 } from "../ports";
 import type { ReadLedger } from "../workspace/ledger";
+import type { AgentDefinition } from "../orchestration/agentRegistry";
+import type { SubagentRunResult } from "../orchestration/subagent";
 
 export interface ToolContext {
   sessionId: string;
@@ -30,6 +32,10 @@ export interface ToolContext {
   signal: AbortSignal;
   logger: Logger;
   clock: Clock;
+  /** Spawn a sub-agent (injected by the runtime). Absent ⇒ delegation unavailable. */
+  spawn?: (def: AgentDefinition, prompt: string, signal: AbortSignal) => Promise<SubagentRunResult>;
+  /** Nesting depth; 0 for the main agent. The Task tool refuses when > 0 (no nesting). */
+  depth?: number;
 }
 
 export interface ToolResult {

@@ -3,6 +3,8 @@
  * Adding a specialized sub-agent is a new row here, not a new branch in the loop.
  */
 
+import { TOOL_NAMES } from "../tools/toolNames";
+
 export interface AgentDefinition {
   name: string;
   /** When to use this agent (used for description-based routing). */
@@ -23,7 +25,7 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
     name: "explorer",
     description:
       "Read-only investigation of the existing workspace. Returns a concise findings summary; makes no changes.",
-    tools: ["list_files", "read_file", "grep", "glob"],
+    tools: [TOOL_NAMES.read, TOOL_NAMES.grep, TOOL_NAMES.glob],
     maxTurns: 8,
   },
 ];

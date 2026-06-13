@@ -80,8 +80,13 @@ export class PermissionBroker {
 
 /** Tools whose writes acceptEdits should auto-allow. */
 const EDIT_TOOLS = new Set<string>([TOOL_NAMES.write, TOOL_NAMES.edit, TOOL_NAMES.memory]);
-/** Side-effect-free control tools auto-allowed in every mode. */
-const CONTROL_TOOLS = new Set<string>([TOOL_NAMES.todo]);
+/**
+ * Tools auto-allowed in every mode. TodoWrite is side-effect-free. Task only
+ * LAUNCHES a sub-agent — the sub-agent runs under this same engine, so each of its
+ * own actions is permission-checked independently; gating the launch too would just
+ * double-prompt. A deny rule on Task still blocks it (rules run before this gate).
+ */
+const CONTROL_TOOLS = new Set<string>([TOOL_NAMES.todo, TOOL_NAMES.task]);
 
 export interface PermissionEngineOptions {
   mode?: PermissionMode;

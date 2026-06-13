@@ -148,6 +148,24 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(retries[0]).toMatchObject({ attempt: 1, status: 503 });
   });
 
+  it("runs a model-callable Task sub-agent and enforces no-nesting (terminates)", async () => {
+    // main → Task(explorer); sub tries to nest Task (refused), then finishes; main finishes.
+    // The whole thing TERMINATING is the proof that nesting is refused (no infinite spawn).
+    const rt = makeRuntime([
+      reply("", [call("t", "Task", { description: "look around", subagent_type: "explorer", prompt: "investigate" })]),
+      reply("", [call("nested", "Task", { description: "go deeper", prompt: "nest" })]), // sub-agent turn 1
+      reply("sub: nesting was refused; investigation complete.", []), // sub-agent turn 2
+      reply("Done — the sub reported back.", []), // main turn 2
+    ]);
+    const { emit, events } = sink();
+    const { result } = await rt.run({ prompt: "delegate" }, emit, signal());
+
+    expect(result.subtype).toBe("success");
+    // The sub-agent's distilled report came back as the main Task tool_result.
+    const taskResult = events.find((e) => e.type === "tool_result" && e.toolUseId === "t");
+    expect(taskResult && taskResult.type === "tool_result" && taskResult.content).toContain("investigation complete");
+  });
+
   it("resumes an existing session", async () => {
     const rt = makeRuntime([
       reply("one", [call("m", "memory", { command: "view" })]),

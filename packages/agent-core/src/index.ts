@@ -19,9 +19,14 @@ import type {
   Workspace,
 } from "./ports";
 import { builtinTools } from "./tools/builtin";
+import { makeTaskTool } from "./tools/builtin/task";
 import type { Tool } from "./tools/registry";
 import { ToolRegistry } from "./tools/registry";
 import { ToolExecutor } from "./tools/executor";
+import { AgentRegistry } from "./orchestration/agentRegistry";
+import type { AgentDefinition } from "./orchestration/agentRegistry";
+import { runSubagent } from "./orchestration/subagent";
+import type { SubagentRunResult } from "./orchestration/subagent";
 import { HookBus } from "./permissions/hooks";
 import type { PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
@@ -82,6 +87,8 @@ export interface AgentRuntimeOptions {
   logger?: Logger;
   idGen?: () => string;
   tools?: Tool[];
+  /** Custom sub-agent definitions (merged over the built-ins) for the Task tool. */
+  agents?: AgentDefinition[];
   system?: string;
   userRules?: string;
   permissionMode?: PermissionMode;
@@ -171,6 +178,7 @@ export class AgentRuntime {
   private readonly logger: Logger;
   private readonly idGen: () => string;
   private readonly registry: ToolRegistry;
+  private readonly agentRegistry: AgentRegistry;
   private readonly executor: ToolExecutor;
   private readonly contextManager: ContextManager;
   private readonly loopConfig: AgentLoopConfig;
@@ -188,7 +196,12 @@ export class AgentRuntime {
     this.logger = opts.logger ?? silentLogger;
     this.idGen = opts.idGen ?? makeIdGen(this.clock);
 
-    this.registry = new ToolRegistry().registerAll(opts.tools ?? builtinTools());
+    // Sub-agent definitions + the model-callable Task tool that routes to them.
+    this.agentRegistry = new AgentRegistry(opts.agents);
+    this.registry = new ToolRegistry().registerAll([
+      ...(opts.tools ?? builtinTools()),
+      makeTaskTool(this.agentRegistry),
+    ]);
     this.hooks = new HookBus().onPreToolUse(secretsHook);
     this.broker = new PermissionBroker();
     const engine = new PermissionEngine({
@@ -236,7 +249,29 @@ export class AgentRuntime {
       clock: this.clock,
       logger: this.logger,
       config: { ...this.loopConfig, effort },
+      spawn: (def, prompt, signal) => this.spawn(def, prompt, signal),
+      depth: 0,
     };
+  }
+
+  /**
+   * Run a sub-agent for the Task tool: a fresh context window over the SHARED
+   * workspace with an isolated read-ledger (runSubagent handles that), at depth 1
+   * so it can't itself spawn. Uses the agent definition's prompt/turn limits.
+   */
+  private spawn(def: AgentDefinition, prompt: string, signal: AbortSignal): Promise<SubagentRunResult> {
+    const deps: AgentLoopDeps = {
+      ...this.loopDeps(this.defaultEffort),
+      depth: 1,
+      config: {
+        ...this.loopConfig,
+        effort: this.defaultEffort,
+        promptVariant: "subagent",
+        promptOverride: def.systemPrompt,
+        maxTurns: def.maxTurns ?? this.loopConfig.maxTurns,
+      },
+    };
+    return runSubagent(prompt, deps, { workspace: this.workspace, signal });
   }
 
   async run(opts: RunOptions, emit: EventSink, signal: AbortSignal): Promise<RunOutcome> {
