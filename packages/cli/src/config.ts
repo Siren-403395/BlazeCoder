@@ -22,6 +22,8 @@ export interface CliConfig {
   home: string;
   /** Use the offline stub gateway instead of a real provider. */
   fakeModel: boolean;
+  /** Enable the WebSearch/WebFetch tools (off by default). */
+  webEnabled: boolean;
 }
 
 /** Parse a .env file's KEY=VALUE lines into a record (no interpolation). */
@@ -83,5 +85,6 @@ export function loadConfig(cwd: string = process.cwd()): CliConfig {
     maxRetries: num(env.AGENT_MAX_RETRIES, 8),
     home,
     fakeModel: env.AGENT_FAKE_MODEL === "1" || env.AGENT_FAKE_MODEL === "true",
+    webEnabled: env.AGENT_WEB === "1" || env.AGENT_WEB === "true",
   };
 }

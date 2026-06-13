@@ -18,7 +18,9 @@ import {
   makeSkillTool,
   silentLogger,
   systemClock,
+  webTools,
 } from "@coding-agent/core";
+import { HttpWebClient } from "./adapters/webClient";
 import type { AgentRuntime, Logger, PermissionMode, RuleSource } from "@coding-agent/core";
 import { DeepSeekGateway } from "./adapters/deepseekGateway";
 import { StubGateway } from "./adapters/stubGateway";
@@ -78,7 +80,10 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
   // Skills (same trust gate). When any exist, expose the model-callable Skill tool.
   const skillDirs = [join(config.home, "skills"), ...(trusted ? [join(root, ".zephyrcode", "skills")] : [])];
   const skills = loadSkills(skillDirs);
-  const extraTools = skills.length ? [makeSkillTool(skills)] : [];
+  const extraTools = [
+    ...(skills.length ? [makeSkillTool(skills)] : []),
+    ...(config.webEnabled ? webTools(new HttpWebClient()) : []),
+  ];
 
   return createAgentRuntime({
     gateway,

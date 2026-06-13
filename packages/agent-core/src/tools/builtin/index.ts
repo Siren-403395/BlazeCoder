@@ -19,4 +19,5 @@ export function builtinTools(): Tool[] {
 
 export { readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, todoWriteTool, memoryTool };
 export { makeTaskTool } from "./task";
+export * from "./web";
 export * from "../toolNames";

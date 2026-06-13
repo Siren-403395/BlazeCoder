@@ -33,7 +33,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 - [x] P1-ext-3     settings.json hooks reader + command-hook subprocess executor (trust gate)   (deps: perm-3, ext-1)
 - [x] P1-ext-4     plan-mode allowedPrompts (pre-approved categories on plan exit)   (deps: perm-2)
 - [x] P1-tools-3   upgrade Read/Write/Edit/Glob/Grep/Bash descriptions to reference-grade   (deps: tools-1)
-- [ ] P1-tools-4   WebSearch + WebFetch behind a WebClient port, mandatory Sources citation   (deps: tools-1)
+- [x] P1-tools-4   WebSearch + WebFetch behind a WebClient port, mandatory Sources citation   (deps: tools-1)
 
 ## P2 — nice-to-have
 - [ ] P2-tools-5   per-tool maxResultSizeChars with disk-spill-and-pointer (replace flat 60k cap)   (deps: tools-3)
