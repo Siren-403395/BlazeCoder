@@ -100,10 +100,10 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
       logger: silentLogger,
     });
     const { emit, events } = sink();
-    const { session, result } = await rt.run({ prompt: "hard question", thinking: true }, emit, signal());
+    const { session, result } = await rt.run({ prompt: "hard question", effort: "high" }, emit, signal());
 
     expect(result.subtype).toBe("success");
-    // The thinking flag reached the model request.
+    // The high-effort run enabled thinking mode on the model request.
     expect(gateway.lastRequest?.thinking).toBe(true);
     // Reasoning arrived as MULTIPLE streamed deltas (never one synchronous blob).
     const deltas = events.filter((e) => e.type === "reasoning_delta");

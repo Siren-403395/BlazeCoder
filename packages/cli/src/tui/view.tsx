@@ -6,7 +6,7 @@
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
 import { theme, toolDetail } from "./theme";
-import type { Item, PendingPermission, TuiState } from "./state";
+import type { Item, PendingPermission, ReasoningDisplay, TuiState } from "./state";
 
 function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   const detail = toolDetail(item.name, item.input);
@@ -27,27 +27,37 @@ function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   );
 }
 
-function AssistantView({ item }: { item: Extract<Item, { kind: "assistant" }> }) {
+function ReasoningView({ item, mode }: { item: Extract<Item, { kind: "assistant" }>; mode: ReasoningDisplay }) {
+  if (mode === "hidden" || !item.reasoning) return null;
+  // While streaming, always show the live thinking. Once finalized, "summary"
+  // collapses it to a single dim line; "full" keeps the whole trace.
+  if (!item.streaming && mode === "summary") {
+    return <Text color={theme.accentDim}>✷ thought for a moment</Text>;
+  }
+  return (
+    <Box flexDirection="column" marginBottom={item.text ? 1 : 0}>
+      <Text color={theme.accentDim}>✷ thinking{item.streaming && !item.text ? "…" : ""}</Text>
+      <Text color={theme.faint} wrap="wrap">
+        {item.reasoning}
+      </Text>
+    </Box>
+  );
+}
+
+function AssistantView({ item, reasoning }: { item: Extract<Item, { kind: "assistant" }>; reasoning: ReasoningDisplay }) {
   return (
     <Box flexDirection="column" marginTop={1}>
-      {item.reasoning ? (
-        <Box flexDirection="column" marginBottom={item.text ? 1 : 0}>
-          <Text color={theme.accentDim}>✷ thinking{item.streaming && !item.text ? "…" : ""}</Text>
-          <Text color={theme.faint} wrap="wrap">
-            {item.reasoning}
-          </Text>
-        </Box>
-      ) : null}
+      <ReasoningView item={item} mode={reasoning} />
       {item.text ? (
         <Text wrap="wrap">{item.text}</Text>
-      ) : item.streaming && !item.reasoning ? (
+      ) : item.streaming && (!item.reasoning || reasoning === "hidden") ? (
         <Text color={theme.faint}>…</Text>
       ) : null}
     </Box>
   );
 }
 
-export function ItemView({ item }: { item: Item }) {
+export function ItemView({ item, reasoning = "summary" }: { item: Item; reasoning?: ReasoningDisplay }) {
   switch (item.kind) {
     case "user":
       return (
@@ -59,7 +69,7 @@ export function ItemView({ item }: { item: Item }) {
         </Box>
       );
     case "assistant":
-      return <AssistantView item={item} />;
+      return <AssistantView item={item} reasoning={reasoning} />;
     case "tool":
       return <ToolView item={item} />;
     case "notice":
@@ -92,8 +102,8 @@ export function StatusBar({ state }: { state: TuiState }) {
   return (
     <Box marginTop={1}>
       <Text color={theme.faint}>
-        {state.model ?? "?"} · effort {state.effort} · turn {state.turns}/{state.maxTurns} · ctx {pct}% · $
-        {state.costUsd.toFixed(4)}
+        {state.model ?? "?"} · effort {state.effort} · reasoning {state.reasoning} · turn {state.turns}/
+        {state.maxTurns} · ctx {pct}% · ${state.costUsd.toFixed(4)}
       </Text>
     </Box>
   );

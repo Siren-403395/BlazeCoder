@@ -48,13 +48,30 @@ describe("ItemView", () => {
     unmount();
   });
 
-  it("renders an assistant message with its thinking block", () => {
+  it("renders an assistant message with a full thinking block", () => {
     const { lastFrame, unmount } = render(
-      <ItemView item={{ kind: "assistant", id: "a", text: "All set.", reasoning: "First I planned it.", streaming: false }} />,
+      <ItemView
+        item={{ kind: "assistant", id: "a", text: "All set.", reasoning: "First I planned it.", streaming: false }}
+        reasoning="full"
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("thinking");
     expect(frame).toContain("First I planned it.");
+    expect(frame).toContain("All set.");
+    unmount();
+  });
+
+  it("collapses the thinking block to one line in summary mode once finalized", () => {
+    const { lastFrame, unmount } = render(
+      <ItemView
+        item={{ kind: "assistant", id: "a", text: "All set.", reasoning: "First I planned it.", streaming: false }}
+        reasoning="summary"
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("thought for a moment");
+    expect(frame).not.toContain("First I planned it.");
     expect(frame).toContain("All set.");
     unmount();
   });

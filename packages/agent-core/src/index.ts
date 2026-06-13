@@ -26,6 +26,7 @@ import { PermissionBroker, PermissionEngine } from "./permissions/engine";
 import type { BrokerDecision, PermissionMode } from "./permissions/engine";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig } from "./context/compaction";
+import type { Effort } from "./effort";
 import { FileSystemWorkspace } from "./workspace/fsWorkspace";
 import { ReadLedger } from "./workspace/ledger";
 import { runAgentLoop } from "./loop/agentLoop";
@@ -44,6 +45,7 @@ export * from "./permissions/protectedPaths";
 export * from "./context/sessionContext";
 export * from "./context/compaction";
 export * from "./context/rehydration";
+export * from "./effort";
 export * from "./memory/memoryStore";
 export * from "./memory/memoryTool";
 export * from "./memory/projectRules";
@@ -82,6 +84,8 @@ export interface AgentRuntimeOptions {
   contextTokens?: number;
   temperature?: number;
   maxOutputTokens?: number;
+  /** Default reasoning effort when a run does not specify one (default "high"). */
+  defaultEffort?: Effort;
   compaction?: Partial<CompactionConfig>;
 }
 
@@ -90,8 +94,8 @@ export interface RunOptions {
   /** Resume an existing session; omit to start a new one. */
   sessionId?: string;
   title?: string;
-  /** Run the model in deep-thinking (reasoning) mode for this turn. */
-  thinking?: boolean;
+  /** Reasoning effort for this turn (maps to thinking mode + output budget). */
+  effort?: Effort;
 }
 
 export interface RunOutcome {
@@ -157,6 +161,7 @@ export class AgentRuntime {
   private readonly executor: ToolExecutor;
   private readonly contextManager: ContextManager;
   private readonly loopConfig: AgentLoopConfig;
+  private readonly defaultEffort: Effort;
 
   constructor(opts: AgentRuntimeOptions) {
     this.store = opts.sessionStore;
@@ -200,9 +205,10 @@ export class AgentRuntime {
       temperature: opts.temperature ?? 0.2,
       maxOutputTokens: opts.maxOutputTokens ?? 8000,
     };
+    this.defaultEffort = opts.defaultEffort ?? "high";
   }
 
-  private loopDeps(thinking: boolean): AgentLoopDeps {
+  private loopDeps(effort: Effort): AgentLoopDeps {
     return {
       gateway: this.gateway,
       registry: this.registry,
@@ -213,7 +219,7 @@ export class AgentRuntime {
       memory: this.memory,
       clock: this.clock,
       logger: this.logger,
-      config: { ...this.loopConfig, thinking },
+      config: { ...this.loopConfig, effort },
     };
   }
 
@@ -232,7 +238,7 @@ export class AgentRuntime {
       session,
       opts.prompt,
       this.workspace,
-      this.loopDeps(opts.thinking ?? false),
+      this.loopDeps(opts.effort ?? this.defaultEffort),
       emit,
       signal,
     );

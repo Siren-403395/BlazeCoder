@@ -27,11 +27,14 @@ export interface PendingPermission {
 
 export type RunStatus = "idle" | "running" | "awaiting_permission" | "done" | "error";
 
+export type ReasoningDisplay = "hidden" | "summary" | "full";
+
 export interface TuiState {
   items: Item[];
   status: RunStatus;
   model?: string;
   effort: string;
+  reasoning: ReasoningDisplay;
   turns: number;
   maxTurns: number;
   costUsd: number;
@@ -48,14 +51,16 @@ export type UiAction =
   | AgentEvent
   | { type: "user_prompt"; text: string }
   | { type: "set_effort"; effort: string }
+  | { type: "set_reasoning"; reasoning: ReasoningDisplay }
   | { type: "permission_resolved" }
   | { type: "reset" };
 
-export function initialState(effort = "high"): TuiState {
+export function initialState(effort = "high", reasoning: ReasoningDisplay = "summary"): TuiState {
   return {
     items: [],
     status: "idle",
     effort,
+    reasoning,
     turns: 0,
     maxTurns: 0,
     costUsd: 0,
@@ -79,10 +84,13 @@ function firstLine(text: string, max = 200): string {
 export function applyEvent(state: TuiState, action: UiAction): TuiState {
   switch (action.type) {
     case "reset":
-      return { ...initialState(state.effort), model: state.model };
+      return { ...initialState(state.effort, state.reasoning), model: state.model };
 
     case "set_effort":
       return { ...state, effort: action.effort };
+
+    case "set_reasoning":
+      return { ...state, reasoning: action.reasoning };
 
     case "permission_resolved":
       // The user answered the prompt; the loop resumes and will emit more events.

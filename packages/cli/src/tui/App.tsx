@@ -9,21 +9,17 @@ import { useCallback, useReducer, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
-import type { AgentRuntime } from "@coding-agent/core";
-import { applyEvent, initialState, type Item, type TuiState } from "./state";
+import { EFFORTS, escalateFromPrompt, isEffort, type AgentRuntime, type Effort } from "@coding-agent/core";
+import { applyEvent, initialState, type Item, type ReasoningDisplay, type TuiState } from "./state";
 import { ItemView, PermissionPrompt, StatusBar } from "./view";
 import { theme } from "./theme";
 
-const EFFORTS = ["low", "medium", "high", "ultra"];
+const REASONING_MODES: ReasoningDisplay[] = ["hidden", "summary", "full"];
 
 function isFinalized(item: Item): boolean {
   if (item.kind === "assistant") return !item.streaming;
   if (item.kind === "tool") return item.status !== "running";
   return true;
-}
-
-function effortToThinking(effort: string): boolean {
-  return effort !== "low";
 }
 
 export function App({ runtime, effort = "high" }: { runtime: AgentRuntime; effort?: string }) {
@@ -52,14 +48,19 @@ export function App({ runtime, effort = "high" }: { runtime: AgentRuntime; effor
           sessionId.current = undefined;
           return true;
         case "effort":
-          if (EFFORTS.includes(arg)) dispatch({ type: "set_effort", effort: arg });
+          if (isEffort(arg)) dispatch({ type: "set_effort", effort: arg });
           else dispatch({ type: "notice", level: "warn", message: `Usage: /effort <${EFFORTS.join("|")}>` });
+          return true;
+        case "reasoning":
+          if ((REASONING_MODES as string[]).includes(arg)) dispatch({ type: "set_reasoning", reasoning: arg as ReasoningDisplay });
+          else dispatch({ type: "notice", level: "warn", message: `Usage: /reasoning <${REASONING_MODES.join("|")}>` });
           return true;
         case "help":
           dispatch({
             type: "notice",
             level: "info",
-            message: "Commands: /effort <level>, /clear, /help, /exit. Esc interrupts a run; Ctrl+C quits.",
+            message:
+              "Commands: /effort <low|medium|high|ultra>, /reasoning <hidden|summary|full>, /clear, /help, /exit. Say 'ultrathink' in a prompt to push that turn to max effort. Esc interrupts; Ctrl+C quits.",
           });
           return true;
         default:
@@ -78,11 +79,12 @@ export function App({ runtime, effort = "high" }: { runtime: AgentRuntime; effor
       if (handleSlash(text)) return;
 
       dispatch({ type: "user_prompt", text });
+      const effort = escalateFromPrompt(text, effortRef.current as Effort);
       const ac = new AbortController();
       abort.current = ac;
       try {
         const { session } = await runtime.run(
-          { prompt: text, sessionId: sessionId.current, thinking: effortToThinking(effortRef.current) },
+          { prompt: text, sessionId: sessionId.current, effort },
           (e) => dispatch(e),
           ac.signal,
         );
@@ -117,11 +119,11 @@ export function App({ runtime, effort = "high" }: { runtime: AgentRuntime; effor
 
   return (
     <Box flexDirection="column">
-      <Static items={finalized}>{(item) => <ItemView key={item.id} item={item} />}</Static>
+      <Static items={finalized}>{(item) => <ItemView key={item.id} item={item} reasoning={state.reasoning} />}</Static>
 
       <Box flexDirection="column">
         {live.map((item) => (
-          <ItemView key={item.id} item={item} />
+          <ItemView key={item.id} item={item} reasoning={state.reasoning} />
         ))}
 
         {state.permission ? (

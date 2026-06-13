@@ -94,9 +94,10 @@ describe("TUI state reducer", () => {
     expect(s.items.at(-1)).toMatchObject({ kind: "result", subtype: "success", summary: "Done." });
   });
 
-  it("reset clears the transcript but keeps the model and effort", () => {
+  it("reset clears the transcript but keeps model, effort, and reasoning", () => {
     const s = reduce([
       { type: "set_effort", effort: "ultra" },
+      { type: "set_reasoning", reasoning: "full" },
       { type: "system", subtype: "init", sessionId: "s", model: "m", tools: [], maxTurns: 24, contextTokens: 100 },
       { type: "user_prompt", text: "go" },
     ]);
@@ -104,7 +105,14 @@ describe("TUI state reducer", () => {
     expect(cleared.items).toHaveLength(0);
     expect(cleared.model).toBe("m");
     expect(cleared.effort).toBe("ultra");
+    expect(cleared.reasoning).toBe("full");
     expect(cleared.status).toBe("idle");
+  });
+
+  it("defaults reasoning to summary and lets /reasoning change it", () => {
+    expect(initialState().reasoning).toBe("summary");
+    const s = applyEvent(initialState(), { type: "set_reasoning", reasoning: "hidden" });
+    expect(s.reasoning).toBe("hidden");
   });
 
   it("keeps a reasoning-only turn that ends in tool calls (no prose)", () => {

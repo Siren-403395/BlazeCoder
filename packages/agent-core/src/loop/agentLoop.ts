@@ -19,6 +19,7 @@ import type {
 } from "../ports";
 import { assembleRequest, computeBudget } from "../context/sessionContext";
 import { CompactionThrashError, ContextManager } from "../context/compaction";
+import { resolveEffort, type Effort } from "../effort";
 import { buildProjectRules } from "../memory/projectRules";
 import type { ReadLedger } from "../workspace/ledger";
 import type { ToolContext } from "../tools/registry";
@@ -43,8 +44,8 @@ export interface AgentLoopConfig {
   contextTokens: number;
   temperature?: number;
   maxOutputTokens?: number;
-  /** Run the model in deep-thinking (reasoning) mode. */
-  thinking?: boolean;
+  /** Reasoning effort for this run (maps to thinking mode + output budget). */
+  effort?: Effort;
 }
 
 export interface AgentLoopDeps {
@@ -71,6 +72,7 @@ export async function runAgentLoop(
   const { gateway, registry, executor, contextManager, ledger, sandbox, memory, clock, logger, config } = deps;
   const toolSchemas = registry.schemas();
   const projectRules = buildProjectRules({ root: workspace.root, userRules: config.userRules });
+  const { thinking, maxOutputTokens } = resolveEffort(config.effort, config.maxOutputTokens);
 
   emit({
     type: "system",
@@ -133,9 +135,9 @@ export async function runAgentLoop(
       projectRules,
       messages: session.messages,
       tools: toolSchemas,
-      maxOutputTokens: config.maxOutputTokens,
+      maxOutputTokens,
       temperature: config.temperature,
-      thinking: config.thinking,
+      thinking,
     });
 
     let response: ModelResponse;
