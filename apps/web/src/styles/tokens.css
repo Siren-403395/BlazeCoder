@@ -59,6 +59,22 @@
   --shadow-pop: 0 4px 14px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-float: 0 18px 52px rgba(0, 0, 0, 0.58), 0 4px 12px rgba(0, 0, 0, 0.4);
   --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+
+  /* Depth & material - chrome bars read as raised slabs, seams as etched
+     grooves, empty states as glowing focal tiles. All theme-reactive. */
+  --chrome: linear-gradient(180deg, #1b1a1f 0%, var(--surface) 100%);
+  --chrome-shadow-down: 0 10px 22px -16px rgba(0, 0, 0, 0.85);
+  --chrome-shadow-up: 0 -10px 22px -16px rgba(0, 0, 0, 0.85);
+  --rule-v: linear-gradient(180deg, transparent, var(--border-strong) 28%, var(--border-strong) 72%, transparent);
+  --divider: linear-gradient(180deg, transparent, var(--border) 8%, var(--border-strong) 50%, var(--border) 92%, transparent);
+  --divider-glow: 0 0 0 1px var(--accent-border), 0 0 9px 0 rgba(232, 154, 77, 0.42);
+  --inset-well: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  --well-focus: inset 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 3px var(--accent-subtle);
+  --halo: radial-gradient(130px 130px at 50% 40%, rgba(232, 154, 77, 0.12), transparent 70%);
+  --tile: linear-gradient(150deg, var(--surface-3), var(--surface-2));
+  --tile-ring: inset 0 0 0 1px var(--border-strong), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --tile-glow: 0 10px 26px -12px rgba(232, 154, 77, 0.34);
+  --tile-icon: var(--accent-text); /* bright amber reads well on the dark tile */
 }
 
 :root[data-theme="light"] {
@@ -103,4 +119,19 @@
   --shadow-pop: 0 4px 14px rgba(28, 25, 20, 0.1), 0 1px 3px rgba(28, 25, 20, 0.07);
   --shadow-float: 0 18px 52px rgba(28, 25, 20, 0.16), 0 4px 12px rgba(28, 25, 20, 0.1);
   --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+
+  /* Depth & material (light mirror) */
+  --chrome: linear-gradient(180deg, #ffffff 0%, #fcfbf8 100%);
+  --chrome-shadow-down: 0 10px 22px -16px rgba(28, 25, 20, 0.16);
+  --chrome-shadow-up: 0 -10px 22px -16px rgba(28, 25, 20, 0.16);
+  --rule-v: linear-gradient(180deg, transparent, var(--border-strong) 28%, var(--border-strong) 72%, transparent);
+  --divider: linear-gradient(180deg, transparent, var(--border) 8%, var(--border-strong) 50%, var(--border) 92%, transparent);
+  --divider-glow: 0 0 0 1px var(--accent-border), 0 0 9px 0 rgba(196, 120, 43, 0.34);
+  --inset-well: inset 0 1px 2px rgba(28, 25, 20, 0.06);
+  --well-focus: inset 0 1px 2px rgba(28, 25, 20, 0.06), 0 0 0 3px var(--accent-subtle);
+  --halo: radial-gradient(130px 130px at 50% 40%, rgba(196, 120, 43, 0.12), transparent 70%);
+  --tile: linear-gradient(150deg, #ffffff, var(--surface-2));
+  --tile-ring: inset 0 0 0 1px var(--border), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --tile-glow: 0 12px 28px -14px rgba(173, 106, 34, 0.28);
+  --tile-icon: #8a5117; /* deeper amber: clears WCAG AA on the off-white tile gradient */
 }

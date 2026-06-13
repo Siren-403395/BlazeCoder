@@ -36,13 +36,13 @@ export function Header({
 }) {
   const p = PHASE[phase];
   return (
-    <header className="flex h-[52px] shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4">
+    <header className="relative z-10 flex h-[52px] shrink-0 items-center justify-between gap-3 chrome-top px-4">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="flex size-6 items-center justify-center rounded-control bg-accent text-accent-fg">
+        <span className="flex size-6 items-center justify-center rounded-control bg-gradient-to-br from-accent-hover to-accent-active text-accent-fg edge-hi shadow-[0_3px_10px_-3px_var(--accent-border)]">
           <Sparkle size={14} weight="fill" />
         </span>
         <span className="text-sm font-semibold tracking-tight text-text">Coding Agent</span>
-        <span className="hidden h-4 w-px bg-border sm:block" />
+        <span className="hidden h-4 w-px rule-v sm:block" />
         <SessionMenu currentId={sessionId} onSelect={onSelectSession} onNew={onNewSession} />
         {model && (
           <Badge tone="neutral" mono className="hidden md:inline-flex">

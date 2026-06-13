@@ -20,7 +20,7 @@ export function PanelHeader({
   return (
     <header
       className={cn(
-        "flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border px-3.5",
+        "relative z-10 flex h-11 shrink-0 items-center justify-between gap-2 chrome-top px-3.5",
         className,
       )}
     >

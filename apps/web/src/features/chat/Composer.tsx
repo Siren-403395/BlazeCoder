@@ -35,7 +35,7 @@ export function Composer({
   }
 
   return (
-    <div className="shrink-0 border-t border-border bg-surface px-5 pb-5 pt-4">
+    <div className="relative z-10 shrink-0 chrome-bottom px-5 pb-5 pt-4">
       {!value && !busy && (
         <div className="mb-3 flex flex-wrap gap-2">
           {EXAMPLES.map((ex) => (
@@ -77,7 +77,8 @@ export function Composer({
           className={cn(
             "block max-h-[200px] min-h-[72px] w-full resize-none rounded-card border border-border bg-bg",
             "px-4 py-3.5 pr-14 text-[13px] leading-relaxed text-text outline-none",
-            "placeholder:text-faint focus:border-accent-border",
+            "shadow-[var(--inset-well)] transition-shadow",
+            "placeholder:text-faint focus:border-accent-border focus:shadow-[var(--well-focus)]",
           )}
         />
         {busy ? (

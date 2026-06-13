@@ -5,7 +5,7 @@ import { ContextGauge } from "./ContextGauge";
 
 /** A thin vertical divider used to separate ambient status items. */
 function Divider() {
-  return <span className="h-3 w-px bg-border" />;
+  return <span className="h-3 w-px rule-v" />;
 }
 
 /**
@@ -19,7 +19,7 @@ export function StatusBar({ stats }: { stats: RunStats }) {
   const files = stats.fileCount;
 
   return (
-    <div className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-border bg-surface px-3 text-[11px] font-mono tnum text-subtle">
+    <div className="relative z-10 flex h-7 shrink-0 items-center justify-between gap-3 chrome-bottom px-3 text-[11px] font-mono tnum text-subtle">
       <div className="flex items-center gap-3">
         <span>{stats.model ?? "offline"}</span>
         <Divider />

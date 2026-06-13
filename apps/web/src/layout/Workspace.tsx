@@ -81,19 +81,18 @@ export function Workspace({
         onKeyDown={onKeyDown}
         className="group relative w-1 shrink-0 cursor-col-resize"
       >
+        <div className="divider-line absolute inset-y-0 left-1/2 w-px -translate-x-1/2" />
         <div
           className={cn(
-            "absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors",
-            dragging
-              ? "bg-accent-border"
-              : "bg-border group-hover:bg-accent-border group-focus-visible:bg-accent-border",
+            "divider-accent absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-opacity duration-200",
+            dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
           )}
         />
       </div>
 
       <div
         style={{ width }}
-        className="flex min-h-0 shrink-0 flex-col border-l border-border bg-surface"
+        className="flex min-h-0 shrink-0 flex-col bg-surface"
       >
         <PanelHeader className="px-5">Conversation</PanelHeader>
         <div className="min-h-0 flex-1">

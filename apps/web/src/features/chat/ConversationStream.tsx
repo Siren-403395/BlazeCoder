@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Info, Scissors, Sparkle, Warning } from "@phosphor-icons/react";
-import { StatusDot } from "@/ui";
+import { EmptyState, StatusDot } from "@/ui";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import type { UiStatus } from "@/lib/agentState";
 import type { ConversationSegment } from "@/lib/conversation";
@@ -33,14 +33,12 @@ export function ConversationStream({
 
   if (segments.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-        <div className="flex size-16 items-center justify-center rounded-card bg-surface-2 text-accent-text">
-          <Sparkle size={30} weight="light" />
-        </div>
-        <p className="mt-6 text-base font-medium tracking-tight text-text">Ready to build</p>
-        <p className="mt-2.5 max-w-[40ch] text-[13px] leading-relaxed text-muted">
-          Describe an app below. The agent will write the files, build a live preview, and fix its own mistakes.
-        </p>
+      <div className="h-full">
+        <EmptyState
+          icon={<Sparkle size={30} weight="light" />}
+          title="Ready to build"
+          hint="Describe an app below. The agent will write the files, build a live preview, and fix its own mistakes."
+        />
       </div>
     );
   }

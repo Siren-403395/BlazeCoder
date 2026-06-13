@@ -37,6 +37,7 @@
   --color-accent-fg: var(--accent-fg);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-border: var(--accent-border);
+  --color-tile-icon: var(--tile-icon);
 
   --color-success: var(--success);
   --color-success-text: var(--success-text);
@@ -69,6 +70,21 @@
 }
 @utility edge-hi {
   box-shadow: var(--edge-hi);
+}
+
+/* Chrome bars (header, panel headers, composer, status bar): a raised slab with
+   a lit top edge and a soft cast shadow, so its seam reads as a material edge
+   rather than a drawn 1px line. `-top` casts down onto the body below it;
+   `-bottom` casts up onto the content above it. */
+@utility chrome-top {
+  background: var(--chrome);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--edge-hi), var(--chrome-shadow-down);
+}
+@utility chrome-bottom {
+  background: var(--chrome);
+  border-top: 1px solid var(--border);
+  box-shadow: var(--edge-hi), var(--chrome-shadow-up);
 }
 
 @layer base {
@@ -143,6 +159,30 @@
     );
     background-size: 200% 100%;
     animation: ca-shimmer 1.4s ease-in-out infinite;
+  }
+
+  /* Etched vertical tick for inline separators (header brand cluster, status bar). */
+  .rule-v {
+    background: var(--rule-v);
+  }
+
+  /* Resizable split seam: a soft gradient hairline that fades into the chrome
+     bars, with an accent line + glow that blooms on hover / drag. */
+  .divider-line {
+    background: var(--divider);
+  }
+  .divider-accent {
+    background: var(--accent-border);
+    box-shadow: var(--divider-glow);
+  }
+
+  /* Empty-state focal point: a radial accent halo behind a raised, glowing tile. */
+  .empty-halo {
+    background: var(--halo);
+  }
+  .empty-tile {
+    background: var(--tile);
+    box-shadow: var(--tile-ring), var(--tile-glow);
   }
 }
 
