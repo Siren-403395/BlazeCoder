@@ -13,7 +13,21 @@ import {
 } from "../src/index";
 import type { SessionState, TranscriptMessage } from "../src/index";
 import type { AgentEvent } from "@coding-agent/shared";
+import type { ModelGateway, ModelResponse } from "../src/index";
+import { truncateHeadForSummary } from "../src/index";
 import { reply, ScriptedGateway } from "./fakes";
+
+/** A summarizer gateway that throws on the first `failTimes` calls, then returns text. */
+class FlakySummarizer implements ModelGateway {
+  readonly model = "m";
+  calls = 0;
+  constructor(private readonly failTimes: number, private readonly text = "SUMMARY") {}
+  async complete(): Promise<ModelResponse> {
+    this.calls += 1;
+    if (this.calls <= this.failTimes) throw new Error("PROMPT_TOO_LONG");
+    return reply(this.text);
+  }
+}
 
 function session(messages: TranscriptMessage[]): SessionState {
   return {
@@ -250,6 +264,64 @@ describe("ContextManager compaction", () => {
     const summary = s.messages[0] as Extract<TranscriptMessage, { role: "summary" }>;
     expect(summary.boundary).toMatchObject({ compactType: "auto" });
     expect(typeof summary.boundary?.preTokens).toBe("number");
+  });
+
+  it("truncateHeadForSummary drops the oldest round (before the 2nd assistant)", () => {
+    const head: TranscriptMessage[] = [
+      { role: "user", content: "u1" },
+      { role: "assistant", content: "a1", toolCalls: [] },
+      { role: "user", content: "u2" },
+      { role: "assistant", content: "a2", toolCalls: [] },
+      { role: "user", content: "u3" },
+    ];
+    const out = truncateHeadForSummary(head);
+    expect(out.map((m) => (m.role === "assistant" ? m.content : (m as { content: string }).content))).toEqual(["a2", "u3"]);
+    // Fewer than 2 rounds → returned unchanged (can't shrink).
+    expect(truncateHeadForSummary([{ role: "user", content: "x" }]).length).toBe(1);
+  });
+
+  function summarizableSession() {
+    return session([
+      { role: "user", content: "X".repeat(40) },
+      { role: "assistant", content: "Y".repeat(40), toolCalls: [] },
+      { role: "user", content: "Z".repeat(40) },
+      { role: "assistant", content: "W".repeat(40), toolCalls: [] },
+    ]);
+  }
+  const failCfg = { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 } as const;
+
+  it("a summarize that throws increments the failure counter and emits a notice (no throw)", async () => {
+    const cm = new ContextManager(failCfg, new FixedClock(), silentLogger, new FlakySummarizer(99));
+    const events: AgentEvent[] = [];
+    await cm.maybeCompact(summarizableSession(), { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+    expect(events.some((e) => e.type === "notice" && /Summarization failed \(1\/3\)/.test((e as { message: string }).message))).toBe(true);
+  });
+
+  it("short-circuits with a /clear notice after 3 consecutive failures", async () => {
+    const cm = new ContextManager(failCfg, new FixedClock(), silentLogger, new FlakySummarizer(99));
+    for (let i = 0; i < 3; i++) await cm.maybeCompact(summarizableSession(), { system: "", projectRules: "", tools: [] }, () => {}, signal);
+    const events: AgentEvent[] = [];
+    await cm.maybeCompact(summarizableSession(), { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+    expect(events.some((e) => e.type === "notice" && /Use \/clear/.test((e as { message: string }).message))).toBe(true);
+  });
+
+  it("a summarizer that fails twice then succeeds completes compaction", async () => {
+    const gw = new FlakySummarizer(2);
+    const cm = new ContextManager(failCfg, new FixedClock(), silentLogger, gw);
+    // keepRecentMessages:1 → the head holds 3 assistant "rounds", so it can shrink
+    // twice (full → from 2nd assistant → from 3rd) before the 3rd attempt succeeds.
+    const s = session([
+      { role: "user", content: "A".repeat(40) },
+      { role: "assistant", content: "B".repeat(40), toolCalls: [] },
+      { role: "user", content: "C".repeat(40) },
+      { role: "assistant", content: "D".repeat(40), toolCalls: [] },
+      { role: "user", content: "E".repeat(40) },
+      { role: "assistant", content: "F".repeat(40), toolCalls: [] },
+      { role: "user", content: "G".repeat(40) },
+    ]);
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, () => {}, signal);
+    expect(gw.calls).toBe(3); // two overflows + one success
+    expect(s.messages[0]!.role).toBe("summary");
   });
 
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {

@@ -70,8 +70,30 @@ function isClearedMarker(content: string): boolean {
   return /result cleared to save context\]\s*$/.test(content);
 }
 
+/** Max consecutive summarize failures before we stop trying and tell the user to /clear. */
+const MAX_SUMMARIZE_FAILURES = 3;
+/** Attempts to summarize one head, truncating the oldest round each time the call overflows. */
+const MAX_SUMMARIZE_TRUNCATIONS = 3;
+
+/**
+ * Drop the oldest API "round" (everything before the 2nd assistant message) so a
+ * head that itself overflows the summarizer can be retried smaller. Returns the
+ * input unchanged when it can't shrink (fewer than 2 rounds).
+ */
+export function truncateHeadForSummary(head: SessionState["messages"]): SessionState["messages"] {
+  let assistants = 0;
+  for (let i = 0; i < head.length; i++) {
+    if (head[i]!.role === "assistant") {
+      assistants += 1;
+      if (assistants === 2) return head.slice(i);
+    }
+  }
+  return head;
+}
+
 export class ContextManager {
   private thrash = 0;
+  private consecutiveFailures = 0;
 
   constructor(
     private readonly config: CompactionConfig,
@@ -164,8 +186,31 @@ export class ContextManager {
       emit({ type: "notice", level: "warn", message: "Context is large but no summarizer is configured." });
       return;
     }
+    // Failure circuit breaker: if summarization keeps throwing, stop trying (the
+    // cleared tool results above still freed some space) and tell the user.
+    if (this.consecutiveFailures >= MAX_SUMMARIZE_FAILURES) {
+      emit({
+        type: "notice",
+        level: "warn",
+        message: "Summarization keeps failing; the context can't be compacted further. Use /clear to start a fresh session.",
+      });
+      return;
+    }
     const before = after;
-    await this.summarize(session, signal, { preTokens: before, clearedToolUseIds: clearedIds });
+    try {
+      await this.summarize(session, signal, { preTokens: before, clearedToolUseIds: clearedIds });
+      this.consecutiveFailures = 0;
+    } catch (err) {
+      // Don't throw out of the loop — continue with cleared-but-unsummarized context.
+      this.consecutiveFailures += 1;
+      const message = err instanceof Error ? err.message : String(err);
+      emit({
+        type: "notice",
+        level: "warn",
+        message: `Summarization failed (${this.consecutiveFailures}/${MAX_SUMMARIZE_FAILURES}): ${message}. Continuing with cleared context.`,
+      });
+      return;
+    }
     await this.rehydrateFiles(session, params.ledger, params.workspace);
     after = this.estimate(session, params);
     emit({
@@ -176,7 +221,7 @@ export class ContextManager {
       clearedToolUseIds: clearedIds.length ? clearedIds : undefined,
     });
 
-    // Stage 3 — circuit breaker.
+    // Stage 3 — low-yield circuit breaker.
     if (before - after < 0.05 * this.config.contextTokens) {
       this.thrash += 1;
       if (this.thrash >= this.config.maxThrash) {
@@ -272,10 +317,25 @@ export class ContextManager {
     const split = this.computeSplit(session.messages);
     if (split <= 0 || split >= session.messages.length) return;
 
-    const head = session.messages.slice(0, split);
     const tail = session.messages.slice(split);
-    const response = await this.gateway!.complete(buildSummaryRequest(head), signal);
-    const content = stripAnalysis(response.text) || "(summary unavailable)";
+    let head = session.messages.slice(0, split);
+
+    // Retry on overflow: if the summarize call itself fails, drop the oldest round
+    // and try again with a smaller head, up to a cap. If it can't shrink, rethrow.
+    let content: string | undefined;
+    for (let attempt = 0; attempt < MAX_SUMMARIZE_TRUNCATIONS; attempt++) {
+      try {
+        const response = await this.gateway!.complete(buildSummaryRequest(head), signal);
+        content = stripAnalysis(response.text) || "(summary unavailable)";
+        break;
+      } catch (err) {
+        const smaller = truncateHeadForSummary(head);
+        if (smaller.length >= head.length) throw err; // can't shrink further
+        head = smaller;
+      }
+    }
+    if (content === undefined) throw new Error("summarization failed after truncation retries");
+
     session.messages = [
       {
         role: "summary",
