@@ -120,6 +120,27 @@ describe("agent loop reduces over immutable LoopState", () => {
     const result = await runAgentLoop(session(), "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
     expect(result.subtype).toBe("error_max_turns");
   });
+
+  it("backfills synthetic tool_results so no tool_use is orphaned at max-turns", async () => {
+    const deps = makeDeps([() => reply("loop", [call("g", "Glob", { pattern: "**/*" })])]);
+    deps.config.maxTurns = 2;
+    const s = session();
+    await runAgentLoop(s, "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
+    const last = s.messages[s.messages.length - 1]!;
+    expect(last.role).toBe("tool");
+    expect(last.role === "tool" && last.results[0]).toMatchObject({ toolUseId: "g", content: "[Interrupted]", isError: true });
+    // Every assistant tool_use now has a following tool result (no orphan).
+    const lastAssistant = [...s.messages].reverse().find((m) => m.role === "assistant" && m.toolCalls.length > 0);
+    expect(lastAssistant).toBeTruthy();
+  });
+});
+
+describe("ToolExecutor.syntheticResults", () => {
+  it("pairs one synthetic result per call", () => {
+    const r = ToolExecutor.syntheticResults([call("a", "Read"), call("b", "Bash")]);
+    expect(r.map((x) => x.toolUseId)).toEqual(["a", "b"]);
+    expect(r.every((x) => x.isError && x.content === "[Interrupted]")).toBe(true);
+  });
 });
 
 describe("between-turns steering", () => {

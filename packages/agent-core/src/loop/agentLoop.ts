@@ -30,7 +30,7 @@ import type { ReadLedger } from "../workspace/ledger";
 import type { HookBus } from "../permissions/hooks";
 import type { ToolContext } from "../tools/registry";
 import type { ToolRegistry } from "../tools/registry";
-import type { ToolExecutor } from "../tools/executor";
+import { ToolExecutor } from "../tools/executor";
 
 export interface AgentRunResult {
   subtype: ResultSubtype;
@@ -130,6 +130,12 @@ export async function runAgentLoop(
 
   // Single finish site: every exit derives its public subtype from a Terminal.
   const finish = (terminal: Terminal, summary: string): AgentRunResult => {
+    // Backfill synthetic tool_results for any orphaned tool_use (a non-completed exit
+    // right after a tool-call turn), so the persisted transcript stays API-valid on resume.
+    const last = session.messages[session.messages.length - 1];
+    if (last?.role === "assistant" && last.toolCalls.length > 0) {
+      session.messages.push({ role: "tool", results: ToolExecutor.syntheticResults(last.toolCalls) });
+    }
     const subtype = terminalToSubtype(terminal);
     session.status = subtype === "success" ? "done" : subtype === "cancelled" ? "idle" : "error";
     const result: AgentRunResult = {

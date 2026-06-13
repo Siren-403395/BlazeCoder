@@ -36,6 +36,15 @@ export class ToolExecutor {
     this.defaultTimeoutMs = opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
+  /**
+   * Synthetic results for orphaned tool_use blocks (one per call), so a transcript
+   * that ended on an assistant tool-call turn (abort, max-turns, error) stays
+   * API-valid: stricter providers reject an assistant tool_use with no tool_result.
+   */
+  static syntheticResults(calls: ToolCall[], reason = "[Interrupted]"): ToolResultRecord[] {
+    return calls.map((c) => ({ toolUseId: c.id, toolName: c.name, content: reason, isError: true }));
+  }
+
   /** Execute all tool calls for one assistant turn, preserving call order in the output. */
   async executeTurn(toolCalls: ToolCall[], ctx: ToolContext): Promise<ToolResultRecord[]> {
     const byId = new Map<string, ToolResultRecord>();
