@@ -26,7 +26,7 @@ export function buildRuntimeFromEnv(env: NodeJS.ProcessEnv = process.env): Agent
     ? new StubGateway()
     : new DeepSeekGateway({
         apiKey: env.DEEPSEEK_API_KEY as string,
-        model: env.DEEPSEEK_MODEL ?? "deepseek-chat",
+        model: env.DEEPSEEK_MODEL ?? "deepseek-v4-pro",
         baseUrl: env.DEEPSEEK_BASE_URL,
       });
 
