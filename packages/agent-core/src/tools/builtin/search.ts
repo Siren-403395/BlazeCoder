@@ -6,12 +6,14 @@
  */
 
 import { relative, sep } from "node:path";
+import { isSecretPath } from "@coding-agent/shared";
 import { WorkspaceBoundaryError } from "../../workspace/boundary";
 import type { Tool, ToolContext, ToolResult } from "../registry";
 
 const GLOB_CAP = 100;
 const GREP_FILE_CAP = 2000;
 const GREP_MATCH_CAP = 200;
+const GREP_COUNT_CAP = 100;
 
 /** Translate a path glob (supporting *, ?, and ** across directories) to a RegExp. */
 function globToRegExp(glob: string): RegExp {
@@ -77,6 +79,7 @@ export const globTool: Tool = {
     const root = ctx.workspace.root;
     const all = await ctx.workspace.walk({ respectGitignore: false });
     const hits = all.filter((abs) => {
+      if (isSecretPath(abs)) return false; // never surface secret/credential file paths
       if (scope && !(abs === scope || abs.startsWith(scope + sep) || abs.startsWith(scope + "/"))) return false;
       return re.test(anchored ? abs : posixRel(root, abs));
     });
@@ -139,6 +142,7 @@ export const grepTool: Tool = {
     let totalMatches = 0;
 
     for (const abs of all) {
+      if (isSecretPath(abs)) continue; // never read or surface secret/credential file contents
       if (scope && !(abs === scope || abs.startsWith(scope + sep) || abs.startsWith(scope + "/"))) continue;
       if (globRe && !globRe.test(globAnchored ? abs : posixRel(root, abs))) continue;
       const file = await ctx.workspace.read(abs);
@@ -162,7 +166,9 @@ export const grepTool: Tool = {
 
     if (totalMatches === 0) return { content: `No matches for /${pattern}/.` };
     if (mode === "count") {
-      return { content: fileMatches.map((f) => `${f}: ${counts[f]}`).join("\n") };
+      const top = fileMatches.slice(0, GREP_COUNT_CAP);
+      const capped = fileMatches.length > GREP_COUNT_CAP ? `\n…[${fileMatches.length - GREP_COUNT_CAP} more file(s)]` : "";
+      return { content: `${top.map((f) => `${f}: ${counts[f]}`).join("\n")}${capped}` };
     }
     if (mode === "content") {
       const capped = totalMatches > lines.length ? `\n…[${totalMatches - lines.length} more match(es)]` : "";

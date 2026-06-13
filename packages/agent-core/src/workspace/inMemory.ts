@@ -6,7 +6,7 @@
  */
 
 import { inferLanguage, type ProjectFile } from "@coding-agent/shared";
-import type { FileStamp, Workspace } from "../ports";
+import type { FileStamp, ReadFile, Workspace } from "../ports";
 import { isWithin, resolveWithin } from "./boundary";
 
 export class InMemoryWorkspace implements Workspace {
@@ -32,9 +32,11 @@ export class InMemoryWorkspace implements Workspace {
     return isWithin(this.root, absPath);
   }
 
-  async read(absPath: string): Promise<ProjectFile | null> {
+  async read(absPath: string): Promise<ReadFile | null> {
     const file = this.files.get(absPath);
-    return file ? { ...file } : null;
+    if (!file) return null;
+    const stamp = this.stamps.get(absPath) ?? { mtimeMs: 0, size: file.content.length };
+    return { ...file, stamp };
   }
 
   async write(file: ProjectFile): Promise<void> {

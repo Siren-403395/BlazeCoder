@@ -10,7 +10,7 @@ import { mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs
 import { realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { inferLanguage, type ProjectFile } from "@coding-agent/shared";
-import type { FileStamp, Workspace } from "../ports";
+import type { FileStamp, ReadFile, Workspace } from "../ports";
 import { isWithin, resolveWithin, WorkspaceBoundaryError } from "./boundary";
 import { compileIgnore, isIgnored, type IgnoreRule } from "./gitignore";
 
@@ -88,11 +88,12 @@ export class FileSystemWorkspace implements Workspace {
     }
   }
 
-  async read(absPath: string): Promise<ProjectFile | null> {
+  async read(absPath: string): Promise<ReadFile | null> {
     try {
       await this.assertRealWithin(absPath);
       const content = await readFile(absPath, "utf8");
-      return { path: absPath, language: inferLanguage(absPath), content };
+      const s = await stat(absPath);
+      return { path: absPath, language: inferLanguage(absPath), content, stamp: { mtimeMs: s.mtimeMs, size: s.size } };
     } catch (err) {
       if (err instanceof WorkspaceBoundaryError) throw err;
       return null;
@@ -105,6 +106,10 @@ export class FileSystemWorkspace implements Workspace {
     }
     await this.assertRealWithin(file.path);
     await mkdir(dirname(file.path), { recursive: true });
+    // Re-check after mkdir: a concurrently-swapped symlink could have made mkdir
+    // create directories outside the boundary (TOCTOU). Now the parent exists,
+    // so realpath resolves the true target.
+    await this.assertRealWithin(file.path);
     await writeFile(file.path, file.content, "utf8");
   }
 
@@ -119,6 +124,7 @@ export class FileSystemWorkspace implements Workspace {
   }
 
   async exists(absPath: string): Promise<boolean> {
+    await this.assertRealWithin(absPath);
     try {
       await stat(absPath);
       return true;
@@ -128,6 +134,7 @@ export class FileSystemWorkspace implements Workspace {
   }
 
   async stat(absPath: string): Promise<FileStamp | null> {
+    await this.assertRealWithin(absPath);
     try {
       const s = await stat(absPath);
       return { mtimeMs: s.mtimeMs, size: s.size };

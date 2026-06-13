@@ -89,12 +89,15 @@ describe("FileSystemWorkspace", () => {
     expect(respected.some((p) => p.endsWith("keep.ts"))).toBe(true);
   });
 
-  it("refuses to read through a symlink that escapes the boundary", async () => {
+  it("refuses to read, write, or delete through a symlink that escapes the boundary", async () => {
     const outside = await mkdtemp(join(tmpdir(), "ca-out-"));
     await writeFile(join(outside, "secret.txt"), "top secret");
     const link = join(root, "link.txt");
     await symlink(join(outside, "secret.txt"), link);
     await expect(ws.read(link)).rejects.toBeInstanceOf(WorkspaceBoundaryError);
+    await expect(ws.write({ path: link, language: "txt", content: "x" })).rejects.toBeInstanceOf(WorkspaceBoundaryError);
+    await expect(ws.delete(link)).rejects.toBeInstanceOf(WorkspaceBoundaryError);
+    await expect(ws.stat(link)).rejects.toBeInstanceOf(WorkspaceBoundaryError);
     await rm(outside, { recursive: true, force: true });
   });
 });

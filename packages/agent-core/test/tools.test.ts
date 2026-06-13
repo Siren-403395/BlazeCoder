@@ -94,6 +94,16 @@ describe("Edit tool", () => {
     expect(notFound.isError).toBe(true);
   });
 
+  it("rejects an empty old_string (would otherwise corrupt the file with replace_all)", async () => {
+    const { ctx } = makeCtx();
+    await ctx.workspace.write({ path: "/a.ts", language: "ts", content: "hello" });
+    await readFileTool.execute({ file_path: "/a.ts" }, ctx);
+    const res = await editFileTool.execute({ file_path: "/a.ts", old_string: "", new_string: "X", replace_all: true }, ctx);
+    expect(res.isError).toBe(true);
+    expect(res.content).toMatch(/cannot be empty/i);
+    expect((await ctx.workspace.read("/a.ts"))?.content).toBe("hello");
+  });
+
   it("detects a file that changed on disk since it was read", async () => {
     const { ctx } = makeCtx();
     await ctx.workspace.write({ path: "/a.ts", language: "ts", content: "v1" });
@@ -117,6 +127,15 @@ describe("Glob tool", () => {
     expect(res.content).toContain("/src/deep/b.tsx");
     expect(res.content).not.toContain("/src/c.ts");
   });
+
+  it("never surfaces secret/credential file paths", async () => {
+    const { ctx } = makeCtx();
+    await ctx.workspace.write({ path: "/app.ts", language: "ts", content: "x" });
+    await ctx.workspace.write({ path: "/.env", language: "txt", content: "TOKEN=1" });
+    const res = await globTool.execute({ pattern: "**/*" }, ctx);
+    expect(res.content).toContain("/app.ts");
+    expect(res.content).not.toContain("/.env");
+  });
 });
 
 describe("Grep tool", () => {
@@ -137,5 +156,14 @@ describe("Grep tool", () => {
 
     const none = await grepTool.execute({ pattern: "zzz" }, ctx);
     expect(none.content).toMatch(/no matches/i);
+  });
+
+  it("never reads or surfaces secret file contents", async () => {
+    const { ctx } = makeCtx();
+    await ctx.workspace.write({ path: "/.env", language: "txt", content: "API_KEY=supersecret123" });
+    const res = await grepTool.execute({ pattern: "API_KEY", output_mode: "content" }, ctx);
+    expect(res.content).not.toContain("supersecret123");
+    expect(res.content).not.toContain("/.env");
+    expect(res.content).toMatch(/no matches/i);
   });
 });

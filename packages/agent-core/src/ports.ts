@@ -86,6 +86,9 @@ export interface FileStamp {
   size: number;
 }
 
+/** read() returns content + the stamp captured at read time (atomic), so the ledger records exactly what was read. */
+export type ReadFile = ProjectFile & { stamp: FileStamp };
+
 export interface Workspace {
   /** Canonical absolute primary root (the cwd the agent is scoped to). */
   readonly root: string;
@@ -93,7 +96,7 @@ export interface Workspace {
   resolve(inputPath: string): string;
   /** Whether writes are permitted to this (already-resolved) path. */
   isWritable(absPath: string): boolean;
-  read(absPath: string): Promise<ProjectFile | null>;
+  read(absPath: string): Promise<ReadFile | null>;
   write(file: ProjectFile): Promise<void>;
   delete(absPath: string): Promise<boolean>;
   exists(absPath: string): Promise<boolean>;
