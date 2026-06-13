@@ -26,6 +26,7 @@ import { HookBus } from "./permissions/hooks";
 import type { PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
 import type { BrokerDecision, PermissionMode } from "./permissions/engine";
+import type { PermissionRule, RuleSource } from "@coding-agent/shared";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig } from "./context/compaction";
 import type { Effort } from "./effort";
@@ -46,6 +47,8 @@ export * from "./permissions/protectedPaths";
 export * from "./permissions/rule";
 export * from "./permissions/bashRuleMatch";
 export * from "./permissions/pathRuleMatch";
+export * from "./permissions/settingsStore";
+export * from "./permissions/update";
 export * from "./context/sessionContext";
 export * from "./context/compaction";
 export * from "./context/rehydration";
@@ -83,6 +86,11 @@ export interface AgentRuntimeOptions {
   permissionMode?: PermissionMode;
   allow?: string[];
   deny?: string[];
+  ask?: string[];
+  /** Pre-parsed layered permission rules from settings files (user/project/local). */
+  rules?: PermissionRule[];
+  /** Maps a rule source to the dir its settings file is rooted at (source-relative path globs). */
+  sourceRootDir?: (source: RuleSource) => string | undefined;
   maxTurns?: number;
   maxBudgetUsd?: number;
   contextTokens?: number;
@@ -186,6 +194,9 @@ export class AgentRuntime {
       mode: opts.permissionMode ?? "acceptEdits",
       allow: opts.allow,
       deny: opts.deny,
+      ask: opts.ask,
+      rules: opts.rules,
+      sourceRootDir: opts.sourceRootDir,
       hookBus: this.hooks,
       broker: this.broker,
       idGen: this.idGen,

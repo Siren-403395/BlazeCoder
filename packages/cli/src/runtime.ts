@@ -11,15 +11,16 @@ import {
   createAgentRuntime,
   FileMemoryStore,
   FileSessionStore,
+  loadLayeredSettings,
   silentLogger,
   systemClock,
 } from "@coding-agent/core";
-import type { AgentRuntime, Logger, PermissionMode } from "@coding-agent/core";
+import type { AgentRuntime, Logger, PermissionMode, RuleSource } from "@coding-agent/core";
 import { DeepSeekGateway } from "./adapters/deepseekGateway";
 import { StubGateway } from "./adapters/stubGateway";
 import { LocalProcessSandbox } from "./adapters/sandbox";
 import type { CliConfig } from "./config";
-import { projectStateDir } from "./projects";
+import { projectStateDir, settingsPaths } from "./projects";
 
 /** Canonicalize a path so the project key matches the workspace root exactly. */
 function canonical(p: string): string {
@@ -46,6 +47,14 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
   const root = canonical(cwd);
   const projectDir = projectStateDir(config.home, root);
 
+  // Permission settings, by contrast, live IN the working dir so they travel with
+  // the repo (user scope is global). Source-relative path globs root at: user→home,
+  // project/local→the workspace root.
+  const paths = settingsPaths(config.home, root);
+  const settings = loadLayeredSettings(paths);
+  const sourceRootDir = (source: RuleSource): string | undefined =>
+    source === "user" ? config.home : source === "project" || source === "local" ? root : undefined;
+
   return createAgentRuntime({
     gateway,
     sessionStore: new FileSessionStore(projectDir, systemClock),
@@ -53,7 +62,9 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     sandbox: new LocalProcessSandbox(),
     cwd: root,
     logger: opts.logger ?? silentLogger,
-    permissionMode: opts.permissionMode,
+    permissionMode: opts.permissionMode ?? settings.defaultMode,
+    rules: settings.rules,
+    sourceRootDir,
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,
     contextTokens: config.contextTokens,

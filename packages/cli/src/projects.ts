@@ -39,6 +39,26 @@ export function projectStateDir(home: string, cwd: string): string {
   return join(home, "projects", projectKey(cwd));
 }
 
+export interface SettingsPaths {
+  user: string;
+  project: string;
+  local: string;
+}
+
+/**
+ * Permission-settings file locations. Unlike sessions/memory (which live under
+ * projectStateDir, keyed off cwd), settings live IN the working directory so they
+ * travel with the repo: project settings are committable, local settings are
+ * gitignored. The user scope is global under the home dir.
+ */
+export function settingsPaths(home: string, cwd: string): SettingsPaths {
+  return {
+    user: join(home, "settings.json"),
+    project: join(cwd, ".zephyrcode", "settings.json"),
+    local: join(cwd, ".zephyrcode", "settings.local.json"),
+  };
+}
+
 /**
  * One-time migration. Older builds wrote ALL sessions to a single global
  * `<home>/sessions` directory, so resume leaked across projects. Relocate each
