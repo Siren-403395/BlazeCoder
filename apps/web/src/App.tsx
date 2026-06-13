@@ -1,124 +1,97 @@
-import { useReducer, useRef, useState } from "react";
-import type { AgentEvent } from "@coding-agent/shared";
-import { applyEvent, fileList, initialState } from "./lib/agentState";
-import { runAgent } from "./lib/eventStream";
-import { postPermission } from "./lib/api";
-import { exportProjectZip } from "./lib/exportProject";
-import { Composer } from "./features/chat/Composer";
-import { TracePanel } from "./features/trace/TracePanel";
-import { PreviewPane } from "./features/preview/PreviewPane";
-import { CodeView, FileExplorer } from "./features/fileTree/FileExplorer";
-import { BudgetGauge } from "./features/budgetGauge/BudgetGauge";
+import { useEffect, useMemo, useState } from "react";
+import { useAgentRun } from "@/hooks/useAgentRun";
+import { useTheme } from "@/hooks/useTheme";
+import { fileList, runStats, type UiStatus } from "@/lib/agentState";
+import { buildConversation } from "@/lib/conversation";
+import { exportProjectZip } from "@/lib/exportProject";
+import { Header } from "@/layout/Header";
+import { Workspace } from "@/layout/Workspace";
+import { StatusBar } from "@/features/context/StatusBar";
+import type { WorkTab } from "@/layout/WorkspacePanel";
+
+const STATUS_LABEL: Record<UiStatus, string> = {
+  idle: "Ready",
+  running: "Working",
+  awaiting_permission: "Awaiting permission",
+  done: "Run complete",
+  error: "Run failed",
+};
 
 export function App() {
-  const [state, dispatch] = useReducer(applyEvent, initialState);
-  const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<string | undefined>();
-  const [tab, setTab] = useState<"preview" | "code">("preview");
-  const abortRef = useRef<AbortController | null>(null);
+  const { state, busy, phase, run, stop, decide } = useAgentRun();
+  const { resolved, toggle } = useTheme();
+  const [tab, setTab] = useState<WorkTab>("preview");
+  const [selected, setSelected] = useState<string | undefined>(undefined);
 
-  const files = fileList(state);
+  const files = useMemo(() => fileList(state), [state.files]);
+  const segments = useMemo(() => buildConversation(state.trace), [state.trace]);
+  const stats = runStats(state);
+  const building = useMemo(
+    () =>
+      state.trace.some(
+        (t) => t.kind === "tool" && t.toolName === "build_preview" && t.status === "running",
+      ),
+    [state.trace],
+  );
+
+  // Resolve a sensible selected file: explicit pick, else the entry point, else first.
   const activeSelected =
     selected && state.files[selected]
       ? selected
       : state.files["/src/App.tsx"]
         ? "/src/App.tsx"
         : files[0]?.path;
-  const activeFile = activeSelected ? state.files[activeSelected] : undefined;
 
-  async function onRun(prompt: string) {
-    setBusy(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
-    try {
-      await runAgent({ prompt, sessionId: state.sessionId }, (e: AgentEvent) => dispatch(e), controller.signal);
-    } catch (err) {
-      if (!controller.signal.aborted) {
-        dispatch({ type: "notice", level: "error", message: err instanceof Error ? err.message : String(err) });
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Surface the preview as soon as one is built.
+  useEffect(() => {
+    if (state.previewHtml) setTab("preview");
+  }, [state.previewHtml]);
 
-  async function decide(behavior: "allow" | "deny") {
-    const pending = state.pendingPermission;
-    if (!pending) return;
-    await postPermission({ requestId: pending.requestId, behavior });
-  }
+  const liveMessage = state.pendingPermission
+    ? `Permission needed for ${state.pendingPermission.toolName}`
+    : STATUS_LABEL[phase];
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">⌘ Coding Agent</div>
-        <div className="topbar-right">
-          <BudgetGauge budget={state.budget} />
-          <span className={`status status-${state.status}`}>{state.status}</span>
-          {busy && (
-            <button className="ghost-btn" onClick={() => abortRef.current?.abort()}>
-              Stop
-            </button>
-          )}
-          <button className="ghost-btn" disabled={files.length === 0} onClick={() => void exportProjectZip(state.sessionId ?? "project", files)}>
-            Export .zip
-          </button>
-        </div>
-      </header>
-
-      {state.pendingPermission && (
-        <div className="permission-banner">
-          <span>
-            Allow <strong>{state.pendingPermission.toolName}</strong>? {state.pendingPermission.reason}
-          </span>
-          <span className="permission-actions">
-            <button className="run-btn" onClick={() => void decide("allow")}>Allow</button>
-            <button className="ghost-btn" onClick={() => void decide("deny")}>Deny</button>
-          </span>
-        </div>
-      )}
-
-      <main className="layout">
-        <section className="col col-left">
-          <div className="col-head">Activity</div>
-          <div className="col-body scroll">
-            <TracePanel trace={state.trace} />
-            {state.resultSummary && <div className="result-summary">{state.resultSummary}</div>}
-          </div>
-          <Composer disabled={busy} onSubmit={onRun} />
-        </section>
-
-        <section className="col col-center">
-          <div className="tabbar">
-            <button className={tab === "preview" ? "tab active" : "tab"} onClick={() => setTab("preview")}>
-              Preview
-            </button>
-            <button className={tab === "code" ? "tab active" : "tab"} onClick={() => setTab("code")}>
-              Code
-            </button>
-          </div>
-          <div className="col-body">
-            {tab === "preview" ? (
-              <PreviewPane html={state.previewHtml} error={state.previewError} />
-            ) : (
-              <CodeView file={activeFile} />
-            )}
-          </div>
-        </section>
-
-        <section className="col col-right">
-          <div className="col-head">Files</div>
-          <div className="col-body scroll">
-            <FileExplorer
-              files={files}
-              selected={activeSelected}
-              onSelect={(p) => {
-                setSelected(p);
-                setTab("code");
-              }}
-            />
-          </div>
-        </section>
-      </main>
+    <div className="flex h-full flex-col bg-bg text-text">
+      <div
+        className="sr-only"
+        role="status"
+        aria-live={state.pendingPermission || phase === "error" ? "assertive" : "polite"}
+      >
+        {liveMessage}
+      </div>
+      <Header
+        phase={phase}
+        model={state.model}
+        sessionId={state.sessionId}
+        resolvedTheme={resolved}
+        onToggleTheme={toggle}
+        onExport={() => void exportProjectZip(state.sessionId ?? "project", files)}
+        canExport={files.length > 0}
+      />
+      <Workspace
+        segments={segments}
+        phase={phase}
+        onOpenFile={(path) => {
+          setSelected(path);
+          setTab("files");
+        }}
+        busy={busy}
+        onRun={(prompt) => void run(prompt)}
+        onStop={stop}
+        pending={state.pendingPermission}
+        onDecide={(behavior) => void decide(behavior)}
+        tab={tab}
+        onTab={setTab}
+        previewHtml={state.previewHtml}
+        previewError={state.previewError}
+        building={building}
+        files={files}
+        selected={activeSelected}
+        onSelect={(path) => setSelected(path)}
+        trace={state.trace}
+      />
+      <StatusBar stats={stats} />
     </div>
   );
 }
