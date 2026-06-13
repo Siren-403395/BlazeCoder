@@ -43,4 +43,6 @@ export interface SessionSummary {
   createdAt: number;
   updatedAt: number;
   turns: number;
+  /** Workspace the session ran in — used to scope resume to the current project. */
+  cwd: string;
 }

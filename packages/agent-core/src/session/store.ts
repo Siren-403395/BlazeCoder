@@ -33,6 +33,7 @@ function toSummary(state: SessionState): SessionSummary {
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
     turns: state.turns,
+    cwd: state.cwd,
   };
 }
 

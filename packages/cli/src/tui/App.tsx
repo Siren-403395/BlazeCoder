@@ -13,6 +13,7 @@
  * Tab-completion, command history, and @-mention file completion.
  */
 
+import { homedir } from "node:os";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import {
@@ -26,7 +27,7 @@ import {
 } from "@coding-agent/core";
 import { applyEvent, initialState } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
-import { CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine } from "./view";
+import { CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, WelcomeBanner } from "./view";
 import { freshSeed, loadingWord, tipAt } from "./flavor";
 import { theme } from "./theme";
 
@@ -43,6 +44,12 @@ function formatElapsed(sec: number): string {
 
 function formatTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+/** Shorten an absolute path by collapsing the home dir to "~". */
+function prettyPath(p: string): string {
+  const home = homedir();
+  return home && (p === home || p.startsWith(`${home}/`)) ? `~${p.slice(home.length)}` : p;
 }
 
 export function App({
@@ -350,12 +357,18 @@ export function App({
 
   return (
     <Box flexDirection="column">
-      {hidden > 0 ? (
-        <Text color={theme.faint}>{`⋯ ${hidden} earlier message${hidden === 1 ? "" : "s"} hidden`}</Text>
-      ) : null}
-      {visible.map((item) => (
-        <ItemView key={item.id} item={item} />
-      ))}
+      {state.items.length === 0 ? (
+        <WelcomeBanner model={runtime.model} cwd={prettyPath(runtime.cwd)} effort={state.effort} width={width} />
+      ) : (
+        <>
+          {hidden > 0 ? (
+            <Text color={theme.faint}>{`⋯ ${hidden} earlier message${hidden === 1 ? "" : "s"} hidden`}</Text>
+          ) : null}
+          {visible.map((item) => (
+            <ItemView key={item.id} item={item} />
+          ))}
+        </>
+      )}
 
       {busy && !state.permission && !picker ? <LoadingLine word={word} meta={meta} /> : null}
 

@@ -8,8 +8,45 @@ import Spinner from "ink-spinner";
 import type { SessionSummary } from "@coding-agent/core";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
+import { LOGO, LOGO_WIDTH, TAGLINE } from "./banner";
 import type { SlashCommand } from "./commands";
 import type { Item, PendingPermission } from "./state";
+
+/** The welcome screen shown on an empty session: logo wordmark + orientation. */
+export function WelcomeBanner({ model, cwd, effort, width }: { model: string; cwd: string; effort: string; width: number }) {
+  const compact = width < LOGO_WIDTH + 2;
+  return (
+    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+      {compact ? (
+        <Text color={theme.accent} bold>
+          ✶ zephyrcode
+        </Text>
+      ) : (
+        LOGO.map((line, i) => (
+          <Text key={i} color={theme.accent}>
+            {line}
+          </Text>
+        ))
+      )}
+      <Box marginTop={1}>
+        <Text color={theme.faint}>{TAGLINE}</Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          <Text color={theme.muted}>{"cwd    "}</Text>
+          <Text color={theme.faint}>{cwd}</Text>
+        </Text>
+        <Text>
+          <Text color={theme.muted}>{"model  "}</Text>
+          <Text color={theme.faint}>{`${model} · effort ${effort}`}</Text>
+        </Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color={theme.faint}>/help for commands · @ to add files · ↑ for history · /resume to reopen a chat</Text>
+      </Box>
+    </Box>
+  );
+}
 
 /** Finalized assistant prose, rendered as Markdown (headings, bold, lists, code). */
 function Markdown({ text }: { text: string }) {

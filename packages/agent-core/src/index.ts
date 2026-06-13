@@ -15,6 +15,7 @@ import type {
   Sandbox,
   SessionState,
   SessionStore,
+  SessionSummary,
   Workspace,
 } from "./ports";
 import { builtinTools } from "./tools/builtin";
@@ -255,8 +256,24 @@ export class AgentRuntime {
     return this.broker.pendingIds();
   }
 
-  listSessions() {
-    return this.store.list();
+  /** The model id behind the gateway (for display before the first turn). */
+  get model(): string {
+    return this.gateway.model;
+  }
+
+  /** The workspace root the agent edits. */
+  get cwd(): string {
+    return this.workspace.root;
+  }
+
+  /**
+   * Sessions for the CURRENT project only. Sessions are persisted globally (one
+   * store under ~/.zephyrcode), but resume is scoped to the workspace they ran
+   * in, so a fresh project never surfaces another project's history.
+   */
+  async listSessions(): Promise<SessionSummary[]> {
+    const root = this.workspace.root;
+    return (await this.store.list()).filter((s) => s.cwd === root);
   }
 
   /** Workspace files as paths relative to the root (for @-mention completion), gitignore-aware, secrets excluded. */

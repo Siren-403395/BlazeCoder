@@ -52,10 +52,10 @@ describe("resume replaces the screen (no stacking)", () => {
   it("resuming session B after session A shows only B's transcript", async () => {
     const store = new InMemorySessionStore(new FixedClock(1000));
     // Index 0 (first created) = A; index 1 = B (list() ties on updatedAt -> insertion order).
-    const a = await store.create({ id: "sA", model: "m", title: "alpha chat", cwd: "/w" });
+    const a = await store.create({ id: "sA", model: "m", title: "alpha chat", cwd: "/" });
     a.messages = [{ role: "user", content: "ALPHA_MARKER_ONE" }];
     await store.save(a);
-    const b = await store.create({ id: "sB", model: "m", title: "bravo chat", cwd: "/w" });
+    const b = await store.create({ id: "sB", model: "m", title: "bravo chat", cwd: "/" });
     b.messages = [{ role: "user", content: "BRAVO_MARKER_TWO" }];
     await store.save(b);
 
@@ -91,7 +91,7 @@ describe("resume replaces the screen (no stacking)", () => {
 describe("scrollback is bounded (truncation)", () => {
   it("paints a finite window and shows an 'earlier messages hidden' marker", async () => {
     const store = new InMemorySessionStore(new FixedClock(1000));
-    const s = await store.create({ id: "long", model: "m", title: "long chat", cwd: "/w" });
+    const s = await store.create({ id: "long", model: "m", title: "long chat", cwd: "/" });
     const msgs: SessionState["messages"] = [{ role: "user", content: "FIRST_ITEM_MARKER" }];
     for (let i = 0; i < 58; i++) msgs.push({ role: "user", content: `filler line ${i}` });
     msgs.push({ role: "user", content: "LAST_ITEM_MARKER" }); // 60 messages total
@@ -107,5 +107,21 @@ describe("scrollback is bounded (truncation)", () => {
     expect(frame).toMatch(/earlier message/); // truncation indicator present
     expect(frame).not.toContain("FIRST_ITEM_MARKER"); // oldest item scrolled out of the window
     unmount();
+  });
+});
+
+describe("resume is scoped to the current project", () => {
+  it("listSessions returns only sessions whose cwd matches the workspace root", async () => {
+    const store = new InMemorySessionStore(new FixedClock(1000));
+    const here = await store.create({ id: "here", model: "m", title: "this project", cwd: "/" });
+    here.messages = [{ role: "user", content: "x" }];
+    await store.save(here);
+    const elsewhere = await store.create({ id: "elsewhere", model: "m", title: "another project", cwd: "/somewhere/else" });
+    elsewhere.messages = [{ role: "user", content: "y" }];
+    await store.save(elsewhere);
+
+    // makeRuntime uses InMemoryWorkspace, rooted at "/".
+    const sessions = await makeRuntime(store).listSessions();
+    expect(sessions.map((s) => s.id)).toEqual(["here"]);
   });
 });

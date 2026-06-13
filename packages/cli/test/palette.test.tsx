@@ -55,7 +55,9 @@ describe("command palette (interactive)", () => {
     expect(frame).toContain("/effort");
     expect(frame).toContain("Set reasoning depth");
     expect(frame).toContain("/exit");
-    expect(frame).not.toContain("/resume"); // filtered out by the "e" prefix
+    // The resume command is filtered out by the "e" prefix — assert on its
+    // palette description (the welcome banner separately mentions "/resume").
+    expect(frame).not.toContain("Resume a previous conversation");
     unmount();
   });
 
@@ -132,7 +134,7 @@ describe("@-mention file completion", () => {
 describe("/resume picker (interactive)", () => {
   it("lists a saved session, then hydrates its transcript on select", async () => {
     const store = new InMemorySessionStore(new FixedClock(1000));
-    const sess = await store.create({ id: "s1", model: "m", title: "earlier chat", cwd: "/w" });
+    const sess = await store.create({ id: "s1", model: "m", title: "earlier chat", cwd: "/" });
     sess.messages = [
       { role: "user", content: "hello from history" },
       { role: "assistant", content: "hi back", toolCalls: [] },

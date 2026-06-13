@@ -65,6 +65,26 @@ describe("ItemView", () => {
   });
 });
 
+describe("welcome banner", () => {
+  it("shows the logo + orientation on an empty session", async () => {
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([step("hi")]),
+      sessionStore: new InMemorySessionStore(new FixedClock(1)),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock: new FixedClock(1),
+      logger: silentLogger,
+    });
+    const { lastFrame, unmount } = render(<App runtime={runtime} effort="high" />);
+    await new Promise((r) => setTimeout(r, 80));
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("█"); // the block-letter logo rendered
+    expect(frame).toContain("command-line coding agent"); // tagline
+    expect(frame).toContain("/help for commands"); // orientation line
+    unmount();
+  });
+});
+
 describe("App end-to-end (scripted runtime)", () => {
   it("submits a prompt, runs a tool, and shows the result", async () => {
     const ws = new InMemoryWorkspace();
