@@ -65,6 +65,7 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     permissionMode: opts.permissionMode ?? settings.defaultMode,
     rules: settings.rules,
     sourceRootDir,
+    settingsFiles: { user: paths.user, project: paths.project, local: paths.local },
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,
     contextTokens: config.contextTokens,

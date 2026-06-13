@@ -279,10 +279,21 @@ export function App({
   useInput((input, key) => {
     // 1) Permission approval.
     if (state.status === "awaiting_permission" && state.permission) {
-      const reqId = state.permission.requestId;
-      if (input === "y" || input === "a") {
+      const { requestId: reqId, suggestions } = state.permission;
+      const remember = (destination: "local" | "project") => {
+        if (suggestions?.length) {
+          runtime.persistPermission({ type: "addRules", behavior: "allow", rules: suggestions, destination });
+        }
         runtime.resolvePermission(reqId, { behavior: "allow" });
         dispatch({ type: "permission_resolved" });
+      };
+      if (input === "y") {
+        runtime.resolvePermission(reqId, { behavior: "allow" });
+        dispatch({ type: "permission_resolved" });
+      } else if (input === "a") {
+        remember("local"); // always allow — this project, gitignored
+      } else if (input === "A") {
+        remember("project"); // always allow — committable project rule
       } else if (input === "n") {
         runtime.resolvePermission(reqId, { behavior: "deny", message: "Denied by the user." });
         dispatch({ type: "permission_resolved" });

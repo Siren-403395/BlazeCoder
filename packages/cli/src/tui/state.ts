@@ -26,6 +26,8 @@ export interface PendingPermission {
   toolName: string;
   input: Record<string, unknown>;
   reason: string;
+  /** "Always allow" rule strings the user can persist (local/project). */
+  suggestions?: string[];
 }
 
 export type RunStatus = "idle" | "running" | "awaiting_permission" | "done" | "error";
@@ -247,6 +249,7 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
           toolName: action.toolName,
           input: action.input,
           reason: action.reason,
+          suggestions: action.suggestions,
         },
       };
 

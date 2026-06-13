@@ -102,6 +102,8 @@ export type AgentEvent =
       toolName: string;
       input: Record<string, unknown>;
       reason: string;
+      /** "Always allow" rule strings the user can persist (e.g. ["Bash(git commit:*)"]). */
+      suggestions?: string[];
     }
   /** Out-of-band notice (warnings, info). */
   | { type: "notice"; level: "info" | "warn" | "error"; message: string }

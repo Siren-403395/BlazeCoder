@@ -320,7 +320,12 @@ export function PermissionPrompt({ p }: { p: PendingPermission }) {
       <Text color={theme.muted}>
         {p.toolName} {toolDetail(p.toolName, p.input)}
       </Text>
-      <Text color={theme.faint}>[y] allow once · [a] allow + remember · [n] deny</Text>
+      {p.suggestions?.length ? <Text color={theme.muted}>always-allow rule: {p.suggestions[0]}</Text> : null}
+      <Text color={theme.faint}>
+        {p.suggestions?.length
+          ? "[y] once · [a] always (local) · [A] always (project) · [n] no"
+          : "[y] allow once · [n] deny"}
+      </Text>
     </Box>
   );
 }

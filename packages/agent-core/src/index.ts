@@ -33,6 +33,9 @@ import type { PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
 import type { BrokerDecision, PermissionMode } from "./permissions/engine";
 import type { PermissionRule, RuleSource } from "@coding-agent/shared";
+import { ruleValueFromString } from "./permissions/rule";
+import { persistPermissionUpdate, supportsPersistence } from "./permissions/update";
+import type { PermissionUpdate } from "./permissions/update";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig } from "./context/compaction";
 import type { Effort } from "./effort";
@@ -55,6 +58,7 @@ export * from "./permissions/bashRuleMatch";
 export * from "./permissions/pathRuleMatch";
 export * from "./permissions/settingsStore";
 export * from "./permissions/update";
+export * from "./permissions/suggestions";
 export * from "./context/sessionContext";
 export * from "./context/compaction";
 export * from "./context/rehydration";
@@ -100,6 +104,8 @@ export interface AgentRuntimeOptions {
   rules?: PermissionRule[];
   /** Maps a rule source to the dir its settings file is rooted at (source-relative path globs). */
   sourceRootDir?: (source: RuleSource) => string | undefined;
+  /** Settings file paths per persistent scope, so "always allow" can write to disk. */
+  settingsFiles?: Record<"user" | "project" | "local", string>;
   maxTurns?: number;
   maxBudgetUsd?: number;
   contextTokens?: number;
@@ -187,6 +193,7 @@ export class AgentRuntime {
   private readonly contextManager: ContextManager;
   private readonly loopConfig: AgentLoopConfig;
   private readonly defaultEffort: Effort;
+  private readonly settingsFiles?: Record<"user" | "project" | "local", string>;
 
   constructor(opts: AgentRuntimeOptions) {
     this.store = opts.sessionStore;
@@ -239,6 +246,7 @@ export class AgentRuntime {
       maxOutputTokens: opts.maxOutputTokens ?? 8000,
     };
     this.defaultEffort = opts.defaultEffort ?? "high";
+    this.settingsFiles = opts.settingsFiles;
   }
 
   private loopDeps(effort: Effort): AgentLoopDeps {
@@ -345,6 +353,22 @@ export class AgentRuntime {
   /** Exit plan mode, pre-approving the plan's allowedPrompts as session allow-rules. */
   exitPlanMode(allowedPrompts: { tool: string; prompt: string }[] = [], to: PermissionMode = "acceptEdits"): void {
     this.engine.exitPlanMode(allowedPrompts, to);
+  }
+
+  /**
+   * Apply a permission update from an "always allow" choice: update the engine
+   * in-memory (so the in-flight call and the rest of the session honor it) AND, for
+   * a persistent destination, write it to that scope's settings file.
+   */
+  persistPermission(update: PermissionUpdate): void {
+    if (update.type === "addRules") {
+      this.engine.addRules(update.rules.map((r) => ({ source: update.destination, behavior: update.behavior, value: ruleValueFromString(r) })));
+    } else if (update.type === "setMode") {
+      this.engine.setMode(update.mode);
+    }
+    if (this.settingsFiles && supportsPersistence(update.destination)) {
+      persistPermissionUpdate(this.settingsFiles[update.destination], update);
+    }
   }
 
   pendingPermissions(): string[] {

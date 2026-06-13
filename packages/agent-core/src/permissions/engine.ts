@@ -25,6 +25,7 @@ import { TOOL_NAMES } from "../tools/toolNames";
 import { HookBus } from "./hooks";
 import { isProtectedPath } from "./protectedPaths";
 import { matchesRule, ruleValueFromString, ruleValueToString } from "./rule";
+import { getSuggestions } from "./suggestions";
 
 export type { PermissionMode, PermissionRule, PermissionRuleValue, PermissionSettings, RuleBehavior, RuleSource } from "@coding-agent/shared";
 
@@ -227,7 +228,7 @@ export class PermissionEngine {
     // 7) Ask the human. Register BEFORE emitting so a fast client can't race the awaiting promise.
     const requestId = this.idGen();
     const pending = this.broker.request(requestId, run.signal);
-    run.emit({ type: "permission_request", requestId, toolName: tool.name, input, reason: askReason });
+    run.emit({ type: "permission_request", requestId, toolName: tool.name, input, reason: askReason, suggestions: getSuggestions(tool.name, input) });
     const decision = await pending;
     if (decision.behavior === "allow") {
       return { behavior: "allow", input: decision.updatedInput ?? input, decisionReason: askDecisionReason };
