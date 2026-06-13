@@ -76,6 +76,18 @@ function id(state: TuiState, prefix: string): [string, number] {
   return [`${prefix}${n}`, n];
 }
 
+/**
+ * Upper bound on retained scrollback items. The view paints an even smaller
+ * window; this just keeps the in-memory transcript from growing without bound
+ * across a long session. Trimmed only at safe boundaries (a new prompt, a
+ * hydrate) where no streaming item is in flight, so live ids are never dropped.
+ */
+const MAX_ITEMS = 200;
+
+function cap(items: Item[]): Item[] {
+  return items.length > MAX_ITEMS ? items.slice(-MAX_ITEMS) : items;
+}
+
 /** Short, single-line summary of a tool result for the scrollback. */
 function firstLine(text: string, max = 200): string {
   const line = text.split("\n")[0] ?? "";
@@ -99,7 +111,9 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
 
     case "hydrate": {
       const { items, seq } = hydrateItems(state.seq, action.session.messages);
-      return { ...state, items, seq, model: action.session.model, status: "done" };
+      // Replace the screen entirely with the resumed transcript (bounded), so a
+      // resume never stacks on top of whatever was already shown.
+      return { ...state, items: cap(items), seq, model: action.session.model, status: "done" };
     }
 
     case "user_prompt": {
@@ -110,7 +124,7 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
         status: "running",
         permission: undefined,
         liveAssistantId: undefined,
-        items: [...state.items, { kind: "user", id: uid, text: action.text }],
+        items: cap([...state.items, { kind: "user", id: uid, text: action.text }]),
       };
     }
 

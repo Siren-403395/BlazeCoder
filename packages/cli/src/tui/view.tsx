@@ -3,12 +3,20 @@
  * runtime/IO here; App wires events in and these just draw.
  */
 
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import Spinner from "ink-spinner";
 import type { SessionSummary } from "@coding-agent/core";
 import { theme, toolDetail } from "./theme";
+import { renderMarkdown } from "./markdown";
 import type { SlashCommand } from "./commands";
 import type { Item, PendingPermission, ReasoningDisplay, TuiState } from "./state";
+
+/** Finalized assistant prose, rendered as Markdown (headings, bold, lists, code). */
+function Markdown({ text }: { text: string }) {
+  const { stdout } = useStdout();
+  const width = Math.max(20, (stdout?.columns ?? 80) - 2);
+  return <Text>{renderMarkdown(text, width)}</Text>;
+}
 
 function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   const detail = toolDetail(item.name, item.input);
@@ -51,7 +59,11 @@ function AssistantView({ item, reasoning }: { item: Extract<Item, { kind: "assis
     <Box flexDirection="column" marginTop={1}>
       <ReasoningView item={item} mode={reasoning} />
       {item.text ? (
-        <Text wrap="wrap">{item.text}</Text>
+        item.streaming ? (
+          <Text wrap="wrap">{item.text}</Text>
+        ) : (
+          <Markdown text={item.text} />
+        )
       ) : item.streaming && (!item.reasoning || reasoning === "hidden") ? (
         <Text color={theme.faint}>…</Text>
       ) : null}

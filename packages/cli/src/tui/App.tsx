@@ -1,13 +1,20 @@
 /**
  * The root TUI component. Owns the reducer, drives the AgentRuntime in-process
- * (no HTTP), and renders an immutable <Static> scrollback + a live region with a
- * custom prompt input. The input is hand-rolled (value + cursor) rather than
- * ink-text-input so we fully control the cursor for Tab-completion, command
- * history, and @-mention file completion.
+ * (no HTTP), and renders a BOUNDED WINDOW of recent scrollback items plus a live
+ * region with a custom prompt input.
+ *
+ * We deliberately do NOT use Ink's <Static>: it is append-only (its internal
+ * index never rewinds) and its `fullStaticOutput` buffer grows without bound and
+ * has no reset, which makes (a) /resume visibly stack one transcript on top of
+ * the previous one and (b) very long sessions blow the render up. Rendering a
+ * trailing window instead lets `hydrate` cleanly REPLACE the screen on resume and
+ * keeps the painted height finite. The input is hand-rolled (value + cursor)
+ * rather than ink-text-input so we fully control the cursor for Tab-completion,
+ * command history, and @-mention file completion.
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { Box, Static, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import Spinner from "ink-spinner";
 import {
   EFFORTS,
@@ -18,18 +25,15 @@ import {
   type SessionState,
   type SessionSummary,
 } from "@coding-agent/core";
-import { applyEvent, initialState, type Item, type ReasoningDisplay } from "./state";
+import { applyEvent, initialState, type ReasoningDisplay } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
 import { CommandPalette, FileCompletion, InputLine, ItemView, PermissionPrompt, SessionPicker, StatusBar } from "./view";
 import { theme } from "./theme";
 
 const REASONING_MODES: ReasoningDisplay[] = ["hidden", "summary", "full"];
 
-function isFinalized(item: Item): boolean {
-  if (item.kind === "assistant") return !item.streaming;
-  if (item.kind === "tool") return item.status !== "running";
-  return true;
-}
+/** Cap the number of scrollback items painted at once so the frame stays finite. */
+const MAX_VISIBLE_ITEMS = 50;
 
 type Completion =
   | { kind: "command"; matches: { name: string; argHint?: string }[] }
@@ -291,15 +295,19 @@ export function App({
     setLine(draft.slice(0, cursor) + input + draft.slice(cursor), cursor + input.length);
   });
 
-  const finalized = state.items.filter(isFinalized);
-  const live = state.items.filter((i) => !isFinalized(i));
+  // Paint only a trailing window of the transcript so the rendered height stays
+  // bounded (long sessions never "blow up"); older items scroll out of view.
+  const hidden = Math.max(0, state.items.length - MAX_VISIBLE_ITEMS);
+  const visible = hidden > 0 ? state.items.slice(-MAX_VISIBLE_ITEMS) : state.items;
 
   return (
     <Box flexDirection="column">
-      <Static items={finalized}>{(item) => <ItemView key={item.id} item={item} reasoning={state.reasoning} />}</Static>
+      {hidden > 0 ? (
+        <Text color={theme.faint}>{`⋯ ${hidden} earlier message${hidden === 1 ? "" : "s"} hidden`}</Text>
+      ) : null}
 
       <Box flexDirection="column">
-        {live.map((item) => (
+        {visible.map((item) => (
           <ItemView key={item.id} item={item} reasoning={state.reasoning} />
         ))}
 
