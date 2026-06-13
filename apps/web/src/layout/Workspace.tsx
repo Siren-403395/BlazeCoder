@@ -54,9 +54,11 @@ export function Workspace({
   });
 
   // Cursor-style layout: the workspace fills the left, the conversation is a
-  // resizable right rail. DOM order is left to right.
+  // resizable right rail. DOM order is left to right. `isolate` keeps the
+  // panels' chrome z-10 contained here, so they never rise into the root
+  // stacking context and occlude the header's History dropdown.
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="relative isolate flex min-h-0 flex-1">
       <WorkspacePanel
         tab={tab}
         onTab={onTab}
