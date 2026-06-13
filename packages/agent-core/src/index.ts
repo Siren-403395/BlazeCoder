@@ -28,6 +28,7 @@ import { AgentRegistry } from "./orchestration/agentRegistry";
 import type { AgentDefinition } from "./orchestration/agentRegistry";
 import { runSubagent } from "./orchestration/subagent";
 import type { SubagentRunResult } from "./orchestration/subagent";
+import type { Skill } from "./skills/loadSkills";
 import { HookBus } from "./permissions/hooks";
 import type { PostToolUseHook, PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
@@ -75,6 +76,8 @@ export * from "./loop/transitions";
 export * from "./orchestration/agentRegistry";
 export * from "./orchestration/loadAgents";
 export * from "./orchestration/subagent";
+export * from "./skills/loadSkills";
+export * from "./skills/skillTool";
 
 // ─── Runtime factory ──────────────────────────────────────────────────────────
 
@@ -93,6 +96,10 @@ export interface AgentRuntimeOptions {
   logger?: Logger;
   idGen?: () => string;
   tools?: Tool[];
+  /** Extra tools appended to the built-ins (e.g. a Skill tool, web tools). */
+  extraTools?: Tool[];
+  /** Loaded skills (exposed via runtime.skills for a future /skill palette). */
+  skills?: Skill[];
   /** Custom sub-agent definitions (merged over the built-ins) for the Task tool. */
   agents?: AgentDefinition[];
   /** Extra PreToolUse/PostToolUse hooks (e.g. settings-driven command hooks), registered after the built-in secrets guard. */
@@ -198,6 +205,8 @@ export class AgentRuntime {
   private readonly loopConfig: AgentLoopConfig;
   private readonly defaultEffort: Effort;
   private readonly settingsFiles?: Record<"user" | "project" | "local", string>;
+  /** Loaded skills (for a /skill palette in the TUI). */
+  readonly skills: Skill[];
 
   constructor(opts: AgentRuntimeOptions) {
     this.store = opts.sessionStore;
@@ -215,6 +224,7 @@ export class AgentRuntime {
     this.agentRegistry = new AgentRegistry(opts.agents);
     this.registry = new ToolRegistry().registerAll([
       ...(opts.tools ?? builtinTools()),
+      ...(opts.extraTools ?? []),
       makeTaskTool(this.agentRegistry),
     ]);
     // secretsHook FIRST (a deny it returns is final), then any settings-driven hooks.
@@ -254,6 +264,7 @@ export class AgentRuntime {
     };
     this.defaultEffort = opts.defaultEffort ?? "high";
     this.settingsFiles = opts.settingsFiles;
+    this.skills = opts.skills ?? [];
   }
 
   private loopDeps(effort: Effort): AgentLoopDeps {

@@ -21,6 +21,7 @@ export const TOOL_NAMES = {
   memory: "memory",
   todo: "TodoWrite",
   task: "Task",
+  skill: "Skill",
 } as const;
 
 export type ToolNameKey = keyof typeof TOOL_NAMES;

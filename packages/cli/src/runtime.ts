@@ -14,6 +14,8 @@ import {
   FileSessionStore,
   loadAgentDefinitions,
   loadLayeredSettings,
+  loadSkills,
+  makeSkillTool,
   silentLogger,
   systemClock,
 } from "@coding-agent/core";
@@ -73,6 +75,11 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
   const agentDirs = [join(config.home, "agents"), ...(trusted ? [join(root, ".zephyrcode", "agents")] : [])];
   const { definitions: agents } = loadAgentDefinitions(agentDirs, builtinTools().map((t) => t.name));
 
+  // Skills (same trust gate). When any exist, expose the model-callable Skill tool.
+  const skillDirs = [join(config.home, "skills"), ...(trusted ? [join(root, ".zephyrcode", "skills")] : [])];
+  const skills = loadSkills(skillDirs);
+  const extraTools = skills.length ? [makeSkillTool(skills)] : [];
+
   return createAgentRuntime({
     gateway,
     sessionStore: new FileSessionStore(projectDir, systemClock),
@@ -86,6 +93,8 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     settingsFiles: { user: paths.user, project: paths.project, local: paths.local },
     extraPreToolUseHooks,
     extraPostToolUseHooks,
+    extraTools,
+    skills,
     agents,
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,
