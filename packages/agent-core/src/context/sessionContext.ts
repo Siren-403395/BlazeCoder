@@ -7,9 +7,7 @@
  * prompt" pattern.
  */
 
-import type { GeneratedProject } from "@coding-agent/shared";
 import type { ModelRequest, ToolSchema, TranscriptMessage } from "../ports";
-import { buildProjectRules } from "../memory/projectRules";
 
 /** Cheap heuristic (~4 chars/token). Swap for a real tokenizer behind this fn later. */
 export function estimateTokens(text: string): number {
@@ -18,8 +16,8 @@ export function estimateTokens(text: string): number {
 
 export interface AssembleParams {
   system: string;
-  project: GeneratedProject;
-  userRules?: string;
+  /** Pre-built environment/rules block, injected as a synthetic user message after the system prompt. */
+  projectRules: string;
   messages: TranscriptMessage[];
   tools: ToolSchema[];
   maxOutputTokens?: number;
@@ -28,8 +26,9 @@ export interface AssembleParams {
 }
 
 export function assembleRequest(params: AssembleParams): ModelRequest {
-  const rules = buildProjectRules({ project: params.project, userRules: params.userRules });
-  const messages: TranscriptMessage[] = [{ role: "user", content: rules }, ...params.messages];
+  const messages: TranscriptMessage[] = params.projectRules
+    ? [{ role: "user", content: params.projectRules }, ...params.messages]
+    : [...params.messages];
   return {
     system: params.system,
     messages,

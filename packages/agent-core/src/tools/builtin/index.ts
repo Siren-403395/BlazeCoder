@@ -1,37 +1,19 @@
 /**
- * Built-in tool set. To add a capability: write a Tool here (or in its own file)
- * and include it — nothing else in the loop changes. This is the primary
- * "new tool" extension point.
+ * Built-in tool set, at Claude-Code parity: Read, Write, Edit (file tools with the
+ * read-before-edit invariant), Glob + Grep (search), Bash (everything else, and
+ * verification), and memory (durable cross-session notes). Listing and deletion
+ * are handled through Glob/Bash rather than dedicated tools, keeping the surface
+ * small and orthogonal.
  */
 
 import type { Tool } from "../registry";
-import { deleteFileTool, editFileTool, listFilesTool, readFileTool, writeFileTool } from "./filesystem";
+import { editFileTool, readFileTool, writeFileTool } from "./filesystem";
 import { globTool, grepTool } from "./search";
 import { runCommandTool } from "./shell";
 import { memoryTool } from "../../memory/memoryTool";
 
 export function builtinTools(): Tool[] {
-  return [
-    listFilesTool,
-    readFileTool,
-    writeFileTool,
-    editFileTool,
-    deleteFileTool,
-    grepTool,
-    globTool,
-    runCommandTool,
-    memoryTool,
-  ];
+  return [readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, memoryTool];
 }
 
-export {
-  listFilesTool,
-  readFileTool,
-  writeFileTool,
-  editFileTool,
-  deleteFileTool,
-  grepTool,
-  globTool,
-  runCommandTool,
-  memoryTool,
-};
+export { readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, memoryTool };

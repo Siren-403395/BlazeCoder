@@ -54,7 +54,7 @@ export class ContextManager {
 
   async maybeCompact(
     session: SessionState,
-    params: { system: string; userRules?: string; tools: ToolSchema[] },
+    params: { system: string; projectRules: string; tools: ToolSchema[] },
     emit: EventSink,
     signal: AbortSignal,
   ): Promise<void> {
@@ -62,8 +62,7 @@ export class ContextManager {
       estimateRequestTokens(
         assembleRequest({
           system: params.system,
-          project: session.project,
-          userRules: params.userRules,
+          projectRules: params.projectRules,
           messages: session.messages,
           tools: params.tools,
         }),

@@ -9,7 +9,6 @@
 
 import type {
   AgentEvent,
-  GeneratedProject,
   ProjectFile,
   SessionState,
   SessionSummary,
@@ -79,15 +78,28 @@ export interface ModelGateway {
   stream?(request: ModelRequest, signal: AbortSignal, handlers: ModelStreamHandlers): Promise<ModelResponse>;
 }
 
-// ─── Workspace (the project file graph the agent edits) ───────────────────────
+// ─── Workspace (the real filesystem the agent edits, scoped to its roots) ─────
+
+/** A file's identity stamp, used by the read-before-edit ledger. */
+export interface FileStamp {
+  mtimeMs: number;
+  size: number;
+}
 
 export interface Workspace {
-  list(): ProjectFile[];
-  read(path: string): ProjectFile | undefined;
-  write(file: ProjectFile): void;
-  delete(path: string): boolean;
-  exists(path: string): boolean;
-  snapshot(): GeneratedProject;
+  /** Canonical absolute primary root (the cwd the agent is scoped to). */
+  readonly root: string;
+  /** Resolve an agent-supplied path to a canonical absolute path inside the boundary, or throw. */
+  resolve(inputPath: string): string;
+  /** Whether writes are permitted to this (already-resolved) path. */
+  isWritable(absPath: string): boolean;
+  read(absPath: string): Promise<ProjectFile | null>;
+  write(file: ProjectFile): Promise<void>;
+  delete(absPath: string): Promise<boolean>;
+  exists(absPath: string): Promise<boolean>;
+  stat(absPath: string): Promise<FileStamp | null>;
+  /** Enumerate files under the root as canonical absolute paths, bounded. */
+  walk(opts?: { respectGitignore?: boolean; limit?: number }): Promise<string[]>;
 }
 
 // ─── Sandbox (shell execution; the real adapter runs commands under an OS sandbox) ─
@@ -121,7 +133,7 @@ export interface MemoryStore {
 // ─── Sessions (conversation persistence) ──────────────────────────────────────
 
 export interface SessionStore {
-  create(init: { id: string; model: string; title: string; project: GeneratedProject }): Promise<SessionState>;
+  create(init: { id: string; model: string; title: string; cwd: string }): Promise<SessionState>;
   get(id: string): Promise<SessionState | undefined>;
   save(state: SessionState): Promise<void>;
   list(): Promise<SessionSummary[]>;

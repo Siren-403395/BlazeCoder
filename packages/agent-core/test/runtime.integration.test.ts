@@ -5,6 +5,7 @@ import {
   FixedClock,
   InMemoryMemoryStore,
   InMemorySessionStore,
+  InMemoryWorkspace,
   silentLogger,
 } from "../src/index";
 import type { AgentRuntimeOptions } from "../src/index";
@@ -23,6 +24,7 @@ function makeRuntime(steps: Step[], extra: Partial<AgentRuntimeOptions> = {}) {
     gateway: new ScriptedGateway("deepseek-chat", steps),
     sessionStore: new InMemorySessionStore(clock),
     memory: new InMemoryMemoryStore(),
+    workspace: extra.workspace ?? new InMemoryWorkspace(),
     clock,
     logger: silentLogger,
     ...extra,
@@ -38,17 +40,18 @@ const signal = () => new AbortController().signal;
 
 describe("AgentRuntime end-to-end (scripted model)", () => {
   it("writes a full project across a turn and finishes successfully", async () => {
-    const rt = makeRuntime([
-      reply("Creating files.", writeFullProjectCalls()),
-      reply("Done, a Hello app.", []),
-    ]);
+    const ws = new InMemoryWorkspace();
+    const rt = makeRuntime(
+      [reply("Creating files.", writeFullProjectCalls()), reply("Done, a Hello app.", [])],
+      { workspace: ws },
+    );
     const { emit, events } = sink();
     const { session, result } = await rt.run({ prompt: "make a hello app" }, emit, signal());
 
     expect(result.subtype).toBe("success");
     expect(result.numTurns).toBe(1);
     expect(result.totalCostUsd).toBeGreaterThan(0);
-    expect(session.project.files).toHaveLength(6);
+    expect(await ws.walk()).toHaveLength(6);
 
     expect(events[0]!.type).toBe("system");
     expect(events.at(-1)!.type).toBe("result");
@@ -58,11 +61,11 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     const sessions = await rt.listSessions();
     expect(sessions).toHaveLength(1);
     const reloaded = await rt.getSession(session.id);
-    expect(reloaded?.project.files).toHaveLength(6);
+    expect(reloaded?.cwd).toBe(ws.root);
   });
 
   it("stops at the turn cap", async () => {
-    const rt = makeRuntime([() => reply("looping", [call("l", "list_files")])], { maxTurns: 2 });
+    const rt = makeRuntime([() => reply("looping", [call("l", "Glob", { pattern: "**/*" })])], { maxTurns: 2 });
     const { emit, events } = sink();
     const { result } = await rt.run({ prompt: "x" }, emit, signal());
     expect(result.subtype).toBe("error_max_turns");
@@ -70,19 +73,18 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(events.some((e) => e.type === "notice" && e.level === "warn")).toBe(true);
   });
 
-  it("blocks an invalid write via the validation hook and survives", async () => {
+  it("blocks a write to a secret file via the secrets hook and survives", async () => {
     const rt = makeRuntime([
-      reply("", [call("w", "write_file", { path: "/src/App.tsx", content: "" })]),
+      reply("", [call("w", "Write", { file_path: "/.env", content: "TOKEN=value" })]),
       reply("Recovered.", []),
     ]);
     const { emit, events } = sink();
-    const { session, result } = await rt.run({ prompt: "x" }, emit, signal());
+    const { result } = await rt.run({ prompt: "x" }, emit, signal());
 
     expect(result.subtype).toBe("success");
     const toolResult = events.find((e) => e.type === "tool_result" && e.toolUseId === "w");
     expect(toolResult && toolResult.type === "tool_result" && toolResult.isError).toBe(true);
     expect(events.some((e) => e.type === "file_change")).toBe(false);
-    expect(session.project.files).toHaveLength(0);
   });
 
   it("streams reasoning when thinking is enabled, and persists + rehydrates it", async () => {
@@ -93,6 +95,7 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
       gateway,
       sessionStore: new InMemorySessionStore(clock),
       memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
       clock,
       logger: silentLogger,
     });

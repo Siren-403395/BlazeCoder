@@ -1,36 +1,26 @@
 /**
- * Project rules — our CLAUDE.md analog. Injected as a synthetic user message
- * AFTER the system prompt (advisory, keeps the system prompt cacheable, survives
- * compaction). Gives the model a live, high-signal view of the workspace (the
- * current file list) each turn, so it rarely needs to call list_files, plus any
- * durable user/project conventions.
+ * Project rules / environment block — our CLAUDE.md analog. Injected as a
+ * synthetic user message AFTER the system prompt (advisory, keeps the system
+ * prompt cacheable, survives compaction). For a CLI agent this is a small, high-
+ * signal description of WHERE it is working (the cwd) plus any durable user or
+ * project conventions. It deliberately does NOT dump the file tree; the agent
+ * discovers files on demand with Glob/Grep/Read.
  */
 
-import type { GeneratedProject } from "@coding-agent/shared";
-
 export interface ProjectRulesInput {
-  project: GeneratedProject;
+  /** Absolute working directory the agent is operating in. */
+  root: string;
   /** Durable conventions (framework choices, style, acceptance criteria). */
   userRules?: string;
+  /** Optional volatile environment lines (platform, git status, model) injected by the frontend. */
+  environment?: string[];
 }
 
-export function buildProjectRules({ project, userRules }: ProjectRulesInput): string {
-  const fileList =
-    project.files.length === 0
-      ? "- (empty — no files created yet)"
-      : project.files
-          .slice()
-          .sort((a, b) => a.path.localeCompare(b.path))
-          .map((f) => `- ${f.path} (${f.content.length} bytes)`)
-          .join("\n");
-
+export function buildProjectRules({ root, userRules, environment }: ProjectRulesInput): string {
   return [
-    "# Project context (advisory, refreshed each turn)",
-    `Project: ${project.projectName || "(unnamed)"}`,
-    project.summary ? `Summary: ${project.summary}` : "",
-    "",
-    "## Current workspace files",
-    fileList,
+    "# Environment (advisory, refreshed each turn)",
+    `Working directory: ${root}`,
+    ...(environment ?? []),
     userRules ? `\n## Project conventions\n${userRules}` : "",
   ]
     .filter(Boolean)

@@ -19,6 +19,8 @@ import type {
 } from "../ports";
 import { assembleRequest, computeBudget } from "../context/sessionContext";
 import { CompactionThrashError, ContextManager } from "../context/compaction";
+import { buildProjectRules } from "../memory/projectRules";
+import type { ReadLedger } from "../workspace/ledger";
 import type { ToolContext } from "../tools/registry";
 import type { ToolRegistry } from "../tools/registry";
 import type { ToolExecutor } from "../tools/executor";
@@ -50,6 +52,7 @@ export interface AgentLoopDeps {
   registry: ToolRegistry;
   executor: ToolExecutor;
   contextManager: ContextManager;
+  ledger: ReadLedger;
   sandbox: Sandbox;
   memory: MemoryStore;
   clock: Clock;
@@ -65,8 +68,9 @@ export async function runAgentLoop(
   emit: EventSink,
   signal: AbortSignal,
 ): Promise<AgentRunResult> {
-  const { gateway, registry, executor, contextManager, sandbox, memory, clock, logger, config } = deps;
+  const { gateway, registry, executor, contextManager, ledger, sandbox, memory, clock, logger, config } = deps;
   const toolSchemas = registry.schemas();
+  const projectRules = buildProjectRules({ root: workspace.root, userRules: config.userRules });
 
   emit({
     type: "system",
@@ -112,7 +116,7 @@ export async function runAgentLoop(
     try {
       await contextManager.maybeCompact(
         session,
-        { system: config.system, userRules: config.userRules, tools: toolSchemas },
+        { system: config.system, projectRules, tools: toolSchemas },
         emit,
         signal,
       );
@@ -126,8 +130,7 @@ export async function runAgentLoop(
 
     const request = assembleRequest({
       system: config.system,
-      project: workspace.snapshot(),
-      userRules: config.userRules,
+      projectRules,
       messages: session.messages,
       tools: toolSchemas,
       maxOutputTokens: config.maxOutputTokens,
@@ -190,6 +193,7 @@ export async function runAgentLoop(
     const ctx: ToolContext = {
       sessionId: session.id,
       workspace,
+      ledger,
       sandbox,
       memory,
       emit,
@@ -199,6 +203,5 @@ export async function runAgentLoop(
     };
     const results = await executor.executeTurn(response.toolCalls, ctx);
     session.messages.push({ role: "tool", results });
-    session.project = workspace.snapshot();
   }
 }

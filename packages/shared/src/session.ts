@@ -4,7 +4,6 @@
  * re-exports them from its ports for the loop and adapters.
  */
 
-import type { GeneratedProject } from "./projectSchema";
 import type { TokenUsage, ToolCall } from "./events";
 
 export interface ToolResultRecord {
@@ -30,7 +29,8 @@ export interface SessionState {
   model: string;
   title: string;
   messages: TranscriptMessage[];
-  project: GeneratedProject;
+  /** Absolute working directory the agent operated in (the workspace root). */
+  cwd: string;
   turns: number;
   costUsd: number;
   usage: TokenUsage;

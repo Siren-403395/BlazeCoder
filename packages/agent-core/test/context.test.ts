@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { emptyProject } from "@coding-agent/shared";
 import {
   assembleRequest,
   CompactionThrashError,
@@ -19,7 +18,7 @@ function session(messages: TranscriptMessage[]): SessionState {
     model: "m",
     title: "t",
     messages,
-    project: emptyProject("p"),
+    cwd: "/work",
     turns: 0,
     costUsd: 0,
     usage: { inputTokens: 0, outputTokens: 0 },
@@ -35,17 +34,26 @@ describe("sessionContext", () => {
     expect(estimateTokens("a".repeat(40))).toBe(10);
   });
 
-  it("assembleRequest injects project rules as the leading user message", () => {
+  it("injects the project rules block as the leading user message", () => {
     const req = assembleRequest({
       system: "SYS",
-      project: emptyProject("p"),
+      projectRules: "RULES",
       messages: [{ role: "user", content: "hi" }],
       tools: [],
     });
     expect(req.system).toBe("SYS");
-    expect(req.messages[0]!.role).toBe("user");
-    expect((req.messages[0] as { content: string }).content).toMatch(/Project context/);
+    expect(req.messages[0]).toEqual({ role: "user", content: "RULES" });
     expect(req.messages[1]).toEqual({ role: "user", content: "hi" });
+  });
+
+  it("omits the rules message when there are no rules", () => {
+    const req = assembleRequest({
+      system: "SYS",
+      projectRules: "",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [],
+    });
+    expect(req.messages).toEqual([{ role: "user", content: "hi" }]);
   });
 });
 
@@ -62,7 +70,7 @@ describe("ContextManager compaction", () => {
       { role: "tool", results: [{ toolUseId: "2", toolName: "y", content: "B".repeat(20), isError: false }] },
     ]);
     const events: string[] = [];
-    await cm.maybeCompact(s, { system: "", tools: [] }, (e) => events.push(e.type), signal);
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, (e) => events.push(e.type), signal);
 
     const firstTool = s.messages[1] as { results: { content: string }[] };
     const secondTool = s.messages[2] as { results: { content: string }[] };
@@ -85,7 +93,7 @@ describe("ContextManager compaction", () => {
       { role: "user", content: "Z".repeat(40) },
       { role: "assistant", content: "W".repeat(40), toolCalls: [] },
     ]);
-    await cm.maybeCompact(s, { system: "", tools: [] }, () => {}, signal);
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, () => {}, signal);
     expect(gw.calls).toBe(1);
     expect(s.messages[0]!.role).toBe("summary");
     expect((s.messages[0] as { content: string }).content).toBe("SUMMARY");
@@ -105,7 +113,7 @@ describe("ContextManager compaction", () => {
       { role: "assistant", content: "Q".repeat(200), toolCalls: [] },
       { role: "user", content: "R".repeat(200) },
     ]);
-    await expect(cm.maybeCompact(s, { system: "", tools: [] }, () => {}, signal)).rejects.toBeInstanceOf(
+    await expect(cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, () => {}, signal)).rejects.toBeInstanceOf(
       CompactionThrashError,
     );
   });

@@ -16,13 +16,16 @@ import type {
   Sandbox,
   Workspace,
 } from "../ports";
+import type { ReadLedger } from "../workspace/ledger";
 
 export interface ToolContext {
   sessionId: string;
   workspace: Workspace;
+  /** Read-before-edit ledger shared across the file tools for this run. */
+  ledger: ReadLedger;
   sandbox: Sandbox;
   memory: MemoryStore;
-  /** Tools emit dedicated events (file_change, preview, notice) through this sink. */
+  /** Tools emit dedicated events (file_change, notice) through this sink. */
   emit: EventSink;
   signal: AbortSignal;
   logger: Logger;

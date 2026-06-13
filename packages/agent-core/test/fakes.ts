@@ -1,11 +1,11 @@
 /** Shared test doubles for agent-core. */
 
-import type { AgentEvent, GeneratedProject, ProjectFile, ToolCall } from "@coding-agent/shared";
-import { emptyProject } from "@coding-agent/shared";
+import type { AgentEvent, ProjectFile, ToolCall } from "@coding-agent/shared";
 import {
-  FixedClock,
   InMemoryMemoryStore,
   InMemoryWorkspace,
+  ReadLedger,
+  FixedClock,
   silentLogger,
 } from "../src/index";
 import type {
@@ -23,6 +23,18 @@ export const disabledSandbox: Sandbox = {
     return { stdout: "", stderr: "disabled", exitCode: 1, timedOut: false };
   },
 };
+
+/** A sandbox that runs a fixed scripted reply per command (for Bash tool tests). */
+export class FakeSandbox implements Sandbox {
+  readonly available = true;
+  commands: string[] = [];
+  constructor(private readonly reply: (cmd: string) => { stdout?: string; stderr?: string; exitCode?: number } = () => ({})) {}
+  async run(command: string) {
+    this.commands.push(command);
+    const r = this.reply(command);
+    return { stdout: r.stdout ?? "", stderr: r.stderr ?? "", exitCode: r.exitCode ?? 0, timedOut: false };
+  }
+}
 
 export type Step = ModelResponse | ((req: ModelRequest, callIndex: number) => ModelResponse);
 
@@ -104,7 +116,8 @@ export function makeCtx(overrides: Partial<ToolContext> = {}): { ctx: ToolContex
   const events: AgentEvent[] = [];
   const ctx: ToolContext = {
     sessionId: "s1",
-    workspace: overrides.workspace ?? new InMemoryWorkspace(emptyProject("t")),
+    workspace: overrides.workspace ?? new InMemoryWorkspace(),
+    ledger: overrides.ledger ?? new ReadLedger(),
     sandbox: overrides.sandbox ?? disabledSandbox,
     memory: overrides.memory ?? new InMemoryMemoryStore(),
     emit: overrides.emit ?? ((e) => events.push(e)),
@@ -115,12 +128,12 @@ export function makeCtx(overrides: Partial<ToolContext> = {}): { ctx: ToolContex
   return { ctx, events };
 }
 
-/** A complete, valid React+Vite project (passes validateProject). */
+/** A complete, valid set of files for a small project. */
 export function fullProjectFiles(): ProjectFile[] {
   return [
     { path: "/package.json", language: "json", content: '{\n  "name": "app",\n  "private": true\n}\n' },
     { path: "/index.html", language: "html", content: '<!doctype html><html><body><div id="root"></div></body></html>' },
-    { path: "/vite.config.ts", language: "ts", content: 'export default {};\n' },
+    { path: "/vite.config.ts", language: "ts", content: "export default {};\n" },
     {
       path: "/src/main.tsx",
       language: "tsx",
@@ -136,11 +149,7 @@ export function fullProjectFiles(): ProjectFile[] {
   ];
 }
 
-export function fullProject(): GeneratedProject {
-  return { ...emptyProject("app"), files: fullProjectFiles() };
-}
-
-/** Build the scripted tool calls that write a full project (one call per file). */
+/** Build the scripted tool calls that write a full project (one Write per file). */
 export function writeFullProjectCalls(): ToolCall[] {
-  return fullProjectFiles().map((f, i) => call(`w${i}`, "write_file", { path: f.path, content: f.content }));
+  return fullProjectFiles().map((f, i) => call(`w${i}`, "Write", { file_path: f.path, content: f.content }));
 }

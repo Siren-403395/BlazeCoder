@@ -1,14 +1,10 @@
 /**
  * agent-core public API + the AgentRuntime factory that wires every part together
- * behind injected ports. The server constructs one AgentRuntime and exposes its
- * `run` over SSE; tests construct one with in-memory fakes.
+ * behind injected ports. The CLI constructs one AgentRuntime and feeds its event
+ * stream straight to the TUI in-process; tests construct one with in-memory fakes.
  */
 
-import {
-  emptyProject,
-  isUnsafeRelativePath,
-  validateProjectFile,
-} from "@coding-agent/shared";
+import { isSecretPath, looksLikeSecret } from "@coding-agent/shared";
 import type {
   Clock,
   EventSink,
@@ -18,6 +14,7 @@ import type {
   Sandbox,
   SessionState,
   SessionStore,
+  Workspace,
 } from "./ports";
 import { builtinTools } from "./tools/builtin";
 import type { Tool } from "./tools/registry";
@@ -29,7 +26,8 @@ import { PermissionBroker, PermissionEngine } from "./permissions/engine";
 import type { BrokerDecision, PermissionMode } from "./permissions/engine";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig } from "./context/compaction";
-import { InMemoryWorkspace } from "./workspace";
+import { FileSystemWorkspace } from "./workspace/fsWorkspace";
+import { ReadLedger } from "./workspace/ledger";
 import { runAgentLoop } from "./loop/agentLoop";
 import type { AgentLoopConfig, AgentLoopDeps, AgentRunResult } from "./loop/agentLoop";
 import { CODING_AGENT_SYSTEM_PROMPT } from "./prompts";
@@ -64,6 +62,12 @@ export interface AgentRuntimeOptions {
   sessionStore: SessionStore;
   memory: MemoryStore;
   sandbox?: Sandbox;
+  /** The working directory the agent edits (defaults to process.cwd()). */
+  cwd?: string;
+  /** Extra writable roots beyond cwd (e.g. --add-dir). */
+  writableRoots?: string[];
+  /** Inject a Workspace directly (tests use InMemoryWorkspace); overrides cwd. */
+  workspace?: Workspace;
   clock?: Clock;
   logger?: Logger;
   idGen?: () => string;
@@ -107,33 +111,31 @@ function makeIdGen(clock: Clock): () => string {
   return () => `id-${clock.now().toString(36)}-${(n++).toString(36)}`;
 }
 
-function slug(value: string): string {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "")
-      .slice(0, 40) || "untitled-project"
-  );
-}
-
 function titleFromPrompt(prompt: string): string {
   const trimmed = prompt.trim().replace(/\s+/g, " ");
   return trimmed.length > 60 ? `${trimmed.slice(0, 57)}…` : trimmed || "Untitled session";
 }
 
-/** Deterministic enforcement of the validation primitive, independent of model output. */
-const validationHook: PreToolUseHook = ({ toolName, input }) => {
-  if (toolName === "write_file") {
-    const path = typeof input.path === "string" ? input.path : "";
-    const content = typeof input.content === "string" ? input.content : "";
-    const v = validateProjectFile({ path, content });
-    if (!v.ok) return { decision: "deny", message: `Rejected by validation: ${v.errors.join("; ")}` };
+/**
+ * Deterministic secrets guard, independent of model output and permission mode:
+ * the file tools may never read or write a secret/credential file, and may never
+ * write content that looks like an embedded secret.
+ */
+const secretsHook: PreToolUseHook = ({ toolName, input }) => {
+  const isFileTool = toolName === "Read" || toolName === "Write" || toolName === "Edit";
+  const filePath = typeof input.file_path === "string" ? input.file_path : undefined;
+  if (isFileTool && filePath && isSecretPath(filePath)) {
+    return { decision: "deny", message: `Refusing to access a secret/credential file: ${filePath}` };
   }
-  if (toolName === "edit_file" || toolName === "delete_file") {
-    const path = typeof input.path === "string" ? input.path : "";
-    if (!path.startsWith("/") || isUnsafeRelativePath(path) || path.toLowerCase().includes(".env")) {
-      return { decision: "deny", message: `Unsafe or invalid path: ${path}` };
+  if (toolName === "Write" || toolName === "Edit") {
+    const candidate =
+      typeof input.content === "string"
+        ? input.content
+        : typeof input.new_string === "string"
+          ? input.new_string
+          : "";
+    if (candidate && looksLikeSecret(candidate)) {
+      return { decision: "deny", message: "Refusing to write content that appears to contain a secret." };
     }
   }
   return { decision: "continue" };
@@ -146,6 +148,8 @@ export class AgentRuntime {
   private readonly gateway: ModelGateway;
   private readonly memory: MemoryStore;
   private readonly sandbox: Sandbox;
+  private readonly workspace: Workspace;
+  private readonly ledger: ReadLedger;
   private readonly clock: Clock;
   private readonly logger: Logger;
   private readonly idGen: () => string;
@@ -159,12 +163,15 @@ export class AgentRuntime {
     this.gateway = opts.gateway;
     this.memory = opts.memory;
     this.sandbox = opts.sandbox ?? disabledSandbox;
+    this.workspace =
+      opts.workspace ?? new FileSystemWorkspace({ root: opts.cwd ?? process.cwd(), writableRoots: opts.writableRoots });
+    this.ledger = new ReadLedger();
     this.clock = opts.clock ?? systemClock;
     this.logger = opts.logger ?? silentLogger;
     this.idGen = opts.idGen ?? makeIdGen(this.clock);
 
     this.registry = new ToolRegistry().registerAll(opts.tools ?? builtinTools());
-    this.hooks = new HookBus().onPreToolUse(validationHook);
+    this.hooks = new HookBus().onPreToolUse(secretsHook);
     this.broker = new PermissionBroker();
     const engine = new PermissionEngine({
       mode: opts.permissionMode ?? "acceptEdits",
@@ -201,6 +208,7 @@ export class AgentRuntime {
       registry: this.registry,
       executor: this.executor,
       contextManager: this.contextManager,
+      ledger: this.ledger,
       sandbox: this.sandbox,
       memory: this.memory,
       clock: this.clock,
@@ -217,12 +225,17 @@ export class AgentRuntime {
         id: this.idGen(),
         model: this.gateway.model,
         title: opts.title || titleFromPrompt(opts.prompt),
-        project: emptyProject(slug(opts.title || opts.prompt)),
+        cwd: this.workspace.root,
       });
     }
-    const workspace = new InMemoryWorkspace(session.project);
-    const result = await runAgentLoop(session, opts.prompt, workspace, this.loopDeps(opts.thinking ?? false), emit, signal);
-    session.project = workspace.snapshot();
+    const result = await runAgentLoop(
+      session,
+      opts.prompt,
+      this.workspace,
+      this.loopDeps(opts.thinking ?? false),
+      emit,
+      signal,
+    );
     await this.store.save(session);
     return { session, result };
   }

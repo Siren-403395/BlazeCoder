@@ -1,10 +1,8 @@
 /**
- * GeneratedProject — the file-graph contract shared between frontend and backend.
- *
- * This is the substrate the agent's filesystem tools (list_files / read_file /
- * write_file / edit_file) operate over, and what the preview builder and the
- * client-side exporter consume. Salvaged from V1 and kept deliberately small:
- * a project is just a flat list of files plus light metadata.
+ * File language tagging + the ProjectFile shape the agent's file tools and the
+ * file_change event pass around. A "project" is no longer a self-contained graph
+ * we copy into memory; the agent edits the real working directory. ProjectFile is
+ * just {path, language, content} for a single file in flight.
  */
 
 export type FileLanguage =
@@ -16,53 +14,36 @@ export type FileLanguage =
   | "css"
   | "md"
   | "html"
+  | "py"
+  | "rs"
+  | "go"
+  | "sh"
+  | "yaml"
+  | "toml"
   | "txt";
 
 export interface ProjectFile {
-  /** Absolute project path, always starts with "/", e.g. "/src/App.tsx". */
+  /** Absolute path (real filesystem path, or a virtual "/..." path in tests). */
   path: string;
   language: FileLanguage;
   content: string;
 }
 
-export interface GeneratedProject {
-  projectName: string;
-  summary: string;
-  features: string[];
-  files: ProjectFile[];
-  runInstructions: string;
-}
-
-/** A React + Vite project must contain these for the preview/export to work. */
-export const REQUIRED_FILES = [
-  "/package.json",
-  "/index.html",
-  "/src/main.tsx",
-  "/src/App.tsx",
-  "/src/index.css",
-] as const;
-
-/** The single entry the preview bundler resolves from. */
-export const PREVIEW_ENTRY = "/src/App.tsx";
-
 export function inferLanguage(path: string): FileLanguage {
-  if (path.endsWith(".tsx")) return "tsx";
-  if (path.endsWith(".ts")) return "ts";
-  if (path.endsWith(".jsx")) return "jsx";
-  if (path.endsWith(".js")) return "js";
-  if (path.endsWith(".css")) return "css";
-  if (path.endsWith(".html")) return "html";
-  if (path.endsWith(".md")) return "md";
-  if (path.endsWith(".json")) return "json";
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".tsx")) return "tsx";
+  if (lower.endsWith(".ts")) return "ts";
+  if (lower.endsWith(".jsx")) return "jsx";
+  if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs")) return "js";
+  if (lower.endsWith(".css")) return "css";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
+  if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "md";
+  if (lower.endsWith(".json")) return "json";
+  if (lower.endsWith(".py")) return "py";
+  if (lower.endsWith(".rs")) return "rs";
+  if (lower.endsWith(".go")) return "go";
+  if (lower.endsWith(".sh") || lower.endsWith(".bash") || lower.endsWith(".zsh")) return "sh";
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "yaml";
+  if (lower.endsWith(".toml")) return "toml";
   return "txt";
-}
-
-export function emptyProject(projectName = "untitled-project"): GeneratedProject {
-  return {
-    projectName,
-    summary: "",
-    features: [],
-    files: [],
-    runInstructions: "Run npm install, then npm run dev.",
-  };
 }

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { emptyProject } from "@coding-agent/shared";
 import { FixedClock, InMemorySessionStore } from "../src/index";
 
 describe("InMemorySessionStore", () => {
@@ -7,7 +6,7 @@ describe("InMemorySessionStore", () => {
     const clock = new FixedClock(1000);
     const store = new InMemorySessionStore(clock);
 
-    const s = await store.create({ id: "a", model: "m", title: "t", project: emptyProject("p") });
+    const s = await store.create({ id: "a", model: "m", title: "t", cwd: "/work" });
     expect(s.id).toBe("a");
     expect(s.createdAt).toBe(1000);
     expect(s.status).toBe("idle");
@@ -28,7 +27,7 @@ describe("InMemorySessionStore", () => {
 
   it("isolates stored state from later mutation of the returned object", async () => {
     const store = new InMemorySessionStore(new FixedClock());
-    const s = await store.create({ id: "a", model: "m", title: "t", project: emptyProject("p") });
+    const s = await store.create({ id: "a", model: "m", title: "t", cwd: "/work" });
     s.turns = 99;
     const got = await store.get("a");
     expect(got?.turns).toBe(0);

@@ -48,13 +48,13 @@ describe("PermissionEngine", () => {
     expect(denied.behavior).toBe("deny");
   });
 
-  it("acceptEdits allows edit tools but asks for run_command", async () => {
+  it("acceptEdits allows edit tools but asks for Bash", async () => {
     const { engine, broker } = makeEngine({ mode: "acceptEdits" });
-    const edit = await engine.check(tool("write_file", false), { path: "/a" }, { emit: () => {}, signal });
+    const edit = await engine.check(tool("Write", false), { file_path: "/a" }, { emit: () => {}, signal });
     expect(edit.behavior).toBe("allow");
 
     let asked = false;
-    const run = await engine.check(tool("run_command", false), {}, {
+    const run = await engine.check(tool("Bash", false), {}, {
       emit: (e) => {
         if (e.type === "permission_request") {
           asked = true;

@@ -56,7 +56,7 @@ export class PermissionBroker {
   }
 }
 
-const EDIT_TOOLS = new Set(["write_file", "edit_file", "delete_file", "memory"]);
+const EDIT_TOOLS = new Set(["Write", "Edit", "memory"]);
 
 export interface PermissionEngineOptions {
   mode?: PermissionMode;
@@ -106,7 +106,12 @@ export class PermissionEngine {
     }
 
     // 2) Protected paths (never auto-approved except bypass).
-    const targetPath = typeof input.path === "string" ? input.path : undefined;
+    const targetPath =
+      typeof input.file_path === "string"
+        ? input.file_path
+        : typeof input.path === "string"
+          ? input.path
+          : undefined;
     if (targetPath && isProtectedPath(targetPath) && this.mode !== "bypassPermissions") {
       return { behavior: "deny", message: `Path is protected and cannot be modified: ${targetPath}` };
     }

@@ -6,7 +6,6 @@
 
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { emptyProject } from "@coding-agent/shared";
 import type { Clock, SessionState, SessionStore, SessionSummary } from "../ports";
 
 type CreateInit = Parameters<SessionStore["create"]>[0];
@@ -19,7 +18,7 @@ function newSession(init: CreateInit, now: number): SessionState {
     model: init.model,
     title: init.title || "Untitled session",
     messages: [],
-    project: init.project ?? emptyProject(),
+    cwd: init.cwd,
     turns: 0,
     costUsd: 0,
     usage: { inputTokens: 0, outputTokens: 0 },
