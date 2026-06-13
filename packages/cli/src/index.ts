@@ -7,6 +7,7 @@
 
 export * from "./adapters/deepseekGateway";
 export * from "./adapters/stubGateway";
+export * from "./adapters/sandbox";
 export * from "./config";
 export * from "./runtime";
 export * from "./tui/state";

@@ -16,6 +16,7 @@ import {
 import type { AgentRuntime, Logger } from "@coding-agent/core";
 import { DeepSeekGateway } from "./adapters/deepseekGateway";
 import { StubGateway } from "./adapters/stubGateway";
+import { LocalProcessSandbox } from "./adapters/sandbox";
 import type { CliConfig } from "./config";
 
 export function buildRuntime(config: CliConfig, cwd: string, logger: Logger = silentLogger): AgentRuntime {
@@ -28,6 +29,7 @@ export function buildRuntime(config: CliConfig, cwd: string, logger: Logger = si
     gateway,
     sessionStore: new FileSessionStore(config.home, systemClock),
     memory: new FileMemoryStore(join(config.home, "memories")),
+    sandbox: new LocalProcessSandbox(),
     cwd,
     logger,
     maxTurns: config.maxTurns,
