@@ -6,6 +6,7 @@
 import { Box, Text, useStdout } from "ink";
 import Spinner from "ink-spinner";
 import type { SessionSummary } from "@coding-agent/core";
+import type { TodoItem } from "@coding-agent/shared";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { LOGO, LOGO_WIDTH, TAGLINE } from "./banner";
@@ -179,6 +180,27 @@ export function InputBox({
 }
 
 /** A faint product tip shown beneath the prompt. */
+/** The live task list (TodoWrite) as a compact panel above the input. */
+export function TodoPanel({ todos }: { todos: TodoItem[] }) {
+  if (todos.length === 0) return null;
+  const done = todos.filter((t) => t.status === "completed").length;
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text color={theme.faint}>{`Tasks · ${done}/${todos.length} done`}</Text>
+      {todos.map((t, i) => {
+        const mark = t.status === "completed" ? "✔" : t.status === "in_progress" ? "▶" : "○";
+        const color = t.status === "completed" ? theme.faint : t.status === "in_progress" ? theme.accent : undefined;
+        const label = t.status === "in_progress" ? t.activeForm : t.content;
+        return (
+          <Text key={i} color={color} strikethrough={t.status === "completed"}>
+            {`  ${mark} ${label}`}
+          </Text>
+        );
+      })}
+    </Box>
+  );
+}
+
 export function TipLine({ tip }: { tip: string }) {
   return <Text color={theme.faint}>{`  Tip: ${tip}`}</Text>;
 }

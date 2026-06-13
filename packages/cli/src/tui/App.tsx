@@ -27,7 +27,7 @@ import {
 } from "@coding-agent/core";
 import { applyEvent, initialState } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
-import { CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, WelcomeBanner } from "./view";
+import { CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
 import { freshSeed, loadingWord, tipAt } from "./flavor";
 import { theme } from "./theme";
 
@@ -369,6 +369,8 @@ export function App({
           ))}
         </>
       )}
+
+      {!picker && !state.permission ? <TodoPanel todos={state.todos} /> : null}
 
       {busy && !state.permission && !picker ? <LoadingLine word={word} meta={meta} /> : null}
 

@@ -9,7 +9,7 @@
  * region can show a growing token counter while it thinks.
  */
 
-import type { AgentEvent, SessionState, TranscriptMessage } from "@coding-agent/shared";
+import type { AgentEvent, SessionState, TodoItem, TranscriptMessage } from "@coding-agent/shared";
 
 export type ToolStatus = "running" | "ok" | "error";
 
@@ -43,6 +43,8 @@ export interface TuiState {
   tokensUsed: number;
   tokensTotal: number;
   permission?: PendingPermission;
+  /** The live task list (TodoWrite); rendered as a panel above the input. */
+  todos: TodoItem[];
   /** Monotonic id source (kept in state so the reducer stays pure). */
   seq: number;
   /** Id of the in-flight streaming assistant item, if any. */
@@ -68,6 +70,7 @@ export function initialState(effort = "high"): TuiState {
     costUsd: 0,
     tokensUsed: 0,
     tokensTotal: 0,
+    todos: [],
     seq: 0,
   };
 }
@@ -198,6 +201,10 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
 
     case "budget":
       return { ...state, tokensUsed: action.usedTokens, tokensTotal: action.totalTokens };
+
+    case "todos":
+      // Full replace; the panel shows the live list and is cleared when emptied.
+      return { ...state, todos: action.items };
 
     case "api_retry": {
       const [rid, seq] = id(state, "r");

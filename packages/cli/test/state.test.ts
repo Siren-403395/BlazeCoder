@@ -8,6 +8,24 @@ describe("TUI state reducer", () => {
     expect(s.items.at(-1)).toMatchObject({ kind: "user", text: "build a counter" });
   });
 
+  it("a todos event fully replaces the live task list", () => {
+    let s = applyEvent(initialState(), {
+      type: "todos",
+      items: [
+        { content: "A", status: "completed", activeForm: "Aing" },
+        { content: "B", status: "in_progress", activeForm: "Bing" },
+      ],
+    });
+    expect(s.todos).toHaveLength(2);
+    s = applyEvent(s, { type: "todos", items: [{ content: "C", status: "pending", activeForm: "Cing" }] });
+    expect(s.todos.map((t) => t.content)).toEqual(["C"]); // replace, not append
+  });
+
+  it("an api_retry event surfaces a warn notice", () => {
+    const s = applyEvent(initialState(), { type: "api_retry", attempt: 1, maxRetries: 8, delayMs: 500, status: 503 });
+    expect(s.items.at(-1)).toMatchObject({ kind: "notice", level: "warn" });
+  });
+
   it("captures model/limits from the init event", () => {
     const s = applyEvent(initialState(), {
       type: "system",

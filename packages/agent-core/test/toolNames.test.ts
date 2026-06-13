@@ -11,6 +11,7 @@ describe("TOOL_NAMES is the single source of truth for tool names", () => {
       TOOL_NAMES.glob,
       TOOL_NAMES.grep,
       TOOL_NAMES.bash,
+      TOOL_NAMES.todo,
       TOOL_NAMES.memory,
     ]);
   });

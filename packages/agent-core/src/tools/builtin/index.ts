@@ -10,11 +10,12 @@ import type { Tool } from "../registry";
 import { editFileTool, readFileTool, writeFileTool } from "./filesystem";
 import { globTool, grepTool } from "./search";
 import { runCommandTool } from "./shell";
+import { todoWriteTool } from "./todo";
 import { memoryTool } from "../../memory/memoryTool";
 
 export function builtinTools(): Tool[] {
-  return [readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, memoryTool];
+  return [readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, todoWriteTool, memoryTool];
 }
 
-export { readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, memoryTool };
+export { readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, todoWriteTool, memoryTool };
 export * from "../toolNames";

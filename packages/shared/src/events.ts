@@ -31,6 +31,17 @@ export type ResultSubtype =
 
 export type StopReason = "end_turn" | "max_tokens" | "stop_sequence" | "refusal" | null;
 
+export type TodoStatus = "pending" | "in_progress" | "completed";
+
+/** A single task in the agent's session todo list (TodoWrite tool). */
+export interface TodoItem {
+  /** Imperative form ("Run tests"). */
+  content: string;
+  status: TodoStatus;
+  /** Present-continuous form shown while in_progress ("Running tests"). */
+  activeForm: string;
+}
+
 export type AgentEvent =
   | {
       type: "system";
@@ -72,6 +83,8 @@ export type AgentEvent =
   | { type: "compact_boundary"; reason: string; tokensBefore: number; tokensAfter: number; clearedToolUseIds?: string[] }
   /** The model gateway is retrying a transient failure (backoff in progress). */
   | { type: "api_retry"; attempt: number; maxRetries: number; delayMs: number; status?: number }
+  /** The agent's task list was updated (full replace) via the TodoWrite tool. */
+  | { type: "todos"; items: TodoItem[] }
   /** The loop is blocked awaiting a human allow/deny decision. */
   | {
       type: "permission_request";
