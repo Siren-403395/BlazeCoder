@@ -13,6 +13,7 @@
 import { inferLanguage, isSecretPath, looksLikeSecret } from "@coding-agent/shared";
 import { WorkspaceBoundaryError } from "../../workspace/boundary";
 import type { Tool, ToolContext, ToolResult } from "../registry";
+import { TOOL_NAMES } from "../toolNames";
 
 const MAX_READ_LINES = 2000;
 const MAX_LINE_LEN = 2000;
@@ -54,7 +55,7 @@ function resolvePath(
 }
 
 export const readFileTool: Tool = {
-  name: "Read",
+  name: TOOL_NAMES.read,
   readOnly: true,
   description:
     "Read a file from the filesystem. Pass an absolute file_path. Returns content with 1-indexed line numbers (like `cat -n`). For large files, pass offset (1-indexed first line) and limit (number of lines). Reading a file is REQUIRED before you may Edit or overwrite it.",
@@ -98,7 +99,7 @@ export const readFileTool: Tool = {
 };
 
 export const writeFileTool: Tool = {
-  name: "Write",
+  name: TOOL_NAMES.write,
   readOnly: false,
   description:
     "Create a new file or fully overwrite an existing one. Pass an absolute file_path and the complete content. To overwrite an existing file you must Read it first. Prefer Edit for small changes to an existing file.",
@@ -145,7 +146,7 @@ export const writeFileTool: Tool = {
 };
 
 export const editFileTool: Tool = {
-  name: "Edit",
+  name: TOOL_NAMES.edit,
   readOnly: false,
   description:
     "Replace an exact string in an existing file. old_string must be non-empty and appear EXACTLY once (include enough surrounding context to be unique) unless replace_all is true. You must Read the file first. old_string and new_string must differ.",

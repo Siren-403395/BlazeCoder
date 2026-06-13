@@ -17,3 +17,4 @@ export function builtinTools(): Tool[] {
 }
 
 export { readFileTool, writeFileTool, editFileTool, globTool, grepTool, runCommandTool, memoryTool };
+export * from "../toolNames";

@@ -9,6 +9,7 @@ import { relative, sep } from "node:path";
 import { isSecretPath } from "@coding-agent/shared";
 import { WorkspaceBoundaryError } from "../../workspace/boundary";
 import type { Tool, ToolContext, ToolResult } from "../registry";
+import { TOOL_NAMES } from "../toolNames";
 
 const GLOB_CAP = 100;
 const GREP_FILE_CAP = 2000;
@@ -48,7 +49,7 @@ function posixRel(root: string, abs: string): string {
 }
 
 export const globTool: Tool = {
-  name: "Glob",
+  name: TOOL_NAMES.glob,
   readOnly: true,
   description:
     "Find files by name with a glob pattern (supports *, ?, and ** across directories), e.g. **/*.ts or src/**/*.tsx. Returns up to 100 absolute paths, most-recently-modified first. Skips .git and node_modules. Optionally scope to a subdirectory with path.",
@@ -96,7 +97,7 @@ export const globTool: Tool = {
 };
 
 export const grepTool: Tool = {
-  name: "Grep",
+  name: TOOL_NAMES.grep,
   readOnly: true,
   description:
     "Search file contents with a regular expression. output_mode: 'files_with_matches' (default) lists matching files; 'content' shows matching lines as 'path:line: text'; 'count' shows per-file match counts. Optionally restrict with a path-glob and ignore_case. Honors .gitignore and skips binary files.",

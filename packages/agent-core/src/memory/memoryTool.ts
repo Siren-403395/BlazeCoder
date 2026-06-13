@@ -6,9 +6,10 @@
  */
 
 import type { Tool, ToolContext, ToolResult } from "../tools/registry";
+import { TOOL_NAMES } from "../tools/toolNames";
 
 export const memoryTool: Tool = {
-  name: "memory",
+  name: TOOL_NAMES.memory,
   readOnly: false,
   description:
     "Persistent memory sandboxed to /memories. Commands: view (read a file or list a dir), create (write a file), str_replace (replace exact text), insert (insert at a 1-indexed line), delete, rename. ALWAYS view /memories at the start of a task to recall prior context; your context window may reset at any time.",

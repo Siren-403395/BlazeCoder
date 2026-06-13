@@ -8,12 +8,13 @@
  */
 
 import type { Tool, ToolContext, ToolResult } from "../registry";
+import { TOOL_NAMES } from "../toolNames";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
 
 export const runCommandTool: Tool = {
-  name: "Bash",
+  name: TOOL_NAMES.bash,
   readOnly: false,
   description:
     "Run a shell command in the working directory and return its stdout/stderr and exit code. Use this for builds, tests, type-checks, linters, git, package managers, and scaffolding — and to VERIFY your work after editing. Prefer the dedicated tools (Read, Glob, Grep, Edit) over their shell equivalents (cat, find, grep, sed). Quote paths with spaces. Avoid commands that need interactive input.",
