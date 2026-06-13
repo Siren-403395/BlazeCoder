@@ -249,9 +249,20 @@ export class AgentRuntime {
       clock: this.clock,
       logger: this.logger,
       config: { ...this.loopConfig, effort },
+      hooks: this.hooks,
       spawn: (def, prompt, signal) => this.spawn(def, prompt, signal),
       depth: 0,
     };
+  }
+
+  /** Run a lifecycle hook best-effort: a failing hook emits a notice, never breaks the run. */
+  private async safeLifecycle<T>(label: string, fn: () => Promise<T>, emit: EventSink, fallback: T): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      emit({ type: "notice", level: "warn", message: `${label} hook failed: ${err instanceof Error ? err.message : String(err)}` });
+      return fallback;
+    }
   }
 
   /**
@@ -285,16 +296,33 @@ export class AgentRuntime {
         cwd: this.workspace.root,
       });
     }
-    const result = await runAgentLoop(
-      session,
-      opts.prompt,
-      this.workspace,
-      this.loopDeps(opts.effort ?? this.defaultEffort),
+    // SessionStart — hooks may contribute context, injected as synthetic user
+    // messages BEFORE the prompt the loop pushes.
+    const source = opts.sessionId ? "resume" : "new";
+    const startContext = await this.safeLifecycle(
+      "SessionStart",
+      () => this.hooks.runSessionStart({ sessionId: session!.id, source }),
       emit,
-      signal,
+      [] as string[],
     );
-    await this.store.save(session);
-    return { session, result };
+    for (const ctx of startContext) session.messages.push({ role: "user", content: ctx });
+
+    try {
+      const result = await runAgentLoop(
+        session,
+        opts.prompt,
+        this.workspace,
+        this.loopDeps(opts.effort ?? this.defaultEffort),
+        emit,
+        signal,
+      );
+      await this.safeLifecycle("Stop", () => this.hooks.runStop({ sessionId: session!.id, stopReason: result.stopReason }), emit, undefined);
+      return { session, result };
+    } finally {
+      // Persist + SessionEnd run even on a thrown error, so state is never lost.
+      await this.store.save(session);
+      await this.safeLifecycle("SessionEnd", () => this.hooks.runSessionEnd({ sessionId: session!.id }), emit, undefined);
+    }
   }
 
   resolvePermission(requestId: string, decision: BrokerDecision): boolean {

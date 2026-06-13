@@ -36,7 +36,12 @@ export type PostToolUseHook = (
   input: PostToolUseHookInput,
 ) => ToolResult | void | Promise<ToolResult | void>;
 
-export type SimpleHook = (payload: Record<string, unknown>) => void | Promise<void>;
+/**
+ * Lifecycle hook. May return a string to contribute additional context — only
+ * SessionStart uses the return value (injected as a synthetic user message before
+ * the run); other lifecycle points ignore it.
+ */
+export type SimpleHook = (payload: Record<string, unknown>) => void | string | Promise<void | string>;
 
 export class HookBus {
   private readonly preToolUse: PreToolUseHook[] = [];
@@ -104,8 +109,14 @@ export class HookBus {
   async runPreCompact(payload: Record<string, unknown>): Promise<void> {
     for (const hook of this.preCompact) await hook(payload);
   }
-  async runSessionStart(payload: Record<string, unknown>): Promise<void> {
-    for (const hook of this.sessionStart) await hook(payload);
+  /** Returns any additional-context strings the hooks contributed (injected pre-run). */
+  async runSessionStart(payload: Record<string, unknown>): Promise<string[]> {
+    const out: string[] = [];
+    for (const hook of this.sessionStart) {
+      const r = await hook(payload);
+      if (typeof r === "string" && r) out.push(r);
+    }
+    return out;
   }
   async runSessionEnd(payload: Record<string, unknown>): Promise<void> {
     for (const hook of this.sessionEnd) await hook(payload);

@@ -106,6 +106,16 @@ describe("PermissionEngine", () => {
   });
 });
 
+describe("HookBus lifecycle", () => {
+  it("runSessionStart collects the strings hooks return as additional context", async () => {
+    const bus = new HookBus()
+      .onSessionStart(() => "CTX_A")
+      .onSessionStart(() => undefined) // no contribution
+      .onSessionStart(() => "CTX_B");
+    expect(await bus.runSessionStart({ sessionId: "s" })).toEqual(["CTX_A", "CTX_B"]);
+  });
+});
+
 describe("PermissionEngine — layered rules (behavior priority)", () => {
   it("a deny rule in 'user' beats an allow rule in 'local'", async () => {
     const rules: PermissionRule[] = [

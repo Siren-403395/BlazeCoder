@@ -101,6 +101,8 @@ export class ContextManager {
       /** Read-ledger + workspace enable post-summarization fresh-file rehydration. */
       ledger?: ReadLedger;
       workspace?: Workspace;
+      /** Fired once, right before any compaction work happens (PreCompact lifecycle hook). */
+      onPreCompact?: () => void | Promise<void>;
     },
     emit: EventSink,
     signal: AbortSignal,
@@ -123,6 +125,9 @@ export class ContextManager {
       this.thrash = 0;
       return;
     }
+
+    // About to compact — give PreCompact hooks a chance (e.g. to snapshot state).
+    await params.onPreCompact?.();
 
     // Stage 1 — clear old tool results (deterministic, no LLM). The transcript is now
     // mutated so the real count is stale; fall back to the estimate.

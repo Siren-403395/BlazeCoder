@@ -25,6 +25,7 @@ import { buildSystemPrompt } from "../prompts";
 import { initialLoopState, terminalToSubtype } from "./transitions";
 import type { LoopState, Terminal } from "./transitions";
 import type { ReadLedger } from "../workspace/ledger";
+import type { HookBus } from "../permissions/hooks";
 import type { ToolContext } from "../tools/registry";
 import type { ToolRegistry } from "../tools/registry";
 import type { ToolExecutor } from "../tools/executor";
@@ -69,6 +70,8 @@ export interface AgentLoopDeps {
   clock: Clock;
   logger: Logger;
   config: AgentLoopConfig;
+  /** Lifecycle hooks; the loop fires PreCompact through this when compaction triggers. */
+  hooks?: HookBus;
   /** Spawn a sub-agent (threaded into the Task tool's ToolContext). */
   spawn?: ToolContext["spawn"];
   /** Nesting depth for this run; 0 = main agent. */
@@ -150,6 +153,9 @@ export async function runAgentLoop(
           realInputTokens: session.lastRealInputTokens,
           ledger,
           workspace,
+          onPreCompact: deps.hooks
+            ? () => deps.hooks!.runPreCompact({ sessionId: session.id, trigger: "auto" }).catch(() => {})
+            : undefined,
         },
         emit,
         signal,

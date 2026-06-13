@@ -166,6 +166,31 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(taskResult && taskResult.type === "tool_result" && taskResult.content).toContain("investigation complete");
   });
 
+  it("fires the lifecycle hooks (SessionStart context, Stop, SessionEnd) and survives a throwing hook", async () => {
+    const fired: string[] = [];
+    const rt = makeRuntime([reply("done", [])]);
+    rt.hooks.onSessionStart(() => {
+      fired.push("start");
+      return "SESSION_CONTEXT_MARKER";
+    });
+    rt.hooks.onStop(() => {
+      fired.push("stop");
+    });
+    rt.hooks.onSessionEnd(() => {
+      fired.push("end");
+      throw new Error("boom"); // a failing hook must not break the run
+    });
+    const { emit, events } = sink();
+    const { session, result } = await rt.run({ prompt: "go" }, emit, signal());
+
+    expect(result.subtype).toBe("success");
+    expect(fired).toEqual(["start", "stop", "end"]);
+    // SessionStart's returned context landed as a user message before the loop ran.
+    expect(session.messages.some((m) => m.role === "user" && m.content === "SESSION_CONTEXT_MARKER")).toBe(true);
+    // The throwing SessionEnd hook only produced a warn notice.
+    expect(events.some((e) => e.type === "notice" && e.level === "warn" && /SessionEnd/.test(e.message))).toBe(true);
+  });
+
   it("resumes an existing session", async () => {
     const rt = makeRuntime([
       reply("one", [call("m", "memory", { command: "view" })]),

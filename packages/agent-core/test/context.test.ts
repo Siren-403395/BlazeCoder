@@ -190,6 +190,29 @@ describe("ContextManager compaction", () => {
     expect(led.recentlyReadPaths()).toEqual([]); // ledger cleared post-rehydration
   });
 
+  it("fires onPreCompact once when compacting, and not when under threshold", async () => {
+    const cm = new ContextManager(
+      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      new FixedClock(),
+      silentLogger,
+    );
+    let fired = 0;
+    const onPreCompact = () => {
+      fired += 1;
+    };
+    const big = session([
+      { role: "user", content: "hi" },
+      { role: "tool", results: [{ toolUseId: "1", toolName: "Read", content: "A".repeat(400), isError: false }] },
+      { role: "tool", results: [{ toolUseId: "2", toolName: "Read", content: "B".repeat(40), isError: false }] },
+    ]);
+    await cm.maybeCompact(big, { system: "", projectRules: "", tools: [], onPreCompact }, () => {}, signal);
+    expect(fired).toBe(1);
+
+    // A small session stays under the clear threshold → no compaction, no hook.
+    await cm.maybeCompact(session([{ role: "user", content: "hi" }]), { system: "", projectRules: "", tools: [], onPreCompact }, () => {}, signal);
+    expect(fired).toBe(1);
+  });
+
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {
     const cm = new ContextManager(
       { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
