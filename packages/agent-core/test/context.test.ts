@@ -324,6 +324,24 @@ describe("ContextManager compaction", () => {
     expect(s.messages[0]!.role).toBe("summary");
   });
 
+  it("compactNow forces summarization regardless of thresholds", async () => {
+    const gw = new ScriptedGateway("m", [reply("FORCED SUMMARY")]);
+    const cm = new ContextManager(
+      { contextTokens: 1_000_000, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      new FixedClock(),
+      silentLogger,
+      gw,
+    );
+    const s = session([
+      { role: "user", content: "X" },
+      { role: "assistant", content: "Y", toolCalls: [] },
+      { role: "user", content: "Z" },
+    ]);
+    // Well under any threshold — maybeCompact would do nothing, but compactNow forces it.
+    await cm.compactNow(s, { system: "", projectRules: "", tools: [] }, () => {}, signal);
+    expect(s.messages[0]!.role).toBe("summary");
+  });
+
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {
     const cm = new ContextManager(
       { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },

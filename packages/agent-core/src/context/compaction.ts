@@ -60,6 +60,14 @@ export class CompactionThrashError extends Error {
   }
 }
 
+/** Thrown by the gateway adapter when the provider rejects a request for being too long. */
+export class ContextOverflowError extends Error {
+  constructor(message = "The request exceeded the model's context length.") {
+    super(message);
+    this.name = "ContextOverflowError";
+  }
+}
+
 /**
  * Tool results safe to clear: bulky, regenerable read/search/shell output. Edit/Write
  * confirmations are NOT cleared — they're cheap and a useful record of what changed.
@@ -247,6 +255,40 @@ export class ContextManager {
     const fileMsg = await buildPostCompactFileMessage(ledger, workspace, tail);
     if (fileMsg) session.messages.splice(1, 0, fileMsg);
     ledger.clear();
+  }
+
+  /**
+   * Force a compaction NOW, ignoring thresholds — used for reactive recovery when the
+   * provider rejects a request for being too long. Clears old tool results, then
+   * summarizes + rehydrates (best-effort; shares the failure counter with maybeCompact).
+   */
+  async compactNow(
+    session: SessionState,
+    params: { system: string; projectRules: string; tools: ToolSchema[]; ledger?: ReadLedger; workspace?: Workspace },
+    emit: EventSink,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const clearedIds = this.clearOldToolResults(session);
+    if (!this.gateway || this.consecutiveFailures >= MAX_SUMMARIZE_FAILURES) {
+      emit({ type: "compact_boundary", reason: "reactive compaction (cleared tool results)", tokensBefore: 0, tokensAfter: this.estimate(session, params), clearedToolUseIds: clearedIds.length ? clearedIds : undefined });
+      return;
+    }
+    const before = this.estimate(session, params);
+    try {
+      await this.summarize(session, signal, { preTokens: before, clearedToolUseIds: clearedIds });
+      this.consecutiveFailures = 0;
+    } catch {
+      this.consecutiveFailures += 1;
+      return;
+    }
+    await this.rehydrateFiles(session, params.ledger, params.workspace);
+    emit({
+      type: "compact_boundary",
+      reason: "reactive compaction (context overflow)",
+      tokensBefore: before,
+      tokensAfter: this.estimate(session, params),
+      clearedToolUseIds: clearedIds.length ? clearedIds : undefined,
+    });
   }
 
   /** Clear old, regenerable tool results in place. Returns the toolUseIds cleared. */

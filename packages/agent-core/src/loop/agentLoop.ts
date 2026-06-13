@@ -19,7 +19,7 @@ import type {
   Workspace,
 } from "../ports";
 import { assembleRequest, computeBudget } from "../context/sessionContext";
-import { CompactionThrashError, ContextManager } from "../context/compaction";
+import { CompactionThrashError, ContextManager, ContextOverflowError } from "../context/compaction";
 import { escalateOutputTokens, resolveEffort, type Effort } from "../effort";
 import { buildProjectRules } from "../memory/projectRules";
 import { buildSystemPrompt } from "../prompts";
@@ -209,6 +209,18 @@ export async function runAgentLoop(
         : await gateway.complete(request, signal);
     } catch (err) {
       if (signal.aborted) return finish({ reason: "aborted" }, "Run cancelled.");
+      // Reactive compaction: the provider rejected the request as too long. Compact
+      // once and retry; a second overflow (guard set) is terminal.
+      if (err instanceof ContextOverflowError) {
+        if (state.hasReactiveCompacted) {
+          emit({ type: "notice", level: "error", message: "Context overflow persisted after compaction." });
+          return finish({ reason: "context_overflow" }, err.message);
+        }
+        emit({ type: "notice", level: "warn", message: "Request too long; compacting and retrying once." });
+        await contextManager.compactNow(session, { system, projectRules, tools: toolSchemas, ledger, workspace }, emit, signal);
+        state = { ...state, transition: { reason: "reactive_compact_retry" }, hasReactiveCompacted: true };
+        continue;
+      }
       const message = err instanceof Error ? err.message : String(err);
       logger.error("model gateway failed", { message });
       emit({ type: "notice", level: "error", message: `Model call failed: ${message}` });

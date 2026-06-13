@@ -19,8 +19,21 @@ import {
   ToolRegistry,
   builtinTools,
 } from "../src/index";
-import type { AgentLoopDeps, LoopState, SessionState } from "../src/index";
+import { ContextOverflowError } from "../src/index";
+import type { AgentLoopDeps, LoopState, ModelGateway, ModelResponse, SessionState } from "../src/index";
 import { call, reply, ScriptedGateway, disabledSandbox, type Step } from "./fakes";
+
+/** A gateway that throws ContextOverflowError the first `overflowTimes` calls, then succeeds. */
+class OverflowGateway implements ModelGateway {
+  readonly model = "m";
+  calls = 0;
+  constructor(private readonly overflowTimes: number) {}
+  async complete(): Promise<ModelResponse> {
+    this.calls += 1;
+    if (this.calls <= this.overflowTimes) throw new ContextOverflowError();
+    return reply("done", []);
+  }
+}
 
 describe("terminalToSubtype", () => {
   it("maps every Terminal reason to the public ResultSubtype", () => {
@@ -53,14 +66,14 @@ describe("terminalToSubtype", () => {
 function makeDeps(
   steps: Step[],
   onLoopState?: (s: LoopState) => void,
-  extra: { hooks?: HookBus; steering?: { drain(): string[] } } = {},
+  extra: { hooks?: HookBus; steering?: { drain(): string[] }; gateway?: ModelGateway } = {},
 ): AgentLoopDeps {
   const clock = new FixedClock(1);
   const registry = new ToolRegistry().registerAll(builtinTools());
   const hooks = extra.hooks ?? new HookBus();
   const engine = new PermissionEngine({ mode: "bypassPermissions", hookBus: hooks, broker: new PermissionBroker(), idGen: () => "p" });
   return {
-    gateway: new ScriptedGateway("m", steps),
+    gateway: extra.gateway ?? new ScriptedGateway("m", steps),
     registry,
     executor: new ToolExecutor(registry, engine, hooks, clock),
     contextManager: new ContextManager(DEFAULT_COMPACTION, clock, silentLogger),
@@ -132,6 +145,26 @@ describe("agent loop reduces over immutable LoopState", () => {
     // Every assistant tool_use now has a following tool result (no orphan).
     const lastAssistant = [...s.messages].reverse().find((m) => m.role === "assistant" && m.toolCalls.length > 0);
     expect(lastAssistant).toBeTruthy();
+  });
+});
+
+describe("reactive compaction on context overflow", () => {
+  it("compacts and retries once, then completes", async () => {
+    const gw = new OverflowGateway(1);
+    const deps = makeDeps([], undefined, { gateway: gw });
+    const events: { type: string; message?: string }[] = [];
+    const result = await runAgentLoop(session(), "go", new InMemoryWorkspace(), deps, (e) => events.push(e), new AbortController().signal);
+    expect(result.subtype).toBe("success");
+    expect(gw.calls).toBe(2); // overflow once → compact → retry succeeds
+    expect(events.some((e) => e.type === "notice" && /compacting and retrying/.test(e.message ?? ""))).toBe(true);
+  });
+
+  it("a second overflow (guard set) is terminal", async () => {
+    const gw = new OverflowGateway(2);
+    const deps = makeDeps([], undefined, { gateway: gw });
+    const result = await runAgentLoop(session(), "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
+    expect(result.subtype).toBe("error_during_execution"); // context_overflow → error_during_execution
+    expect(gw.calls).toBe(2);
   });
 });
 

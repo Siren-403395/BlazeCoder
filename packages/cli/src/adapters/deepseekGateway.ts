@@ -13,7 +13,10 @@ import type {
   ModelStreamHandlers,
   TranscriptMessage,
 } from "@coding-agent/core";
+import { ContextOverflowError } from "@coding-agent/core";
 import { HttpError, NonRetryableError, parseRetryAfter, withRetry } from "./withRetry";
+
+const CONTEXT_OVERFLOW_RE = /context length|maximum context|context_length_exceeded|too long|exceeds the maximum/i;
 
 interface OpenAiMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -84,6 +87,10 @@ export class DeepSeekGateway implements ModelGateway {
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
+      // A "too long" 400 becomes a typed ContextOverflowError so the loop can compact + retry.
+      if (res.status === 400 && CONTEXT_OVERFLOW_RE.test(detail)) {
+        throw new ContextOverflowError(`DeepSeek rejected the request as too long: ${detail.slice(0, 300)}`);
+      }
       // Typed so withRetry can decide: 429/5xx retry, 4xx (auth/validation) do not.
       throw new HttpError(res.status, `DeepSeek HTTP ${res.status}: ${detail.slice(0, 500)}`, parseRetryAfter(res.headers.get("retry-after")));
     }
