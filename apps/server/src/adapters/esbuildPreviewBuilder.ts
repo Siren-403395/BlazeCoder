@@ -77,7 +77,7 @@ function virtualPlugin(files: Map<string, string>): Plugin {
 }
 
 function htmlDocument(js: string, css: string, title: string): string {
-  const errorOverlay = `window.addEventListener('error',function(e){var el=document.getElementById('root');if(el&&!el.__err){el.__err=1;el.innerHTML='<pre style="margin:0;padding:16px;color:#b91c1c;background:#fff1f2;white-space:pre-wrap;font:13px/1.5 ui-monospace,monospace">'+((e.error&&e.error.stack)||e.message)+'</pre>';}});`;
+  const errorOverlay = `(function(){function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}function show(msg){var el=document.getElementById('root');if(el&&!el.__err){el.__err=1;el.innerHTML='<pre style="margin:0;padding:16px;color:#b91c1c;background:#fff1f2;white-space:pre-wrap;font:13px/1.5 ui-monospace,monospace">'+esc(msg)+'</pre>';}}window.addEventListener('error',function(e){show((e.error&&e.error.stack)||e.message||'Error');});window.addEventListener('unhandledrejection',function(e){var r=e.reason;show((r&&(r.stack||r.message))||r||'Unhandled promise rejection');});})();`;
   return `<!doctype html>
 <html>
   <head>
