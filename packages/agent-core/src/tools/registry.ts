@@ -51,7 +51,18 @@ export interface Tool {
   inputSchema: JSONSchema;
   /** Read-only tools may run concurrently; mutating tools run sequentially. */
   readOnly: boolean;
+  /** Spill threshold: results larger than this go to disk + a preview (default in the executor). */
+  maxResultSizeChars?: number;
+  /** Keyword hints for a future deferred-tool search (not yet active). */
+  searchHint?: string;
+  /** Marks a core tool that must never be deferred (not yet active). */
+  alwaysLoad?: boolean;
   execute(input: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>;
+}
+
+/** A source of tools (built-ins, or — later — an MCP server). buildRuntime concatenates these. */
+export interface ToolSource {
+  tools(): Promise<Tool[]>;
 }
 
 const TOOL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;

@@ -51,6 +51,7 @@ export * from "./ports";
 export * from "./tools/registry";
 export * from "./tools/executor";
 export * from "./tools/builtin";
+export * from "./tools/coreTools";
 export * from "./permissions/hooks";
 export * from "./permissions/engine";
 export * from "./permissions/protectedPaths";
