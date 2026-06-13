@@ -58,3 +58,38 @@ export function argGhost(draft: string): string | null {
   if (!cmd?.argHint) return null;
   return m[2]!.length === 0 ? cmd.argHint : null;
 }
+
+/**
+ * The active `@file` mention token ending at the cursor, if any: a "@" that
+ * begins a word (start-of-line or after whitespace) with no whitespace between it
+ * and the cursor. Returns its start index and the query typed after the "@".
+ */
+export function atToken(draft: string, cursor: number): { start: number; query: string } | null {
+  for (let i = cursor - 1; i >= 0; i--) {
+    const ch = draft[i]!;
+    if (ch === "@") {
+      if (i === 0 || /\s/.test(draft[i - 1]!)) return { start: i, query: draft.slice(i + 1, cursor) };
+      return null;
+    }
+    if (/\s/.test(ch)) return null;
+  }
+  return null;
+}
+
+/** Rank workspace files against a mention query (basename-prefix first), capped. */
+export function filterFiles(files: string[], query: string, limit = 10): string[] {
+  if (!query) return files.slice(0, limit);
+  const q = query.toLowerCase();
+  const base = (p: string) => p.slice(p.lastIndexOf("/") + 1).toLowerCase();
+  return files
+    .map((f) => {
+      const lf = f.toLowerCase();
+      const b = base(f);
+      const score = b.startsWith(q) ? 0 : lf.startsWith(q) ? 1 : b.includes(q) ? 2 : lf.includes(q) ? 3 : -1;
+      return { f, score };
+    })
+    .filter((s) => s.score >= 0)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, limit)
+    .map((s) => s.f);
+}

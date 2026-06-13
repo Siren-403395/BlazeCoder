@@ -4,6 +4,7 @@
  * stream straight to the TUI in-process; tests construct one with in-memory fakes.
  */
 
+import { relative } from "node:path";
 import { isSecretPath, looksLikeSecret } from "@coding-agent/shared";
 import type {
   Clock,
@@ -256,6 +257,15 @@ export class AgentRuntime {
 
   listSessions() {
     return this.store.list();
+  }
+
+  /** Workspace files as paths relative to the root (for @-mention completion), gitignore-aware, secrets excluded. */
+  async listFiles(limit = 1000): Promise<string[]> {
+    const root = this.workspace.root;
+    const abs = await this.workspace.walk({ respectGitignore: true, limit });
+    return abs
+      .map((a) => relative(root, a).split("\\").join("/"))
+      .filter((p) => p.length > 0 && !isSecretPath(p));
   }
 
   getSession(id: string) {

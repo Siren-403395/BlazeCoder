@@ -111,6 +111,54 @@ export function StatusBar({ state }: { state: TuiState }) {
   );
 }
 
+/** The prompt input line with a block cursor, optional faint arg-hint ghost, and a placeholder. */
+export function InputLine({
+  value,
+  cursor,
+  ghost,
+  placeholder,
+}: {
+  value: string;
+  cursor: number;
+  ghost?: string | null;
+  placeholder?: string;
+}) {
+  const before = value.slice(0, cursor);
+  const at = value.slice(cursor, cursor + 1);
+  const after = value.slice(cursor + 1);
+  return (
+    <Box>
+      <Text color={theme.accent}>{"❯ "}</Text>
+      {value.length === 0 ? (
+        <>
+          <Text inverse> </Text>
+          {placeholder ? <Text color={theme.faint}>{placeholder}</Text> : null}
+        </>
+      ) : (
+        <>
+          <Text>{before}</Text>
+          <Text inverse>{at.length ? at : " "}</Text>
+          <Text>{after}</Text>
+          {ghost ? <Text color={theme.faint}>{ghost}</Text> : null}
+        </>
+      )}
+    </Box>
+  );
+}
+
+/** @-mention file completion list. */
+export function FileCompletion({ files, index }: { files: string[]; index: number }) {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      {files.map((f, i) => (
+        <Text key={f} color={i === index ? theme.accent : theme.muted} bold={i === index}>
+          {(i === index ? "❯ " : "  ") + f}
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
 /** The autocomplete palette shown while typing a slash command (mirrors the screenshot). */
 export function CommandPalette({ matches, index }: { matches: SlashCommand[]; index: number }) {
   const width = Math.max(...matches.map((c) => c.name.length)) + 3;

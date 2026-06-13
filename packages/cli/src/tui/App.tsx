@@ -1,14 +1,13 @@
 /**
  * The root TUI component. Owns the reducer, drives the AgentRuntime in-process
- * (no HTTP), maps its event stream into the reducer, and renders a two-region
- * layout: an immutable <Static> scrollback of finalized turns + a live region for
- * the in-flight assistant, running tools, the prompt, and overlays (the slash-
- * command palette, the /resume session picker, and permission approvals).
+ * (no HTTP), and renders an immutable <Static> scrollback + a live region with a
+ * custom prompt input. The input is hand-rolled (value + cursor) rather than
+ * ink-text-input so we fully control the cursor for Tab-completion, command
+ * history, and @-mention file completion.
  */
 
-import { useCallback, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useInput } from "ink";
-import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
 import {
   EFFORTS,
@@ -20,8 +19,8 @@ import {
   type SessionSummary,
 } from "@coding-agent/core";
 import { applyEvent, initialState, type Item, type ReasoningDisplay } from "./state";
-import { argGhost, findCommand, palette } from "./commands";
-import { CommandPalette, ItemView, PermissionPrompt, SessionPicker, StatusBar } from "./view";
+import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
+import { CommandPalette, FileCompletion, InputLine, ItemView, PermissionPrompt, SessionPicker, StatusBar } from "./view";
 import { theme } from "./theme";
 
 const REASONING_MODES: ReasoningDisplay[] = ["hidden", "summary", "full"];
@@ -31,6 +30,10 @@ function isFinalized(item: Item): boolean {
   if (item.kind === "tool") return item.status !== "running";
   return true;
 }
+
+type Completion =
+  | { kind: "command"; matches: { name: string; argHint?: string }[] }
+  | { kind: "file"; matches: string[]; start: number };
 
 export function App({
   runtime,
@@ -46,26 +49,56 @@ export function App({
     return initialSession ? applyEvent(base, { type: "hydrate", session: initialSession }) : base;
   });
   const [draft, setDraft] = useState("");
-  const [paletteIndex, setPaletteIndex] = useState(0);
+  const [cursor, setCursor] = useState(0);
+  const [compIndex, setCompIndex] = useState(0);
   const [picker, setPicker] = useState<{ sessions: SessionSummary[]; index: number } | null>(null);
   const { exit } = useApp();
+
   const sessionId = useRef<string | undefined>(initialSession?.id);
   const abort = useRef<AbortController | null>(null);
   const effortRef = useRef(state.effort);
   effortRef.current = state.effort;
+  const files = useRef<string[]>([]);
+  const [, setFilesTick] = useState(0);
+  const history = useRef<string[]>([]);
+  const histCursor = useRef(0); // 0 = live draft; n = n-th most recent submission
+  const liveDraft = useRef("");
 
   const busy = state.status === "running" || state.status === "awaiting_permission";
-  const pal = palette(draft);
-  const palIdx = pal.open ? Math.min(paletteIndex, pal.matches.length - 1) : 0;
 
-  const changeDraft = useCallback((v: string) => {
-    setDraft(v);
-    setPaletteIndex(0);
+  // Load the workspace file list for @-completion (on mount, and after each run).
+  const loadFiles = useCallback(async () => {
+    files.current = await runtime.listFiles().catch(() => []);
+    setFilesTick((t) => t + 1);
+  }, [runtime]);
+  useEffect(() => {
+    void loadFiles();
+  }, [loadFiles]);
+  useEffect(() => {
+    if (state.status === "done" || state.status === "error") void loadFiles();
+  }, [state.status, loadFiles]);
+
+  // Derive the active completion (command palette takes precedence over @-files).
+  const pal = palette(draft);
+  const fileTok = atToken(draft, cursor);
+  const fileMatches = fileTok ? filterFiles(files.current, fileTok.query) : [];
+  const completion: Completion | null = pal.open
+    ? { kind: "command", matches: pal.matches }
+    : fileTok && fileMatches.length
+      ? { kind: "file", matches: fileMatches, start: fileTok.start }
+      : null;
+  const cidx = completion ? Math.min(compIndex, completion.matches.length - 1) : 0;
+  const ghost = argGhost(draft);
+
+  const setLine = useCallback((value: string, cur: number) => {
+    setDraft(value);
+    setCursor(cur);
+    setCompIndex(0);
+    histCursor.current = 0;
   }, []);
 
   const openResume = useCallback(async () => {
-    const sessions = await runtime.listSessions();
-    setPicker({ sessions, index: 0 });
+    setPicker({ sessions: await runtime.listSessions(), index: 0 });
   }, [runtime]);
 
   const openSession = useCallback(
@@ -107,7 +140,7 @@ export function App({
             type: "notice",
             level: "info",
             message:
-              "/resume · /effort <level> · /reasoning <hidden|summary|full> · /clear · /help · /exit. Say 'ultrathink' to push a turn to max effort. ↑↓ to pick a command; Esc interrupts; Ctrl+C quits.",
+              "/resume · /effort <level> · /reasoning <hidden|summary|full> · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
           });
           return;
         default:
@@ -119,32 +152,18 @@ export function App({
 
   const submit = useCallback(
     async (value: string) => {
-      if (busy) return;
-
-      // Enter while the palette is open: run a no-arg command, or complete one that takes an arg.
-      const p = palette(value);
-      if (p.open && p.matches.length) {
-        const cmd = p.matches[Math.min(paletteIndex, p.matches.length - 1)]!;
-        setPaletteIndex(0);
-        if (cmd.argHint) {
-          setDraft(`/${cmd.name} `);
-          return;
-        }
-        setDraft("");
-        await execSlash(cmd.name, "");
-        return;
-      }
-
       const text = value.trim();
-      setDraft("");
+      setLine("", 0);
       if (!text) return;
+      if (history.current[history.current.length - 1] !== text) history.current.push(text);
+      histCursor.current = 0;
+
       if (text.startsWith("/")) {
         const m = /^\/(\S+)\s*(.*)$/.exec(text);
         if (m) await execSlash(m[1]!, m[2]!.trim());
         return;
       }
 
-      // A real prompt.
       dispatch({ type: "user_prompt", text });
       const turnEffort = escalateFromPrompt(text, effortRef.current as Effort);
       const ac = new AbortController();
@@ -162,11 +181,45 @@ export function App({
         abort.current = null;
       }
     },
-    [busy, paletteIndex, execSlash, runtime],
+    [setLine, execSlash, runtime],
   );
 
+  const accept = useCallback(() => {
+    if (!completion) return;
+    if (completion.kind === "command") {
+      const cmd = completion.matches[cidx]!;
+      const next = `/${cmd.name} `;
+      setLine(next, next.length);
+    } else {
+      const file = completion.matches[cidx]!;
+      const inserted = `@${file} `;
+      const next = draft.slice(0, completion.start) + inserted + draft.slice(cursor);
+      setLine(next, completion.start + inserted.length);
+    }
+  }, [completion, cidx, draft, cursor, setLine]);
+
+  const historyUp = useCallback(() => {
+    const h = history.current;
+    if (histCursor.current >= h.length) return;
+    if (histCursor.current === 0) liveDraft.current = draft;
+    histCursor.current += 1;
+    const v = h[h.length - histCursor.current]!;
+    setDraft(v);
+    setCursor(v.length);
+    setCompIndex(0);
+  }, [draft]);
+
+  const historyDown = useCallback(() => {
+    if (histCursor.current === 0) return;
+    histCursor.current -= 1;
+    const v = histCursor.current === 0 ? liveDraft.current : history.current[history.current.length - histCursor.current]!;
+    setDraft(v);
+    setCursor(v.length);
+    setCompIndex(0);
+  }, []);
+
   useInput((input, key) => {
-    // 1) Permission approval takes the keyboard.
+    // 1) Permission approval.
     if (state.status === "awaiting_permission" && state.permission) {
       const reqId = state.permission.requestId;
       if (input === "y" || input === "a") {
@@ -179,7 +232,7 @@ export function App({
       return;
     }
 
-    // 2) Session picker (rendered instead of the input, so only this handler is live).
+    // 2) Session picker.
     if (picker) {
       if (key.upArrow) setPicker((p) => (p ? { ...p, index: Math.max(0, p.index - 1) } : p));
       else if (key.downArrow) setPicker((p) => (p ? { ...p, index: Math.min(p.sessions.length - 1, p.index + 1) } : p));
@@ -188,26 +241,58 @@ export function App({
       return;
     }
 
-    // 3) Command-palette navigation (TextInput ignores up/down on a single line, so no conflict).
-    if (pal.open) {
-      if (key.upArrow) {
-        setPaletteIndex((i) => Math.max(0, i - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setPaletteIndex((i) => Math.min(pal.matches.length - 1, i + 1));
-        return;
-      }
+    // 3) Running: input is hidden; only interrupt/quit.
+    if (busy) {
+      if (key.escape && abort.current) abort.current.abort();
+      if (key.ctrl && input === "c") exit();
+      return;
     }
 
-    // 4) Global keys.
-    if (key.escape && abort.current) abort.current.abort();
-    if (key.ctrl && input === "c") exit();
+    // 4) Editing the prompt line.
+    if (key.ctrl && input === "c") {
+      exit();
+      return;
+    }
+    if (key.return) {
+      void submit(draft);
+      return;
+    }
+    if (key.tab || input === "\t") {
+      accept();
+      return;
+    }
+    if (key.upArrow) {
+      if (completion) setCompIndex((i) => Math.max(0, i - 1));
+      else historyUp();
+      return;
+    }
+    if (key.downArrow) {
+      if (completion) setCompIndex((i) => Math.min(completion.matches.length - 1, i + 1));
+      else historyDown();
+      return;
+    }
+    if (key.leftArrow) {
+      setCursor((c) => Math.max(0, c - 1));
+      return;
+    }
+    if (key.rightArrow) {
+      setCursor((c) => Math.min(draft.length, c + 1));
+      return;
+    }
+    if (key.backspace || key.delete) {
+      if (cursor > 0) setLine(draft.slice(0, cursor - 1) + draft.slice(cursor), cursor - 1);
+      return;
+    }
+    if (key.escape) {
+      if (abort.current) abort.current.abort();
+      return;
+    }
+    if (key.ctrl || key.meta || !input) return;
+    setLine(draft.slice(0, cursor) + input + draft.slice(cursor), cursor + input.length);
   });
 
   const finalized = state.items.filter(isFinalized);
   const live = state.items.filter((i) => !isFinalized(i));
-  const ghost = argGhost(draft);
 
   return (
     <Box flexDirection="column">
@@ -230,14 +315,11 @@ export function App({
             <Text color={theme.faint}> working… (esc to interrupt)</Text>
           </Box>
         ) : (
-          <>
-            <Box marginTop={1}>
-              <Text color={theme.accent}>{"❯ "}</Text>
-              <TextInput value={draft} onChange={changeDraft} onSubmit={submit} placeholder="Ask, or /help" />
-              {ghost ? <Text color={theme.faint}>{ghost}</Text> : null}
-            </Box>
-            {pal.open ? <CommandPalette matches={pal.matches} index={palIdx} /> : null}
-          </>
+          <Box marginTop={1} flexDirection="column">
+            <InputLine value={draft} cursor={cursor} ghost={ghost} placeholder="Ask, or / for commands, @ for files" />
+            {completion?.kind === "command" ? <CommandPalette matches={pal.matches} index={cidx} /> : null}
+            {completion?.kind === "file" ? <FileCompletion files={completion.matches} index={cidx} /> : null}
+          </Box>
         )}
 
         <StatusBar state={state} />

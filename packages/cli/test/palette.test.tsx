@@ -38,6 +38,10 @@ async function waitFor(fn: () => boolean, timeout = 3000): Promise<void> {
   throw new Error("waitFor timed out");
 }
 
+// ink-testing-library needs a render tick to settle before a follow-up key (e.g. Tab)
+// is processed; in a real terminal there is always a natural gap between keystrokes.
+const settle = () => new Promise((r) => setTimeout(r, 40));
+
 describe("command palette (interactive)", () => {
   it("shows prefix-filtered commands with descriptions as you type", async () => {
     const { lastFrame, stdin, unmount } = render(<App runtime={makeRuntime()} effort="low" />);
@@ -57,6 +61,65 @@ describe("command palette (interactive)", () => {
     await new Promise((r) => setTimeout(r, 60));
     stdin.write("/effort ");
     await waitFor(() => (lastFrame() ?? "").includes("low | medium | high | ultra"));
+    unmount();
+  });
+});
+
+const UP = "\u001b[A";
+
+describe("Tab completion + cursor placement", () => {
+  it("Tab completes the command and the cursor lands after it (so the arg types correctly)", async () => {
+    const { lastFrame, stdin, unmount } = render(<App runtime={makeRuntime()} effort="low" />);
+    await new Promise((r) => setTimeout(r, 60));
+    stdin.write("/eff");
+    await waitFor(() => (lastFrame() ?? "").includes("/effort"));
+    await settle();
+    stdin.write("\t"); // complete -> "/effort " with the cursor at the end
+    await waitFor(() => (lastFrame() ?? "").includes("low | medium | high | ultra"));
+    await settle();
+    stdin.write("high"); // must land AFTER the space: "/effort high"
+    await settle();
+    stdin.write("\r");
+    await waitFor(() => (lastFrame() ?? "").includes("effort high")); // status bar reflects the set effort
+    unmount();
+  });
+});
+
+describe("command history", () => {
+  it("recalls the previous submission with the Up arrow", async () => {
+    const { lastFrame, stdin, unmount } = render(<App runtime={makeRuntime()} effort="low" />);
+    await new Promise((r) => setTimeout(r, 60));
+    stdin.write("/clear");
+    await new Promise((r) => setTimeout(r, 20));
+    stdin.write("\r"); // submit /clear → wipes scrollback, so "/clear" appears nowhere on screen
+    await new Promise((r) => setTimeout(r, 60));
+    expect(lastFrame() ?? "").not.toContain("/clear");
+    stdin.write(UP); // recall "/clear" into the (otherwise empty) input line
+    await waitFor(() => (lastFrame() ?? "").includes("/clear"));
+    unmount();
+  });
+});
+
+describe("@-mention file completion", () => {
+  it("lists workspace files and Tab inserts the path", async () => {
+    const ws = new InMemoryWorkspace();
+    await ws.write({ path: "/src/App.tsx", language: "tsx", content: "x" });
+    await ws.write({ path: "/README.md", language: "md", content: "x" });
+    const rt = createAgentRuntime({
+      gateway: new StubGW(),
+      sessionStore: new InMemorySessionStore(new FixedClock(1)),
+      memory: new InMemoryMemoryStore(),
+      workspace: ws,
+      clock: new FixedClock(1),
+      logger: silentLogger,
+    });
+    const { lastFrame, stdin, unmount } = render(<App runtime={rt} effort="low" />);
+    await new Promise((r) => setTimeout(r, 120)); // let listFiles load
+    stdin.write("@App");
+    await waitFor(() => (lastFrame() ?? "").includes("src/App.tsx"));
+    await settle();
+    stdin.write("\t"); // insert the path
+    await waitFor(() => (lastFrame() ?? "").includes("@src/App.tsx"));
     unmount();
   });
 });
