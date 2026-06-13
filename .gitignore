@@ -29,3 +29,9 @@ build/
 
 # personal study notes (not part of the repo)
 /study.md
+
+# research scratch (the synthesized spec docs/INTEGRATION_SPEC.md IS committed)
+docs/_research_*.json
+
+# per-project local settings (committable project settings.json is tracked)
+**/.zephyrcode/settings.local.json
