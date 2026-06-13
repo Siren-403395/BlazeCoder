@@ -267,7 +267,12 @@ export async function runAgentLoop(
       toolCalls: response.toolCalls,
     });
     emit({ type: "assistant", text: response.text, reasoning: response.reasoning, toolCalls: response.toolCalls });
-    emit({ type: "budget", ...computeBudget(config.contextTokens, response.usage.inputTokens) });
+    emit({
+      type: "budget",
+      ...computeBudget(config.contextTokens, response.usage.inputTokens),
+      cacheReadTokens: response.usage.cacheReadTokens,
+      cacheCreationTokens: response.usage.cacheCreationTokens,
+    });
 
     if (response.toolCalls.length === 0) {
       if (response.stopReason === "max_tokens") {

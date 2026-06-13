@@ -19,6 +19,10 @@ export interface ToolCall {
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
+  /** Input tokens served from the provider's prompt cache (when reported). */
+  cacheReadTokens?: number;
+  /** Input tokens that missed the cache / wrote a new cache entry (when reported). */
+  cacheCreationTokens?: number;
 }
 
 export type ResultSubtype =
@@ -78,7 +82,7 @@ export type AgentEvent =
       content?: string;
     }
   /** Context budget gauge update (after each turn / compaction). */
-  | { type: "budget"; totalTokens: number; usedTokens: number; remainingTokens: number }
+  | { type: "budget"; totalTokens: number; usedTokens: number; remainingTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number }
   /** A compaction occurred between two turns. */
   | { type: "compact_boundary"; reason: string; tokensBefore: number; tokensAfter: number; clearedToolUseIds?: string[] }
   /** The model gateway is retrying a transient failure (backoff in progress). */

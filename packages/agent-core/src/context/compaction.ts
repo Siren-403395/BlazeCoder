@@ -184,6 +184,7 @@ export class ContextManager {
           tokensAfter: after,
           clearedToolUseIds: clearedIds,
         });
+        this.logger.info("compaction_done", { stage: "clear", tokensBefore: current, tokensAfter: after, cleared: clearedIds.length });
       }
       this.thrash = 0;
       return;
@@ -228,6 +229,7 @@ export class ContextManager {
       tokensAfter: after,
       clearedToolUseIds: clearedIds.length ? clearedIds : undefined,
     });
+    this.logger.info("compaction_done", { stage: "summarize", tokensBefore: before, tokensAfter: after, cleared: clearedIds.length });
 
     // Stage 3 — low-yield circuit breaker.
     if (before - after < 0.05 * this.config.contextTokens) {

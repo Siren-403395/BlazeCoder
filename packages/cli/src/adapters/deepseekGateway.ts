@@ -37,7 +37,7 @@ interface StreamChunk {
     };
     finish_reason?: string;
   }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_cache_hit_tokens?: number; prompt_cache_miss_tokens?: number };
 }
 
 export interface DeepSeekGatewayOptions {
@@ -108,13 +108,15 @@ export class DeepSeekGateway implements ModelGateway {
         const res = await this.post(body, signal);
         const data = (await res.json()) as {
           choices?: { message?: OpenAiMessage; finish_reason?: string }[];
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
+          usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_cache_hit_tokens?: number; prompt_cache_miss_tokens?: number };
         };
         const choice = data.choices?.[0];
         const message = choice?.message;
         const usage = {
           inputTokens: data.usage?.prompt_tokens ?? 0,
           outputTokens: data.usage?.completion_tokens ?? 0,
+          cacheReadTokens: data.usage?.prompt_cache_hit_tokens,
+          cacheCreationTokens: data.usage?.prompt_cache_miss_tokens,
         };
         return {
           text: typeof message?.content === "string" ? message.content : "",
@@ -172,7 +174,7 @@ export class DeepSeekGateway implements ModelGateway {
     let text = "";
     let reasoning = "";
     let finish: string | undefined;
-    const usage = { inputTokens: 0, outputTokens: 0 };
+    const usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number } = { inputTokens: 0, outputTokens: 0 };
     // Tool-call fragments arrive keyed by index across many deltas (and the
     // provider does not guarantee they are grouped). Accumulate, then emit each
     // exactly once with complete args after the stream ends.
@@ -235,6 +237,8 @@ export class DeepSeekGateway implements ModelGateway {
           if (chunk.usage) {
             usage.inputTokens = chunk.usage.prompt_tokens ?? 0;
             usage.outputTokens = chunk.usage.completion_tokens ?? 0;
+            usage.cacheReadTokens = chunk.usage.prompt_cache_hit_tokens;
+            usage.cacheCreationTokens = chunk.usage.prompt_cache_miss_tokens;
           }
         }
       }
