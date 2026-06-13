@@ -10,7 +10,7 @@ import type { Clock, EventSink, Logger, ModelGateway, SessionState, ToolSchema, 
 import type { ReadLedger } from "../workspace/ledger";
 import { TOOL_NAMES } from "../tools/toolNames";
 import { assembleRequest, estimateMessageTokens, estimateRequestTokens } from "./sessionContext";
-import { buildPostCompactFileMessage, buildSummaryRequest, stripAnalysis } from "./rehydration";
+import { buildPostCompactFileMessage, buildSummaryRequest, isSubstantialNotes, stripAnalysis, truncateNotes } from "./rehydration";
 
 export interface CompactionConfig {
   contextTokens: number;
@@ -145,6 +145,8 @@ export class ContextManager {
       workspace?: Workspace;
       /** Fired once, right before any compaction work happens (PreCompact lifecycle hook). */
       onPreCompact?: () => void | Promise<void>;
+      /** Live session notes; when substantial, used as the summary (no gateway call). */
+      notes?: string;
     },
     emit: EventSink,
     signal: AbortSignal,
@@ -190,8 +192,10 @@ export class ContextManager {
       return;
     }
 
-    // Stage 2 — LLM summarization.
-    if (!this.gateway) {
+    // Stage 2 — summarize. Live session notes (when populated) are a zero-cost summary
+    // source; otherwise we call the gateway.
+    const hasNotes = !!params.notes && isSubstantialNotes(params.notes);
+    if (!this.gateway && !hasNotes) {
       emit({ type: "notice", level: "warn", message: "Context is large but no summarizer is configured." });
       return;
     }
@@ -207,7 +211,7 @@ export class ContextManager {
     }
     const before = after;
     try {
-      await this.summarize(session, signal, { preTokens: before, clearedToolUseIds: clearedIds });
+      await this.summarize(session, signal, { preTokens: before, clearedToolUseIds: clearedIds, notes: params.notes });
       this.consecutiveFailures = 0;
     } catch (err) {
       // Don't throw out of the loop — continue with cleared-but-unsummarized context.
@@ -356,7 +360,7 @@ export class ContextManager {
   private async summarize(
     session: SessionState,
     signal: AbortSignal,
-    meta: { preTokens: number; clearedToolUseIds: string[] },
+    meta: { preTokens: number; clearedToolUseIds: string[]; notes?: string },
   ): Promise<void> {
     const split = this.computeSplit(session.messages);
     if (split <= 0 || split >= session.messages.length) return;
@@ -364,21 +368,28 @@ export class ContextManager {
     const tail = session.messages.slice(split);
     let head = session.messages.slice(0, split);
 
-    // Retry on overflow: if the summarize call itself fails, drop the oldest round
-    // and try again with a smaller head, up to a cap. If it can't shrink, rethrow.
-    let content: string | undefined;
-    for (let attempt = 0; attempt < MAX_SUMMARIZE_TRUNCATIONS; attempt++) {
-      try {
-        const response = await this.gateway!.complete(buildSummaryRequest(head), signal);
-        content = stripAnalysis(response.text) || "(summary unavailable)";
-        break;
-      } catch (err) {
-        const smaller = truncateHeadForSummary(head);
-        if (smaller.length >= head.length) throw err; // can't shrink further
-        head = smaller;
+    let content: string;
+    if (meta.notes && isSubstantialNotes(meta.notes)) {
+      // Zero-cost: the model's live notes ARE the summary (head-truncated). No gateway call.
+      content = truncateNotes(meta.notes);
+    } else {
+      // Retry on overflow: if the summarize call itself fails, drop the oldest round
+      // and try again with a smaller head, up to a cap. If it can't shrink, rethrow.
+      let summary: string | undefined;
+      for (let attempt = 0; attempt < MAX_SUMMARIZE_TRUNCATIONS; attempt++) {
+        try {
+          const response = await this.gateway!.complete(buildSummaryRequest(head), signal);
+          summary = stripAnalysis(response.text) || "(summary unavailable)";
+          break;
+        } catch (err) {
+          const smaller = truncateHeadForSummary(head);
+          if (smaller.length >= head.length) throw err; // can't shrink further
+          head = smaller;
+        }
       }
+      if (summary === undefined) throw new Error("summarization failed after truncation retries");
+      content = summary;
     }
-    if (content === undefined) throw new Error("summarization failed after truncation retries");
 
     session.messages = [
       {

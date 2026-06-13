@@ -34,6 +34,36 @@ export function stripAnalysis(text: string): string {
   return text.replace(/<analysis>[\s\S]*?<\/analysis>/gi, "").trim();
 }
 
+/** The session-notes scaffold the model keeps fresh; used as a zero-cost summary when populated. */
+export const NOTES_TEMPLATE = [
+  "# Session notes",
+  "## Session Title",
+  "## Current State",
+  "## Task Spec",
+  "## Files & Functions",
+  "## Errors & Corrections",
+  "## Pending",
+  "## Worklog",
+].join("\n\n");
+
+/** True if the notes hold real content (not just the empty template / whitespace). */
+export function isSubstantialNotes(notes: string): boolean {
+  const stripped = notes
+    .split(/\r?\n/)
+    .filter((l) => !/^#{1,6}\s/.test(l.trim()))
+    .join("")
+    .trim();
+  return stripped.length >= 40;
+}
+
+/** Head-truncate each "## section" of the notes to perSectionChars, so notes can't blow the window. */
+export function truncateNotes(notes: string, perSectionChars = 8000): string {
+  const parts = notes.split(/\n(?=#{1,6}\s)/);
+  return parts
+    .map((part) => (part.length > perSectionChars ? `${part.slice(0, perSectionChars)}\n…[section truncated]` : part))
+    .join("\n");
+}
+
 /** Build the request used to summarize a slice of history. */
 export function buildSummaryRequest(messagesToSummarize: TranscriptMessage[]): ModelRequest {
   const transcript = messagesToSummarize
