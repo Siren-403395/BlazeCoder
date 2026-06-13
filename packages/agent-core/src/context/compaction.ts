@@ -10,7 +10,7 @@ import type { Clock, EventSink, Logger, ModelGateway, SessionState, ToolSchema, 
 import type { ReadLedger } from "../workspace/ledger";
 import { TOOL_NAMES } from "../tools/toolNames";
 import { assembleRequest, estimateRequestTokens } from "./sessionContext";
-import { buildPostCompactFileMessage, buildSummaryRequest } from "./rehydration";
+import { buildPostCompactFileMessage, buildSummaryRequest, stripAnalysis } from "./rehydration";
 
 export interface CompactionConfig {
   contextTokens: number;
@@ -227,7 +227,7 @@ export class ContextManager {
     const head = session.messages.slice(0, split);
     const tail = session.messages.slice(split);
     const response = await this.gateway!.complete(buildSummaryRequest(head), signal);
-    const content = response.text.trim() || "(summary unavailable)";
+    const content = stripAnalysis(response.text) || "(summary unavailable)";
     session.messages = [{ role: "summary", content }, ...tail];
   }
 }

@@ -12,16 +12,27 @@ import type { ModelRequest, TranscriptMessage, Workspace } from "../ports";
 import type { ReadLedger } from "../workspace/ledger";
 
 export const SUMMARY_INSTRUCTIONS = [
+  "CRITICAL: Respond with TEXT ONLY. Do NOT call any tools — you already have all the needed context above; tool calls will be rejected and waste your only turn.",
+  "",
   "You are compacting a coding-agent conversation to fit the context window.",
-  "Produce a dense summary that preserves everything needed to continue the work, organized under these headings:",
+  "First, think in an <analysis>...</analysis> block (it will be stripped): note what's been done, what's load-bearing, and what's left.",
+  "Then produce a dense summary that preserves everything needed to continue the work, organized under these headings:",
   "1. User intent — what the user ultimately wants.",
-  "2. Key technical decisions — framework, structure, conventions chosen.",
-  "3. Files created/modified — paths and the load-bearing details of each.",
-  "4. Errors encountered and how they were fixed.",
-  "5. Pending tasks — what remains to be done.",
-  "6. Current state — what was happening at the moment of compaction.",
+  "2. All user messages — every non-tool user message, verbatim or near-verbatim, in order (so no request is lost).",
+  "3. Key technical decisions — framework, structure, conventions chosen.",
+  "4. Files created/modified — paths and the load-bearing details of each.",
+  "5. Errors encountered and how they were fixed.",
+  "6. Pending tasks — what remains to be done.",
+  "7. Current state — what was happening at the moment of compaction.",
+  "8. Next step — a DIRECT VERBATIM QUOTE of the task you were mid-way through, to avoid drift.",
   "Drop verbatim tool outputs and step-by-step reasoning. Be specific and concise.",
+  "End by resuming directly; do not acknowledge this summary or recap it.",
 ].join("\n");
+
+/** Strip the model's <analysis>…</analysis> scratchpad from a summary response. */
+export function stripAnalysis(text: string): string {
+  return text.replace(/<analysis>[\s\S]*?<\/analysis>/gi, "").trim();
+}
 
 /** Build the request used to summarize a slice of history. */
 export function buildSummaryRequest(messagesToSummarize: TranscriptMessage[]): ModelRequest {
