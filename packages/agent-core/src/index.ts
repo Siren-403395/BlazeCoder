@@ -33,7 +33,6 @@ import { FileSystemWorkspace } from "./workspace/fsWorkspace";
 import { ReadLedger } from "./workspace/ledger";
 import { runAgentLoop } from "./loop/agentLoop";
 import type { AgentLoopConfig, AgentLoopDeps, AgentRunResult } from "./loop/agentLoop";
-import { CODING_AGENT_SYSTEM_PROMPT } from "./prompts";
 import { silentLogger, systemClock } from "./util";
 
 // ─── Re-exports (public API surface) ──────────────────────────────────────────
@@ -199,7 +198,7 @@ export class AgentRuntime {
     );
 
     this.loopConfig = {
-      system: opts.system ?? CODING_AGENT_SYSTEM_PROMPT,
+      promptOverride: opts.system,
       userRules: opts.userRules,
       maxTurns: opts.maxTurns ?? 24,
       maxBudgetUsd: opts.maxBudgetUsd ?? 1,

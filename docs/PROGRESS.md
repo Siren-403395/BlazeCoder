@@ -7,7 +7,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 
 ## P0 — highest-leverage parity
 - [x] P0-tools-1   shared TOOL_NAMES constant + fix prompt↔registry name-drift bug
-- [ ] P0-prompts-2 sectioned composable system-prompt builder (string[]), port counterweight prose, keep identity   (deps: tools-1)
+- [x] P0-prompts-2 sectioned composable system-prompt builder (string[]), port counterweight prose, keep identity   (deps: tools-1)
 - [ ] P0-context-1 type-aware token estimation + authoritative real input_tokens
 - [ ] P0-context-2 whitelist tool-result clearing + post-compact fresh file rehydration   (deps: context-1)
 - [ ] P0-perm-1    permission rule grammar + per-tool matchers (Bash prefix/wildcard, file globs)

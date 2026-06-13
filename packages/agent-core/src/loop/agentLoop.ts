@@ -21,6 +21,7 @@ import { assembleRequest, computeBudget } from "../context/sessionContext";
 import { CompactionThrashError, ContextManager } from "../context/compaction";
 import { resolveEffort, type Effort } from "../effort";
 import { buildProjectRules } from "../memory/projectRules";
+import { buildSystemPrompt } from "../prompts";
 import type { ReadLedger } from "../workspace/ledger";
 import type { ToolContext } from "../tools/registry";
 import type { ToolRegistry } from "../tools/registry";
@@ -37,7 +38,14 @@ export interface AgentRunResult {
 }
 
 export interface AgentLoopConfig {
-  system: string;
+  /** Full prompt override (a custom --system-prompt); when absent the sectioned builder runs. */
+  promptOverride?: string;
+  /** Extra durable instructions appended as a final system-prompt section. */
+  extraInstructions?: string;
+  /** Optional mode/persona prompt slotted near the end of the system prompt. */
+  modePrompt?: string;
+  /** Which prompt contract to build: "main" (default) or the leaner "subagent". */
+  promptVariant?: "main" | "subagent";
   userRules?: string;
   maxTurns: number;
   maxBudgetUsd: number;
@@ -73,6 +81,18 @@ export async function runAgentLoop(
   const toolSchemas = registry.schemas();
   const projectRules = buildProjectRules({ root: workspace.root, userRules: config.userRules });
   const { thinking, budget, maxOutputTokens } = resolveEffort(config.effort, config.maxOutputTokens);
+
+  // Build the system prompt per-run: sections gate on the tools actually registered
+  // and on this run's effort. Joined to one string here (DeepSeek takes one system
+  // string); the sectioned shape stays internal to the builder.
+  const system = buildSystemPrompt({
+    toolNames: new Set(registry.names()),
+    effort: config.effort,
+    modePrompt: config.modePrompt,
+    override: config.promptOverride,
+    extra: config.extraInstructions,
+    variant: config.promptVariant,
+  }).join("\n\n");
 
   emit({
     type: "system",
@@ -118,7 +138,7 @@ export async function runAgentLoop(
     try {
       await contextManager.maybeCompact(
         session,
-        { system: config.system, projectRules, tools: toolSchemas },
+        { system, projectRules, tools: toolSchemas },
         emit,
         signal,
       );
@@ -131,7 +151,7 @@ export async function runAgentLoop(
     }
 
     const request = assembleRequest({
-      system: config.system,
+      system,
       projectRules,
       messages: session.messages,
       tools: toolSchemas,
