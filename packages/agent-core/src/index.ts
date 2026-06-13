@@ -16,6 +16,7 @@ import type {
   SessionState,
   SessionStore,
   SessionSummary,
+  SteeringQueue,
   Workspace,
 } from "./ports";
 import { builtinTools } from "./tools/builtin";
@@ -116,6 +117,8 @@ export interface RunOptions {
   title?: string;
   /** Reasoning effort for this turn (maps to thinking mode + output budget). */
   effort?: Effort;
+  /** Between-turns steering queue (the TUI's mid-run input FIFO). */
+  steering?: SteeringQueue;
 }
 
 export interface RunOutcome {
@@ -308,15 +311,10 @@ export class AgentRuntime {
     for (const ctx of startContext) session.messages.push({ role: "user", content: ctx });
 
     try {
-      const result = await runAgentLoop(
-        session,
-        opts.prompt,
-        this.workspace,
-        this.loopDeps(opts.effort ?? this.defaultEffort),
-        emit,
-        signal,
-      );
-      await this.safeLifecycle("Stop", () => this.hooks.runStop({ sessionId: session!.id, stopReason: result.stopReason }), emit, undefined);
+      // The blocking Stop hook fires INSIDE the loop (at the completion point) so it
+      // can force another turn; here we only persist + SessionEnd afterward.
+      const deps = { ...this.loopDeps(opts.effort ?? this.defaultEffort), steering: opts.steering };
+      const result = await runAgentLoop(session, opts.prompt, this.workspace, deps, emit, signal);
       return { session, result };
     } finally {
       // Persist + SessionEnd run even on a thrown error, so state is never lost.

@@ -76,6 +76,8 @@ export function App({
 
   const sessionId = useRef<string | undefined>(initialSession?.id);
   const abort = useRef<AbortController | null>(null);
+  // Between-turns steering: Enter-while-running enqueues here; the loop drains it.
+  const steerQueue = useRef<string[]>([]);
   const stateRef = useRef(state);
   stateRef.current = state;
   const effortRef = useRef(state.effort);
@@ -221,7 +223,12 @@ export function App({
       abort.current = ac;
       try {
         const { session } = await runtime.run(
-          { prompt: text, sessionId: sessionId.current, effort: turnEffort },
+          {
+            prompt: text,
+            sessionId: sessionId.current,
+            effort: turnEffort,
+            steering: { drain: () => steerQueue.current.splice(0) },
+          },
           (e) => dispatch(e),
           ac.signal,
         );
@@ -292,11 +299,27 @@ export function App({
       return;
     }
 
-    // 3) Running: input is hidden; only interrupt/quit.
+    // 3) Running: Esc interrupts, Ctrl+C quits, Enter queues a steering message;
+    //    other keys fall through so the user can type that message.
     if (busy) {
-      if (key.escape && abort.current) abort.current.abort();
-      if (key.ctrl && input === "c") exit();
-      return;
+      if (key.escape && abort.current) {
+        abort.current.abort();
+        return;
+      }
+      if (key.ctrl && input === "c") {
+        exit();
+        return;
+      }
+      if (key.return) {
+        const text = draft.trim();
+        if (text) {
+          steerQueue.current.push(text);
+          dispatch({ type: "notice", level: "info", message: `(steering) queued: ${text}` });
+          setLine("", 0);
+        }
+        return;
+      }
+      // fall through to the editing handlers below so typing works while running
     }
 
     // 4) Editing the prompt line.
@@ -384,10 +407,10 @@ export function App({
             value={draft}
             cursor={cursor}
             ghost={ghost}
-            placeholder={busy ? "working… (esc to interrupt)" : "Ask, or / for commands, @ for files"}
+            placeholder={busy ? "working… (type + enter to steer · esc to interrupt)" : "Ask, or / for commands, @ for files"}
             effort={state.effort}
             width={width}
-            showCursor={!busy}
+            showCursor={true}
           />
           {completion?.kind === "command" ? (
             <CommandPalette matches={pal.matches} index={cidx} />

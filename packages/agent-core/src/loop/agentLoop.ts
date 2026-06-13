@@ -15,6 +15,7 @@ import type {
   ModelResponse,
   Sandbox,
   SessionState,
+  SteeringQueue,
   Workspace,
 } from "../ports";
 import { assembleRequest, computeBudget } from "../context/sessionContext";
@@ -70,8 +71,10 @@ export interface AgentLoopDeps {
   clock: Clock;
   logger: Logger;
   config: AgentLoopConfig;
-  /** Lifecycle hooks; the loop fires PreCompact through this when compaction triggers. */
+  /** Lifecycle hooks; the loop fires PreCompact + the blocking Stop through this. */
   hooks?: HookBus;
+  /** Between-turns steering queue; drained after each tool turn (default: none). */
+  steering?: SteeringQueue;
   /** Spawn a sub-agent (threaded into the Task tool's ToolContext). */
   spawn?: ToolContext["spawn"];
   /** Nesting depth for this run; 0 = main agent. */
@@ -248,6 +251,17 @@ export async function runAgentLoop(
       if (response.stopReason === "max_tokens") {
         emit({ type: "notice", level: "warn", message: "Output may be truncated — the response hit the output-token limit." });
       }
+      // Blocking Stop hook: it may force one more turn (a "re-think loop"). Capped at
+      // 3 continuations so a misbehaving hook can't loop forever.
+      if (deps.hooks && state.stopBlocks < 3) {
+        const stop = await deps.hooks.runStop({ sessionId: session.id, stopReason }).catch(() => null);
+        if (stop && !stop.preventContinuation && stop.blockingErrors.length > 0) {
+          for (const msg of stop.blockingErrors) session.messages.push({ role: "user", content: msg });
+          emit({ type: "notice", level: "info", message: "A Stop hook requested more work; continuing." });
+          state = { ...state, transition: { reason: "stop_hook_blocking" }, stopBlocks: state.stopBlocks + 1 };
+          continue;
+        }
+      }
       return finish({ reason: "completed" }, response.text.trim() || "Done.");
     }
 
@@ -278,6 +292,11 @@ export async function runAgentLoop(
     };
     const results = await executor.executeTurn(response.toolCalls, ctx);
     session.messages.push({ role: "tool", results });
+
+    // Steering: fold any user input typed mid-run into the transcript for the next turn.
+    const steered = deps.steering?.drain() ?? [];
+    for (const msg of steered) session.messages.push({ role: "user", content: msg });
+    if (steered.length > 0) emit({ type: "notice", level: "info", message: `(steering) added ${steered.length} message(s) to the conversation.` });
 
     // Continue point: rebuild state immutably (never mutate in place) so recovery
     // branches added later can gate on the previous transition without aliasing.

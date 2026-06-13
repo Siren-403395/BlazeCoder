@@ -161,3 +161,12 @@ export interface Logger {
 
 /** The loop and tools push normalized events to the transport through this sink. */
 export type EventSink = (event: AgentEvent) => void;
+
+/**
+ * Between-turns steering — lets the user inject input mid-run without aborting. The
+ * loop drains it after each tool turn and folds the text in as user messages. The
+ * default is a no-op; the TUI provides a real FIFO.
+ */
+export interface SteeringQueue {
+  drain(): string[];
+}

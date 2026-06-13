@@ -43,13 +43,26 @@ export type PostToolUseHook = (
  */
 export type SimpleHook = (payload: Record<string, unknown>) => void | string | Promise<void | string>;
 
+/**
+ * Stop hook — fired when the agent is about to finish a turn. It can BLOCK
+ * completion to force the model to keep going (a "re-think loop"):
+ *  - blockingErrors: pushed as user messages; the loop runs another turn.
+ *  - preventContinuation: just stop now (with a notice); no further turns.
+ */
+export type StopHookResult = { preventContinuation?: boolean; blockingErrors?: string[] } | void;
+export type StopHook = (payload: Record<string, unknown>) => StopHookResult | Promise<StopHookResult>;
+export interface AggregatedStop {
+  preventContinuation: boolean;
+  blockingErrors: string[];
+}
+
 export class HookBus {
   private readonly preToolUse: PreToolUseHook[] = [];
   private readonly postToolUse: PostToolUseHook[] = [];
   private readonly preCompact: SimpleHook[] = [];
   private readonly sessionStart: SimpleHook[] = [];
   private readonly sessionEnd: SimpleHook[] = [];
-  private readonly stop: SimpleHook[] = [];
+  private readonly stop: StopHook[] = [];
 
   onPreToolUse(hook: PreToolUseHook): this {
     this.preToolUse.push(hook);
@@ -71,7 +84,7 @@ export class HookBus {
     this.sessionEnd.push(hook);
     return this;
   }
-  onStop(hook: SimpleHook): this {
+  onStop(hook: StopHook): this {
     this.stop.push(hook);
     return this;
   }
@@ -121,7 +134,15 @@ export class HookBus {
   async runSessionEnd(payload: Record<string, unknown>): Promise<void> {
     for (const hook of this.sessionEnd) await hook(payload);
   }
-  async runStop(payload: Record<string, unknown>): Promise<void> {
-    for (const hook of this.stop) await hook(payload);
+  /** Run Stop hooks, aggregating their blocking signals (any preventContinuation wins). */
+  async runStop(payload: Record<string, unknown>): Promise<AggregatedStop> {
+    const out: AggregatedStop = { preventContinuation: false, blockingErrors: [] };
+    for (const hook of this.stop) {
+      const r = await hook(payload);
+      if (!r) continue;
+      if (r.preventContinuation) out.preventContinuation = true;
+      if (r.blockingErrors) out.blockingErrors.push(...r.blockingErrors);
+    }
+    return out;
   }
 }

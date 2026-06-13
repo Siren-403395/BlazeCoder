@@ -114,6 +114,16 @@ describe("HookBus lifecycle", () => {
       .onSessionStart(() => "CTX_B");
     expect(await bus.runSessionStart({ sessionId: "s" })).toEqual(["CTX_A", "CTX_B"]);
   });
+
+  it("runStop aggregates blockingErrors and any preventContinuation", async () => {
+    const bus = new HookBus()
+      .onStop(() => ({ blockingErrors: ["a"] }))
+      .onStop(() => undefined)
+      .onStop(() => ({ blockingErrors: ["b"], preventContinuation: true }));
+    const agg = await bus.runStop({ sessionId: "s" });
+    expect(agg.blockingErrors).toEqual(["a", "b"]);
+    expect(agg.preventContinuation).toBe(true);
+  });
 });
 
 describe("PermissionEngine — layered rules (behavior priority)", () => {

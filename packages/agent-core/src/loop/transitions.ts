@@ -34,12 +34,14 @@ export interface LoopState {
   transition: Continue;
   /** Output-truncation recovery attempts used so far (cap prevents loops). */
   recoveryCount: number;
+  /** Blocking-Stop re-think continuations used (cap prevents an infinite re-think loop). */
+  stopBlocks: number;
   /** Whether a reactive compaction has already been retried this run. */
   hasReactiveCompacted: boolean;
 }
 
 export function initialLoopState(): LoopState {
-  return { turns: 0, transition: { reason: "next_turn" }, recoveryCount: 0, hasReactiveCompacted: false };
+  return { turns: 0, transition: { reason: "next_turn" }, recoveryCount: 0, stopBlocks: 0, hasReactiveCompacted: false };
 }
 
 /** Map a Terminal to the public ResultSubtype (the external contract is unchanged). */

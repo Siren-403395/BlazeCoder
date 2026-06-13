@@ -44,15 +44,20 @@ describe("terminalToSubtype", () => {
       turns: 0,
       transition: { reason: "next_turn" },
       recoveryCount: 0,
+      stopBlocks: 0,
       hasReactiveCompacted: false,
     });
   });
 });
 
-function makeDeps(steps: Step[], onLoopState?: (s: LoopState) => void): AgentLoopDeps {
+function makeDeps(
+  steps: Step[],
+  onLoopState?: (s: LoopState) => void,
+  extra: { hooks?: HookBus; steering?: { drain(): string[] } } = {},
+): AgentLoopDeps {
   const clock = new FixedClock(1);
   const registry = new ToolRegistry().registerAll(builtinTools());
-  const hooks = new HookBus();
+  const hooks = extra.hooks ?? new HookBus();
   const engine = new PermissionEngine({ mode: "bypassPermissions", hookBus: hooks, broker: new PermissionBroker(), idGen: () => "p" });
   return {
     gateway: new ScriptedGateway("m", steps),
@@ -65,6 +70,8 @@ function makeDeps(steps: Step[], onLoopState?: (s: LoopState) => void): AgentLoo
     clock,
     logger: silentLogger,
     config: { maxTurns: 24, maxBudgetUsd: 1, contextTokens: 65536, effort: "low" },
+    hooks,
+    steering: extra.steering,
     onLoopState,
   };
 }
@@ -112,5 +119,54 @@ describe("agent loop reduces over immutable LoopState", () => {
     deps.config.maxTurns = 2;
     const result = await runAgentLoop(session(), "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
     expect(result.subtype).toBe("error_max_turns");
+  });
+});
+
+describe("between-turns steering", () => {
+  it("folds a steered message into the conversation after a tool turn", async () => {
+    let drained = false;
+    const steering = {
+      drain: () => {
+        if (drained) return [];
+        drained = true;
+        return ["STEERED_INPUT"];
+      },
+    };
+    // turn 1 calls a tool (so the continue point runs + drains), turn 2 finishes.
+    const deps = makeDeps([reply("", [call("g", "Glob", { pattern: "**/*" })]), reply("done", [])], undefined, { steering });
+    const s = session();
+    await runAgentLoop(s, "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
+    expect(s.messages.some((m) => m.role === "user" && m.content === "STEERED_INPUT")).toBe(true);
+  });
+});
+
+describe("blocking Stop hook (re-think loop)", () => {
+  it("forces one more turn on blockingErrors, then completes", async () => {
+    const hooks = new HookBus();
+    let stopCalls = 0;
+    hooks.onStop(() => {
+      stopCalls += 1;
+      return stopCalls === 1 ? { blockingErrors: ["keep going: also handle the edge case"] } : undefined;
+    });
+    const deps = makeDeps([reply("first pass done", []), reply("edge case handled", [])], undefined, { hooks });
+    const s = session();
+    const result = await runAgentLoop(s, "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
+
+    expect(result.subtype).toBe("success");
+    expect(stopCalls).toBe(2); // blocked once, allowed the second time
+    expect(s.messages.some((m) => m.role === "user" && /keep going/.test(m.content))).toBe(true);
+  });
+
+  it("caps re-think continuations so a hook that always blocks can't loop forever", async () => {
+    const hooks = new HookBus();
+    let stopCalls = 0;
+    hooks.onStop(() => {
+      stopCalls += 1;
+      return { blockingErrors: ["again"] }; // always blocks
+    });
+    const deps = makeDeps([() => reply("done", [])], undefined, { hooks });
+    const result = await runAgentLoop(session(), "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
+    expect(result.subtype).toBe("success"); // terminates despite the always-block hook
+    expect(stopCalls).toBe(3); // capped at 3 continuations
   });
 });
