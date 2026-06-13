@@ -3,6 +3,8 @@ import {
   assembleRequest,
   CompactionThrashError,
   ContextManager,
+  estimateMessageTokens,
+  estimateRequestTokens,
   estimateTokens,
   FixedClock,
   silentLogger,
@@ -29,9 +31,26 @@ function session(messages: TranscriptMessage[]): SessionState {
 const signal = new AbortController().signal;
 
 describe("sessionContext", () => {
-  it("estimateTokens ~ chars/4", () => {
+  it("estimateTokens ~ chars/4 by default, configurable density", () => {
     expect(estimateTokens("abcd")).toBe(1);
     expect(estimateTokens("a".repeat(40))).toBe(10);
+    expect(estimateTokens("a".repeat(40), 2)).toBe(20); // JSON-dense density
+  });
+
+  it("counts JSON-dense tool-result content at ~2 chars/token, prose at ~4", () => {
+    const prose = estimateMessageTokens({ role: "user", content: "a".repeat(1000) });
+    const toolMsg = estimateMessageTokens({
+      role: "tool",
+      results: [{ toolUseId: "1", toolName: "Read", content: "a".repeat(1000), isError: false }],
+    });
+    expect(prose).toBe(250); // 1000/4
+    expect(toolMsg).toBe(500); // 1000/2 — not under-counted
+  });
+
+  it("pads the request estimate by 4/3 to cover framing overhead", () => {
+    const req = assembleRequest({ system: "", projectRules: "", messages: [{ role: "user", content: "a".repeat(120) }], tools: [] });
+    // raw = 30 tokens; padded = ceil(30 * 4/3) = 40
+    expect(estimateRequestTokens(req)).toBe(40);
   });
 
   it("injects the project rules block as the leading user message", () => {
@@ -60,14 +79,14 @@ describe("sessionContext", () => {
 describe("ContextManager compaction", () => {
   it("stage 1: clears old tool results without an LLM call", async () => {
     const cm = new ContextManager(
-      { contextTokens: 100, clearThreshold: 0.5, compactThreshold: 0.95, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
     );
     const s = session([
       { role: "user", content: "hi" },
-      { role: "tool", results: [{ toolUseId: "1", toolName: "x", content: "A".repeat(320), isError: false }] },
-      { role: "tool", results: [{ toolUseId: "2", toolName: "y", content: "B".repeat(20), isError: false }] },
+      { role: "tool", results: [{ toolUseId: "1", toolName: "Read", content: "A".repeat(320), isError: false }] },
+      { role: "tool", results: [{ toolUseId: "2", toolName: "Read", content: "B".repeat(20), isError: false }] },
     ]);
     const events: string[] = [];
     await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, (e) => events.push(e.type), signal);
@@ -82,7 +101,7 @@ describe("ContextManager compaction", () => {
   it("stage 2: summarizes history into a summary block", async () => {
     const gw = new ScriptedGateway("m", [reply("SUMMARY")]);
     const cm = new ContextManager(
-      { contextTokens: 60, clearThreshold: 0.3, compactThreshold: 0.4, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
       gw,
@@ -103,7 +122,7 @@ describe("ContextManager compaction", () => {
     const huge = "S".repeat(420);
     const gw = new ScriptedGateway("m", [reply(huge)]);
     const cm = new ContextManager(
-      { contextTokens: 50, clearThreshold: 0.3, compactThreshold: 0.4, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 1 },
+      { contextTokens: 50, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 1 },
       new FixedClock(),
       silentLogger,
       gw,
@@ -116,5 +135,24 @@ describe("ContextManager compaction", () => {
     await expect(cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, () => {}, signal)).rejects.toBeInstanceOf(
       CompactionThrashError,
     );
+  });
+
+  it("prefers the authoritative real input-token count over the char-heuristic", async () => {
+    const cm = new ContextManager(
+      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      new FixedClock(),
+      silentLogger,
+    );
+    const s = session([
+      { role: "user", content: "hi" },
+      { role: "tool", results: [{ toolUseId: "1", toolName: "Read", content: "A".repeat(4000), isError: false }] },
+    ]);
+    const snapshot = JSON.stringify(s.messages);
+    const events: string[] = [];
+    // The char-heuristic (~2000 tokens) would blow past clearAt(50) and clear the
+    // tool result; but the server's real count is tiny, so nothing should compact.
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [], realInputTokens: 5 }, (e) => events.push(e.type), signal);
+    expect(JSON.stringify(s.messages)).toBe(snapshot);
+    expect(events).not.toContain("compact_boundary");
   });
 });

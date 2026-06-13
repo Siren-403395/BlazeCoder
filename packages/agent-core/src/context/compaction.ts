@@ -12,10 +12,14 @@ import { buildSummaryRequest } from "./rehydration";
 
 export interface CompactionConfig {
   contextTokens: number;
-  /** Fraction of context at which we begin clearing old tool results. */
+  /** Added to the run's maxOutputTokens when reserving output headroom from the window. */
+  outputReservePad: number;
+  /** Cap on the reserved output headroom. */
+  outputReserveCap: number;
+  /** Fraction of the EFFECTIVE window (context minus output reserve) at which we clear old tool results. */
   clearThreshold: number;
-  /** Fraction at which we escalate to LLM summarization. */
-  compactThreshold: number;
+  /** Headroom (tokens) below the effective window at which we escalate to LLM summarization. */
+  bufferTokens: number;
   /** Most-recent tool-result messages kept verbatim. */
   keepRecentToolResults: number;
   /** Recent messages preserved when summarizing the head. */
@@ -26,8 +30,10 @@ export interface CompactionConfig {
 
 export const DEFAULT_COMPACTION: CompactionConfig = {
   contextTokens: 65_536,
-  clearThreshold: 0.6,
-  compactThreshold: 0.8,
+  outputReservePad: 15_000,
+  outputReserveCap: 20_000,
+  clearThreshold: 0.7,
+  bufferTokens: 13_000,
   keepRecentToolResults: 3,
   keepRecentMessages: 4,
   maxThrash: 3,
@@ -52,35 +58,66 @@ export class ContextManager {
     private readonly gateway?: ModelGateway,
   ) {}
 
-  async maybeCompact(
+  /** Effective usable window = context minus the output/framing reserve. */
+  private effectiveWindow(maxOutputTokens: number): number {
+    const reserve = Math.min(maxOutputTokens + this.config.outputReservePad, this.config.outputReserveCap);
+    return Math.max(1, this.config.contextTokens - reserve);
+  }
+
+  private estimate(
     session: SessionState,
     params: { system: string; projectRules: string; tools: ToolSchema[] },
+  ): number {
+    return estimateRequestTokens(
+      assembleRequest({
+        system: params.system,
+        projectRules: params.projectRules,
+        messages: session.messages,
+        tools: params.tools,
+      }),
+    );
+  }
+
+  async maybeCompact(
+    session: SessionState,
+    params: {
+      system: string;
+      projectRules: string;
+      tools: ToolSchema[];
+      /** The run's output budget; sizes the reserved headroom. */
+      maxOutputTokens?: number;
+      /** The server's authoritative input-token count from the previous turn, if any. */
+      realInputTokens?: number;
+    },
     emit: EventSink,
     signal: AbortSignal,
   ): Promise<void> {
-    const estimate = () =>
-      estimateRequestTokens(
-        assembleRequest({
-          system: params.system,
-          projectRules: params.projectRules,
-          messages: session.messages,
-          tools: params.tools,
-        }),
-      );
+    const effective = this.effectiveWindow(params.maxOutputTokens ?? 8000);
+    const clearAt = effective * this.config.clearThreshold;
+    const compactAt = Math.max(clearAt, effective - this.config.bufferTokens);
 
-    let before = estimate();
-    this.logger.debug("compaction:check", { at: this.clock.now(), estimate: before, messages: session.messages.length });
-    if (before < this.config.clearThreshold * this.config.contextTokens) {
+    // Authoritative real count first; the char-heuristic is only the pre-first-call fallback.
+    const current = params.realInputTokens ?? this.estimate(session, params);
+    this.logger.debug("compaction:check", {
+      at: this.clock.now(),
+      tokens: current,
+      real: params.realInputTokens !== undefined,
+      clearAt,
+      compactAt,
+      messages: session.messages.length,
+    });
+    if (current < clearAt) {
       this.thrash = 0;
       return;
     }
 
-    // Stage 1 — clear old tool results (deterministic, no LLM).
+    // Stage 1 — clear old tool results (deterministic, no LLM). The transcript is now
+    // mutated so the real count is stale; fall back to the estimate.
     const cleared = this.clearOldToolResults(session);
-    let after = estimate();
-    if (after < this.config.compactThreshold * this.config.contextTokens) {
+    let after = this.estimate(session, params);
+    if (after < compactAt) {
       if (cleared > 0) {
-        emit({ type: "compact_boundary", reason: `cleared ${cleared} old tool result(s)`, tokensBefore: before, tokensAfter: after });
+        emit({ type: "compact_boundary", reason: `cleared ${cleared} old tool result(s)`, tokensBefore: current, tokensAfter: after });
       }
       this.thrash = 0;
       return;
@@ -91,9 +128,9 @@ export class ContextManager {
       emit({ type: "notice", level: "warn", message: "Context is large but no summarizer is configured." });
       return;
     }
-    before = after;
+    const before = after;
     await this.summarize(session, signal);
-    after = estimate();
+    after = this.estimate(session, params);
     emit({ type: "compact_boundary", reason: "summarized conversation history", tokensBefore: before, tokensAfter: after });
 
     // Stage 3 — circuit breaker.

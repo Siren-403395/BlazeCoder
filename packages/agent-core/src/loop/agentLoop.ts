@@ -138,7 +138,7 @@ export async function runAgentLoop(
     try {
       await contextManager.maybeCompact(
         session,
-        { system, projectRules, tools: toolSchemas },
+        { system, projectRules, tools: toolSchemas, maxOutputTokens, realInputTokens: session.lastRealInputTokens },
         emit,
         signal,
       );
@@ -187,6 +187,8 @@ export async function runAgentLoop(
     session.costUsd += response.costUsd;
     session.usage.inputTokens += response.usage.inputTokens;
     session.usage.outputTokens += response.usage.outputTokens;
+    // Authoritative count for the NEXT turn's compaction gate (beats the heuristic).
+    session.lastRealInputTokens = response.usage.inputTokens;
 
     session.messages.push({
       role: "assistant",

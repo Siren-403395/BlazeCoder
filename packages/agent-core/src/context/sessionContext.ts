@@ -9,10 +9,23 @@
 
 import type { ModelRequest, ToolSchema, TranscriptMessage } from "../ports";
 
-/** Cheap heuristic (~4 chars/token). Swap for a real tokenizer behind this fn later. */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+/**
+ * Char-count heuristic for token estimation. Prose is ~4 chars/token, but
+ * JSON-dense tool-result content (paths, braces, line numbers) packs closer to
+ * ~2 chars/token — counting it at 4 under-estimates ~2× and lets the transcript
+ * blow the real window before compaction fires. Callers pass bytesPerToken to
+ * pick the right density. The authoritative number is always the server's real
+ * input_tokens (SessionState.lastRealInputTokens) when available; this is the
+ * pre-first-call fallback. Swap for a real tokenizer behind this fn later.
+ */
+export function estimateTokens(text: string, bytesPerToken = 4): number {
+  return Math.ceil(text.length / bytesPerToken);
 }
+
+/** Multiplier applied to the raw char-estimate to cover role/JSON framing overhead the chars miss. */
+const ESTIMATE_PAD = 4 / 3;
+/** Tool-result content is JSON-dense; count it at ~2 chars/token. */
+const TOOL_BYTES_PER_TOKEN = 2;
 
 export interface AssembleParams {
   system: string;
@@ -49,7 +62,7 @@ export function estimateRequestTokens(request: ModelRequest): number {
   for (const message of request.messages) {
     total += estimateMessageTokens(message);
   }
-  return total;
+  return Math.ceil(total * ESTIMATE_PAD);
 }
 
 export function estimateMessageTokens(message: TranscriptMessage): number {
@@ -63,7 +76,8 @@ export function estimateMessageTokens(message: TranscriptMessage): number {
         message.toolCalls.reduce((sum, c) => sum + estimateTokens(c.name + JSON.stringify(c.input)), 0)
       );
     case "tool":
-      return message.results.reduce((sum, r) => sum + estimateTokens(r.content), 0);
+      // JSON-dense; count at ~2 chars/token so a big Read/Bash dump isn't under-counted.
+      return message.results.reduce((sum, r) => sum + estimateTokens(r.content, TOOL_BYTES_PER_TOKEN), 0);
   }
 }
 

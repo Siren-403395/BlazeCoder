@@ -35,6 +35,12 @@ export interface SessionState {
   costUsd: number;
   usage: TokenUsage;
   status: SessionStatus;
+  /**
+   * The authoritative input-token count the model server reported on the most
+   * recent turn. Compaction prefers this over the char-heuristic estimate, since
+   * it is the real number the next request will be measured against.
+   */
+  lastRealInputTokens?: number;
 }
 
 export interface SessionSummary {
