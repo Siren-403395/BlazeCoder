@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLoopConfig,
   ContextManager,
   DEFAULT_COMPACTION,
   escalateOutputTokens,
@@ -50,6 +51,20 @@ describe("terminalToSubtype", () => {
     expect(escalateOutputTokens(8000)).toBe(OUTPUT_TOKEN_CEILING); // 32000 (min(32000, ceiling))
     expect(escalateOutputTokens(OUTPUT_TOKEN_CEILING)).toBeUndefined(); // already capped
     expect(escalateOutputTokens(2000)).toBe(8000);
+  });
+
+  it("buildLoopConfig snapshots system/tools/effort knobs immutably from config + registry", () => {
+    const registry = new ToolRegistry().registerAll(builtinTools());
+    const cfg = { maxTurns: 7, maxBudgetUsd: 2, contextTokens: 65536, effort: "ultra" as const, temperature: 0.2 };
+    const snap = buildLoopConfig(cfg, registry, "/work");
+    expect(snap.system).toContain("You are zephyrcode");
+    expect(snap.tools.map((t) => t.name)).toEqual(registry.names());
+    expect(snap.thinking).toBe(true); // ultra → thinking on
+    expect(snap.thinkingBudget).toBe("max"); // ultra → Think Max
+    expect(snap.maxTurns).toBe(7);
+    expect(snap.projectRules).toContain("/work");
+    // Recomputing yields an equal snapshot (deterministic / pure).
+    expect(buildLoopConfig(cfg, registry, "/work").system).toBe(snap.system);
   });
 
   it("initialLoopState starts fresh", () => {

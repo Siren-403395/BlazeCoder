@@ -76,6 +76,7 @@ export * from "./prompts";
 export * from "./outputStyles";
 export * from "./loop/agentLoop";
 export * from "./loop/transitions";
+export * from "./loop/config";
 export * from "./orchestration/agentRegistry";
 export * from "./orchestration/loadAgents";
 export * from "./orchestration/subagent";

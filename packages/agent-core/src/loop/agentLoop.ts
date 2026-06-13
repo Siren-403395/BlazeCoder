@@ -20,9 +20,8 @@ import type {
 } from "../ports";
 import { assembleRequest, computeBudget } from "../context/sessionContext";
 import { CompactionThrashError, ContextManager, ContextOverflowError } from "../context/compaction";
-import { escalateOutputTokens, resolveEffort, type Effort } from "../effort";
-import { buildProjectRules } from "../memory/projectRules";
-import { buildSystemPrompt } from "../prompts";
+import { escalateOutputTokens, type Effort } from "../effort";
+import { buildLoopConfig } from "./config";
 import { DenialTracker } from "../permissions/denialTracking";
 import { initialLoopState, terminalToSubtype } from "./transitions";
 import type { LoopState, Terminal } from "./transitions";
@@ -95,23 +94,15 @@ export async function runAgentLoop(
   signal: AbortSignal,
 ): Promise<AgentRunResult> {
   const { gateway, registry, executor, contextManager, ledger, sandbox, memory, clock, logger, config } = deps;
-  const toolSchemas = registry.schemas();
-  const projectRules = buildProjectRules({ root: workspace.root, userRules: config.userRules });
-  const { thinking, budget } = resolveEffort(config.effort, config.maxOutputTokens);
+  // Immutable per-run snapshot (system prompt, project rules, tool schemas, effort knobs).
+  const loop = buildLoopConfig(config, registry, workspace.root);
+  const toolSchemas = loop.tools;
+  const projectRules = loop.projectRules;
+  const system = loop.system;
+  const thinking = loop.thinking;
+  const budget = loop.thinkingBudget;
   // Mutable: output-truncation recovery escalates this within the run.
-  let maxOutputTokens = resolveEffort(config.effort, config.maxOutputTokens).maxOutputTokens;
-
-  // Build the system prompt per-run: sections gate on the tools actually registered
-  // and on this run's effort. Joined to one string here (DeepSeek takes one system
-  // string); the sectioned shape stays internal to the builder.
-  const system = buildSystemPrompt({
-    toolNames: new Set(registry.names()),
-    effort: config.effort,
-    modePrompt: config.modePrompt,
-    override: config.promptOverride,
-    extra: config.extraInstructions,
-    variant: config.promptVariant,
-  }).join("\n\n");
+  let maxOutputTokens = loop.baseMaxOutputTokens;
 
   emit({
     type: "system",
@@ -119,8 +110,8 @@ export async function runAgentLoop(
     sessionId: session.id,
     model: gateway.model,
     tools: registry.names(),
-    maxTurns: config.maxTurns,
-    contextTokens: config.contextTokens,
+    maxTurns: loop.maxTurns,
+    contextTokens: loop.contextTokens,
   });
 
   session.messages.push({ role: "user", content: userPrompt });
@@ -189,7 +180,7 @@ export async function runAgentLoop(
       messages: session.messages,
       tools: toolSchemas,
       maxOutputTokens,
-      temperature: config.temperature,
+      temperature: loop.temperature,
       thinking,
       thinkingBudget: budget,
     });
@@ -269,7 +260,7 @@ export async function runAgentLoop(
     emit({ type: "assistant", text: response.text, reasoning: response.reasoning, toolCalls: response.toolCalls });
     emit({
       type: "budget",
-      ...computeBudget(config.contextTokens, response.usage.inputTokens),
+      ...computeBudget(loop.contextTokens, response.usage.inputTokens),
       cacheReadTokens: response.usage.cacheReadTokens,
       cacheCreationTokens: response.usage.cacheCreationTokens,
     });
@@ -293,13 +284,13 @@ export async function runAgentLoop(
     }
 
     session.turns += 1;
-    if (session.turns > config.maxTurns) {
-      const message = `Reached the maximum of ${config.maxTurns} tool-use turns.`;
+    if (session.turns > loop.maxTurns) {
+      const message = `Reached the maximum of ${loop.maxTurns} tool-use turns.`;
       emit({ type: "notice", level: "warn", message });
       return finish({ reason: "max_turns" }, message);
     }
-    if (session.costUsd > config.maxBudgetUsd) {
-      const message = `Reached the budget cap of $${config.maxBudgetUsd.toFixed(2)}.`;
+    if (session.costUsd > loop.maxBudgetUsd) {
+      const message = `Reached the budget cap of $${loop.maxBudgetUsd.toFixed(2)}.`;
       emit({ type: "notice", level: "warn", message });
       return finish({ reason: "max_budget" }, message);
     }
