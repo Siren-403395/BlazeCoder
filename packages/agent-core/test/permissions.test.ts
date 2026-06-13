@@ -170,3 +170,29 @@ describe("PermissionEngine — layered rules (behavior priority)", () => {
     expect(res.decisionReason).toEqual({ type: "rule", rule: { source: "cliArg", behavior: "allow", value: { toolName: "Bash", ruleContent: "npm test:*" } } });
   });
 });
+
+describe("plan-mode allowedPrompts", () => {
+  it("exitPlanMode pre-approves the declared commands as session allow-rules", async () => {
+    const { engine, broker } = makeEngine({ mode: "plan" });
+    engine.exitPlanMode([{ tool: "Bash", prompt: "npm test" }]);
+    expect(engine.getMode()).toBe("acceptEdits");
+
+    // 'npm test' (and its variants) auto-allow; 'npm publish' still asks.
+    const allowed = await engine.check(tool("Bash", false), { command: "npm test --watch" }, { emit: () => {}, signal });
+    expect(allowed.behavior).toBe("allow");
+    expect(allowed.decisionReason.type).toBe("rule");
+
+    let asked = false;
+    const other = await engine.check(tool("Bash", false), { command: "npm publish" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          asked = true;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(asked).toBe(true);
+    expect(other.behavior).toBe("deny");
+  });
+});

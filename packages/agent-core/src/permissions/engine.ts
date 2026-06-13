@@ -133,6 +133,28 @@ export class PermissionEngine {
     this.mode = mode;
   }
 
+  /** Inject rules at runtime (e.g. session-scope allows from a plan-mode exit). */
+  addRules(rules: PermissionRule[]): void {
+    this.rules.push(...rules);
+  }
+
+  /**
+   * Exit plan mode: switch to a working mode and pre-approve the command categories
+   * the plan declared (allowedPrompts) as session-scope allow-rules, so e.g. "npm
+   * test" auto-runs afterward while "npm publish" still asks. Each prompt becomes a
+   * prefix rule (Bash(<prompt>:*)), reusing the P0 rule grammar.
+   */
+  exitPlanMode(allowedPrompts: { tool: string; prompt: string }[] = [], to: PermissionMode = "acceptEdits"): void {
+    this.setMode(to);
+    this.addRules(
+      allowedPrompts.map((ap) => ({
+        source: "session" as const,
+        behavior: "allow" as const,
+        value: { toolName: ap.tool, ruleContent: `${ap.prompt}:*` },
+      })),
+    );
+  }
+
   /** First rule of `behavior` whose value matches this tool call, or undefined. */
   private firstMatch(behavior: RuleBehavior, toolName: string, input: Record<string, unknown>): PermissionRule | undefined {
     for (const rule of this.rules) {

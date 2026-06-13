@@ -171,6 +171,7 @@ const secretsHook: PreToolUseHook = ({ toolName, input }) => {
 export class AgentRuntime {
   readonly broker: PermissionBroker;
   readonly hooks: HookBus;
+  private readonly engine: PermissionEngine;
   private readonly store: SessionStore;
   private readonly gateway: ModelGateway;
   private readonly memory: MemoryStore;
@@ -207,7 +208,7 @@ export class AgentRuntime {
     ]);
     this.hooks = new HookBus().onPreToolUse(secretsHook);
     this.broker = new PermissionBroker();
-    const engine = new PermissionEngine({
+    this.engine = new PermissionEngine({
       mode: opts.permissionMode ?? "acceptEdits",
       allow: opts.allow,
       deny: opts.deny,
@@ -218,7 +219,7 @@ export class AgentRuntime {
       broker: this.broker,
       idGen: this.idGen,
     });
-    this.executor = new ToolExecutor(this.registry, engine, this.hooks, this.clock);
+    this.executor = new ToolExecutor(this.registry, this.engine, this.hooks, this.clock);
 
     const contextTokens = opts.contextTokens ?? DEFAULT_COMPACTION.contextTokens;
     this.contextManager = new ContextManager(
@@ -325,6 +326,19 @@ export class AgentRuntime {
 
   resolvePermission(requestId: string, decision: BrokerDecision): boolean {
     return this.broker.resolve(requestId, decision);
+  }
+
+  /** The current permission mode (for the TUI's mode indicator / cycle). */
+  get permissionMode(): PermissionMode {
+    return this.engine.getMode();
+  }
+  setPermissionMode(mode: PermissionMode): void {
+    this.engine.setMode(mode);
+  }
+
+  /** Exit plan mode, pre-approving the plan's allowedPrompts as session allow-rules. */
+  exitPlanMode(allowedPrompts: { tool: string; prompt: string }[] = [], to: PermissionMode = "acceptEdits"): void {
+    this.engine.exitPlanMode(allowedPrompts, to);
   }
 
   pendingPermissions(): string[] {
