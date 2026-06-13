@@ -1,4 +1,4 @@
-# Coding Agent (`ca`)
+# zephyrcode
 
 A Claude-Code-style **command-line coding agent**. It runs in your terminal, edits
 real files in your working directory, and runs real shell commands — so it can
@@ -54,27 +54,33 @@ the boundary through ports (`ModelGateway`, `Workspace`, `Sandbox`,
 `SessionStore`, `MemoryStore`, `Clock`, `Logger`), so it runs fully under unit
 tests with in-memory fakes.
 
-## Quick start
+## Install
+
+One command — builds the agent, configures your API key, and puts `zephyrcode`
+on your PATH (like Claude Code's installer):
 
 ```bash
-pnpm install
-
-# configure the model (DeepSeek, OpenAI-compatible). Without a key it falls back
-# to a deterministic offline stub model.
-cp .env.example .env   # then set DEEPSEEK_API_KEY
-
-# interactive TUI in the current directory:
-pnpm --filter @coding-agent/cli ca
-
-# or build the single-file binary and run it anywhere:
-pnpm --filter @coding-agent/cli build
-node packages/cli/dist/ca.js
+git clone <this-repo> && cd <this-repo>
+./install.sh
 ```
+
+It prompts for your DeepSeek API key (or set `DEEPSEEK_API_KEY` in the env first
+to skip the prompt; leave it blank to use the offline stub model), writes it to
+`~/.zephyrcode/.env`, drops a launcher in `~/.local/bin`, and adds that to your
+PATH. Then, from any directory:
+
+```bash
+zephyrcode            # start the interactive TUI in the current directory
+zephyrcode --update   # rebuild to the latest
+zephyrcode --help     # all options
+```
+
+Requires Node.js >= 20 and pnpm.
 
 ### Usage
 
 ```
-ca [options]
+zephyrcode [options]
   --cwd <dir>          working directory the agent edits (default: current dir)
   --effort <level>     reasoning effort: low | medium | high | ultra (default high)
   -c, --continue       resume the most recent session
@@ -82,11 +88,20 @@ ca [options]
   -p, --print <text>   run one prompt headlessly and print the result (text|json|stream-json)
   --output-format      headless output format (default text)
   --yolo               headless: auto-approve tool calls (DANGEROUS; for trusted CI)
+  --update             update zephyrcode to the latest build
 ```
 
 In the session: type to chat; `/effort <level>`, `/reasoning <hidden|summary|full>`,
 `/clear`, `/help`, `/exit`. Say "ultrathink" in a prompt to push that turn to max
-effort. `Esc` interrupts a run; `Ctrl+C` quits. State lives under `~/.coding-agent`.
+effort. `Esc` interrupts a run; `Ctrl+C` quits. State lives under `~/.zephyrcode`.
+
+### From source (development)
+
+```bash
+pnpm install
+pnpm --filter @coding-agent/cli zephyrcode   # run the TUI via tsx (no build)
+pnpm --filter @coding-agent/cli build         # produce packages/cli/dist/zephyrcode.js
+```
 
 ## Verify
 

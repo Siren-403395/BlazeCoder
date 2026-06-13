@@ -9,7 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "ca": "pnpm --filter @coding-agent/cli exec ca",
+    "zephyrcode": "pnpm --filter @coding-agent/cli zephyrcode",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

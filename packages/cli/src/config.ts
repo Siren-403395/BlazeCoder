@@ -16,7 +16,7 @@ export interface CliConfig {
   maxTurns: number;
   maxBudgetUsd: number;
   contextTokens: number;
-  /** Root dir for sessions + memories (~/.coding-agent by default). */
+  /** Root dir for sessions + memories + global config (~/.zephyrcode by default). */
   home: string;
   /** Use the offline stub gateway instead of a real provider. */
   fakeModel: boolean;
@@ -40,16 +40,27 @@ function parseDotenv(text: string): Record<string, string> {
   return out;
 }
 
-/** Read environment, filling gaps from a cwd .env file (process.env wins). */
-function readEnv(cwd: string): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...process.env };
+function loadDotenv(path: string): Record<string, string> {
   try {
-    const fromFile = parseDotenv(readFileSync(join(cwd, ".env"), "utf8"));
-    for (const [k, v] of Object.entries(fromFile)) if (env[k] === undefined) env[k] = v;
+    return parseDotenv(readFileSync(path, "utf8"));
   } catch {
-    // no .env; fine
+    return {};
   }
-  return env;
+}
+
+/** The state/config dir (~/.zephyrcode), from the env or the default. */
+function resolveHome(): string {
+  return resolve(process.env.ZEPHYRCODE_HOME ?? process.env.CODING_AGENT_HOME ?? join(homedir(), ".zephyrcode"));
+}
+
+/**
+ * Layered environment, lowest precedence first:
+ *   global ~/.zephyrcode/.env  <  cwd/.env  <  real process.env
+ * The install script writes the API key once into the global file; a project may
+ * override it with a local .env, and the live environment always wins.
+ */
+function readEnv(cwd: string, home: string): Record<string, string | undefined> {
+  return { ...loadDotenv(join(home, ".env")), ...loadDotenv(join(cwd, ".env")), ...process.env };
 }
 
 function num(value: string | undefined, fallback: number): number {
@@ -58,7 +69,8 @@ function num(value: string | undefined, fallback: number): number {
 }
 
 export function loadConfig(cwd: string = process.cwd()): CliConfig {
-  const env = readEnv(cwd);
+  const home = resolveHome();
+  const env = readEnv(cwd, home);
   return {
     apiKey: env.DEEPSEEK_API_KEY ?? "",
     model: env.DEEPSEEK_MODEL ?? "deepseek-v4-pro",
@@ -66,7 +78,7 @@ export function loadConfig(cwd: string = process.cwd()): CliConfig {
     maxTurns: num(env.AGENT_MAX_TURNS, 24),
     maxBudgetUsd: num(env.AGENT_MAX_BUDGET_USD, 1),
     contextTokens: num(env.AGENT_CONTEXT_TOKENS, 65536),
-    home: resolve(env.CODING_AGENT_HOME ?? join(homedir(), ".coding-agent")),
+    home,
     fakeModel: env.AGENT_FAKE_MODEL === "1" || env.AGENT_FAKE_MODEL === "true",
   };
 }

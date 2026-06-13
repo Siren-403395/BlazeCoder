@@ -7,7 +7,7 @@ import { defineConfig } from "tsup";
  * package.json dependencies, the standard npm-package shape.
  */
 export default defineConfig({
-  entry: { ca: "src/main.tsx" },
+  entry: { zephyrcode: "src/main.tsx" },
   format: ["esm"],
   platform: "node",
   target: "node20",

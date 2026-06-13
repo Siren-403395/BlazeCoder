@@ -1,7 +1,7 @@
 /**
  * `ca` entry point. Parses argv, loads config, builds the in-process runtime, and
  * either renders the Ink TUI or runs one prompt headlessly (--print). The bundled
- * dist/ca.js gets its node shebang from the tsup banner.
+ * dist/zephyrcode.js gets its node shebang from the tsup banner.
  */
 
 import { resolve } from "node:path";
@@ -54,9 +54,9 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-const USAGE = `coding-agent (ca) — a command-line coding agent
+const USAGE = `zephyrcode — a command-line coding agent
 
-Usage: ca [options]
+Usage: zephyrcode [options]
 
 Options:
   --cwd <dir>        Working directory the agent edits (default: current dir)
@@ -66,6 +66,7 @@ Options:
   -p, --print <text> Run one prompt headlessly (no TUI) and print the result
   --output-format    Headless output: text | json | stream-json (default text)
   --yolo             Headless: auto-approve tool calls (DANGEROUS; for trusted CI)
+  --update           Update zephyrcode to the latest build (handled by the launcher)
   -v, --version      Print version
   -h, --help         Print this help
 
