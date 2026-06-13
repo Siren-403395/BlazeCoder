@@ -72,6 +72,7 @@ export class ToolExecutor {
     const run = { emit: ctx.emit, signal: ctx.signal };
     let result: ToolResult;
 
+    let denied = false;
     const tool = this.registry.get(call.name);
     if (!tool) {
       result = {
@@ -81,6 +82,7 @@ export class ToolExecutor {
     } else {
       const decision = await this.permissions.check(tool, call.input, run);
       if (decision.behavior === "deny") {
+        denied = true;
         result = { content: decision.message, isError: true };
       } else {
         result = await this.runHandler(tool, decision.input, ctx);
@@ -109,7 +111,7 @@ export class ToolExecutor {
         message: `Output of ${call.name} was truncated to ${this.maxResultChars} chars.`,
       });
     }
-    return { toolUseId: call.id, toolName: call.name, content, isError: result.isError ?? false };
+    return { toolUseId: call.id, toolName: call.name, content, isError: result.isError ?? false, ...(denied ? { denied: true } : {}) };
   }
 
   private async runHandler(

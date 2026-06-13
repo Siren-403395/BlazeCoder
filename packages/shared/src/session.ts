@@ -11,6 +11,8 @@ export interface ToolResultRecord {
   toolName: string;
   content: string;
   isError: boolean;
+  /** True when blocked by the permission engine (vs a tool runtime error). */
+  denied?: boolean;
 }
 
 export type TranscriptMessage =

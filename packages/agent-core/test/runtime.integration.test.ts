@@ -218,6 +218,16 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(session.messages.some((m) => m.role === "user" && /Output token limit hit/.test(m.content))).toBe(true);
   });
 
+  it("injects a corrective message after repeated tool denials (no infinite thrash)", async () => {
+    // A model that keeps calling a denied tool; a deny rule rejects Bash every turn.
+    const rt = makeRuntime([() => reply("", [call("b", "Bash", { command: "ls" })])], { deny: ["Bash"], maxTurns: 8 });
+    const { emit, events } = sink();
+    const { session } = await rt.run({ prompt: "go" }, emit, signal());
+
+    expect(session.messages.some((m) => m.role === "user" && /previous tool call\(s\) were rejected/.test(m.content))).toBe(true);
+    expect(events.some((e) => e.type === "notice" && /change approach/.test(e.message))).toBe(true);
+  });
+
   it("resumes an existing session", async () => {
     const rt = makeRuntime([
       reply("one", [call("m", "memory", { command: "view" })]),

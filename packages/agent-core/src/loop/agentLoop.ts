@@ -23,6 +23,7 @@ import { CompactionThrashError, ContextManager } from "../context/compaction";
 import { escalateOutputTokens, resolveEffort, type Effort } from "../effort";
 import { buildProjectRules } from "../memory/projectRules";
 import { buildSystemPrompt } from "../prompts";
+import { DenialTracker } from "../permissions/denialTracking";
 import { initialLoopState, terminalToSubtype } from "./transitions";
 import type { LoopState, Terminal } from "./transitions";
 import type { ReadLedger } from "../workspace/ledger";
@@ -125,6 +126,7 @@ export async function runAgentLoop(
 
   let stopReason: StopReason = null;
   let state: LoopState = initialLoopState();
+  const denials = new DenialTracker();
 
   // Single finish site: every exit derives its public subtype from a Terminal.
   const finish = (terminal: Terminal, summary: string): AgentRunResult => {
@@ -292,6 +294,19 @@ export async function runAgentLoop(
     };
     const results = await executor.executeTurn(response.toolCalls, ctx);
     session.messages.push({ role: "tool", results });
+
+    // Denial-loop protection: if the model keeps getting tool calls rejected, nudge it
+    // to change approach instead of thrashing to the turn cap.
+    if (results.some((r) => !r.isError)) denials.recordSuccess();
+    if (results.some((r) => r.denied) && !results.some((r) => !r.isError)) denials.recordDenial();
+    if (denials.shouldFallbackToPrompting()) {
+      session.messages.push({
+        role: "user",
+        content: "Your previous tool call(s) were rejected. Do not retry the same action — change your approach, or ask the user how they'd like to proceed.",
+      });
+      emit({ type: "notice", level: "warn", message: "Repeated tool denials — asked the model to change approach." });
+      denials.reset();
+    }
 
     // Steering: fold any user input typed mid-run into the transcript for the next turn.
     const steered = deps.steering?.drain() ?? [];

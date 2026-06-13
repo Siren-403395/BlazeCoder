@@ -56,6 +56,7 @@ export * from "./permissions/hooks";
 export * from "./permissions/engine";
 export * from "./permissions/protectedPaths";
 export * from "./permissions/rule";
+export * from "./permissions/denialTracking";
 export * from "./permissions/bashRuleMatch";
 export * from "./permissions/pathRuleMatch";
 export * from "./permissions/settingsStore";
