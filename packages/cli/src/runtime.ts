@@ -13,13 +13,18 @@ import {
   silentLogger,
   systemClock,
 } from "@coding-agent/core";
-import type { AgentRuntime, Logger } from "@coding-agent/core";
+import type { AgentRuntime, Logger, PermissionMode } from "@coding-agent/core";
 import { DeepSeekGateway } from "./adapters/deepseekGateway";
 import { StubGateway } from "./adapters/stubGateway";
 import { LocalProcessSandbox } from "./adapters/sandbox";
 import type { CliConfig } from "./config";
 
-export function buildRuntime(config: CliConfig, cwd: string, logger: Logger = silentLogger): AgentRuntime {
+export interface BuildRuntimeOptions {
+  logger?: Logger;
+  permissionMode?: PermissionMode;
+}
+
+export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeOptions = {}): AgentRuntime {
   const gateway =
     config.fakeModel || !config.apiKey
       ? new StubGateway()
@@ -31,7 +36,8 @@ export function buildRuntime(config: CliConfig, cwd: string, logger: Logger = si
     memory: new FileMemoryStore(join(config.home, "memories")),
     sandbox: new LocalProcessSandbox(),
     cwd,
-    logger,
+    logger: opts.logger ?? silentLogger,
+    permissionMode: opts.permissionMode,
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,
     contextTokens: config.contextTokens,

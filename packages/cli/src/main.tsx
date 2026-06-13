@@ -9,6 +9,8 @@ import { render } from "ink";
 import { App } from "./tui/App";
 import { loadConfig } from "./config";
 import { buildRuntime } from "./runtime";
+import { runHeadless, type OutputFormat } from "./headless";
+import { isEffort, type Effort } from "@coding-agent/core";
 
 const VERSION = "0.1.0";
 const EFFORTS = ["low", "medium", "high", "ultra"];
@@ -21,10 +23,14 @@ interface Args {
   continue: boolean;
   /** A session id to resume, or `true` for "list sessions and pick". */
   resume?: string | true;
+  /** Headless: the prompt to run non-interactively. */
+  print?: string;
+  format?: OutputFormat;
+  yolo: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { help: false, version: false, continue: false };
+  const args: Args = { help: false, version: false, continue: false, yolo: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--help" || a === "-h") args.help = true;
@@ -39,7 +45,11 @@ function parseArgs(argv: string[]): Args {
       const next = argv[i + 1];
       if (next && !next.startsWith("-")) args.resume = argv[++i];
       else args.resume = true;
-    }
+    } else if (a === "--print" || a === "-p") args.print = argv[++i];
+    else if (a.startsWith("--print=")) args.print = a.slice(8);
+    else if (a === "--output-format") args.format = argv[++i] as OutputFormat;
+    else if (a.startsWith("--output-format=")) args.format = a.slice(16) as OutputFormat;
+    else if (a === "--yolo" || a === "--dangerously-allow-all") args.yolo = true;
   }
   return args;
 }
@@ -53,6 +63,9 @@ Options:
   --effort <level>   Reasoning effort: ${EFFORTS.join(" | ")} (default: high)
   -c, --continue     Resume the most recent session
   --resume [id]      Resume a session by id (omit id to list recent sessions)
+  -p, --print <text> Run one prompt headlessly (no TUI) and print the result
+  --output-format    Headless output: text | json | stream-json (default text)
+  --yolo             Headless: auto-approve tool calls (DANGEROUS; for trusted CI)
   -v, --version      Print version
   -h, --help         Print this help
 
@@ -70,9 +83,10 @@ async function main(): Promise<void> {
   }
 
   const cwd = args.cwd ? resolve(args.cwd) : process.cwd();
-  const effort = args.effort && EFFORTS.includes(args.effort) ? args.effort : "high";
+  const effort: Effort = args.effort && isEffort(args.effort) ? args.effort : "high";
+  const format: OutputFormat = args.format && ["text", "json", "stream-json"].includes(args.format) ? args.format : "text";
   const config = loadConfig(cwd);
-  const runtime = buildRuntime(config, cwd);
+  const runtime = buildRuntime(config, cwd, { permissionMode: args.yolo ? "bypassPermissions" : undefined });
 
   // Resolve a session to resume, if requested.
   let initialSession;
@@ -98,6 +112,16 @@ async function main(): Promise<void> {
 
   if (!config.apiKey && !config.fakeModel) {
     process.stderr.write("Warning: no DEEPSEEK_API_KEY found; running with the offline stub model.\n");
+  }
+
+  // Headless: run one prompt, print, and exit with the run's status.
+  if (args.print !== undefined) {
+    if (!args.print.trim()) {
+      process.stderr.write("Empty --print prompt.\n");
+      process.exit(2);
+    }
+    const code = await runHeadless(runtime, { prompt: args.print, effort, format, sessionId: initialSession?.id });
+    process.exit(code);
   }
 
   render(<App runtime={runtime} effort={effort} initialSession={initialSession} />);

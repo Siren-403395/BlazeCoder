@@ -10,5 +10,6 @@ export * from "./adapters/stubGateway";
 export * from "./adapters/sandbox";
 export * from "./config";
 export * from "./runtime";
+export * from "./headless";
 export * from "./tui/state";
 export { App } from "./tui/App";
