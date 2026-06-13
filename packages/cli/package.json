@@ -9,11 +9,13 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "bin": {
-    "ca": "./src/main.tsx"
+    "ca": "./dist/ca.js"
   },
+  "files": ["dist"],
   "scripts": {
     "ca": "tsx src/main.tsx",
     "dev": "tsx src/main.tsx",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -32,6 +34,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^18",
     "ink-testing-library": "^4",
+    "tsup": "^8",
     "tsx": "^4",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

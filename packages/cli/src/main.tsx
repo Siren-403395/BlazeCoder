@@ -1,7 +1,7 @@
-#!/usr/bin/env node
 /**
- * `ca` entry point. Parses a minimal argv, loads config, builds the in-process
- * runtime, and renders the Ink TUI. Headless (--print) mode lands in Phase 4.
+ * `ca` entry point. Parses argv, loads config, builds the in-process runtime, and
+ * either renders the Ink TUI or runs one prompt headlessly (--print). The bundled
+ * dist/ca.js gets its node shebang from the tsup banner.
  */
 
 import { resolve } from "node:path";

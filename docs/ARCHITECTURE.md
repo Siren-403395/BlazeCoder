@@ -4,6 +4,36 @@
 
 ---
 
+## 0. Form factor: a local CLI/TUI agent (read this first)
+
+This repo shipped as a **command-line agent** (`ca`), not a browser app. The kernel
+rationale in the sections below is model/form-agnostic and still holds, but the
+substrate and frontend changed — where older text says "GeneratedProject graph",
+"preview", "frontend/web", or "Fastify server", read it as:
+
+- **Real filesystem, not a virtual project graph.** The `Workspace` port is now an
+  async, boundary-aware view of the real working directory: `FileSystemWorkspace`
+  with a realpath-canonicalized + symlink-checked boundary, a `.gitignore`-aware
+  bounded `walk()`, and a **read-before-edit ledger** (Read stamps a file; Write/Edit
+  refuse to touch an unread, deleted, or externally-changed file). `GeneratedProject`
+  is gone; a session stores its `cwd` + transcript.
+- **Tools at Claude-Code parity:** `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`,
+  `memory` (the SPA-only `build_preview` was removed; `Bash` is how the agent
+  verifies). A secrets deny-list blocks reading/writing/searching credential files.
+- **Frontend = an Ink TUI, in-process.** `packages/cli` imports the `AgentRuntime`
+  directly and consumes its `EventSink` — there is no HTTP server or SSE. A headless
+  `--print` mode (text/json/stream-json) serves scripting and CI. `apps/web` and
+  `apps/server` were deleted.
+- **Real command execution.** `LocalProcessSandbox` runs `Bash` as child processes
+  (timeout, process-group kill, abort, output cap), gated by the permission engine.
+- **Deep-thinking → `/effort`.** The old thinking boolean became an effort ladder
+  (`low|medium|high|ultra`, mapped to thinking-on/off + output budget) plus a
+  per-turn "ultrathink" keyword escalation and a `/reasoning` display knob.
+
+Package layout: `packages/{shared, agent-core, cli}` (no `apps/`).
+
+---
+
 ## 1. Coding Agent — definition
 
 A coding agent is **not** a fixed prompt chain. Per Anthropic, "agents are typically just LLMs using tools based on environmental feedback in a loop" ([building-effective-agents](https://www.anthropic.com/engineering/building-effective-agents)), and Claude Code is the **agentic harness** that "provides the tools, context management, and execution environment that turn a language model into a capable coding agent" ([how-claude-code-works](https://code.claude.com/docs/en/how-claude-code-works)). Every task blends three phases the model itself sequences: **gather context → take action → verify results**, repeated until done. Two components power it: "models that reason and tools that act."
