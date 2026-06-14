@@ -22,7 +22,7 @@ git clone <your-repo-url> zephyrcode && cd zephyrcode
 ./install.sh
 ```
 
-`install.sh` builds the agent, writes your config to `~/.zephyrcode/.env`, drops a `zephyrcode` launcher in `~/.local/bin`, and adds that to your `PATH`. It prompts once for a **DeepSeek API key** (or set `DEEPSEEK_API_KEY` in your environment first to skip the prompt; leave it blank to use the offline stub model). Then, from any directory:
+`install.sh` builds the agent, writes your config to `~/.zephyrcode/.env`, drops a `zephyrcode` launcher in `~/.local/bin`, and adds that to your `PATH`. It prompts once for a **DeepSeek API key** ([get one here](https://platform.deepseek.com); or set `DEEPSEEK_API_KEY` in your environment first to skip the prompt; leave it blank to use the offline stub model). Then, from any directory:
 
 ```bash
 zephyrcode             # start the interactive TUI in the current directory
