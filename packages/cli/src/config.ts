@@ -1,16 +1,27 @@
 /**
- * Configuration for the CLI: model provider + runtime caps + where session and
- * memory state live. Sources, lowest priority first: a .env file in the cwd, then
- * the real process environment. A richer layered config file lands in Phase 3;
- * this is the minimum the runtime needs to boot.
+ * Configuration for the CLI: which model PROVIDER + model to drive, the runtime
+ * caps, and where session/memory state lives.
+ *
+ * Credentials come from the MANAGED config file (~/.zephyrcode/config.json), written
+ * by onboarding — the TUI first-run gate, `zephyrcode --setup`, or install.sh — never
+ * by hand. There are no `.env` files anymore: the only override is the real process
+ * environment (the provider's own key var, e.g. DEEPSEEK_API_KEY, plus the AGENT_*
+ * caps), which always wins so CI and power users can inject values without a file.
+ *
+ *   managed config.json   <   process.env
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { authConfigPath, loadAuthConfig, setActiveProvider } from "./authStore";
+import { defaultModel, findModel, resolveProvider } from "./providers";
 
 export interface CliConfig {
+  /** Active provider id (e.g. "deepseek"). */
+  providerId: string;
   apiKey: string;
+  /** Active model id. */
   model: string;
   baseUrl: string;
   maxTurns: number;
@@ -20,7 +31,7 @@ export interface CliConfig {
   maxOutputTokens?: number;
   /** Max transient-failure retries per model call. */
   maxRetries: number;
-  /** Root dir for sessions + memories + global config (~/.zephyrcode by default). */
+  /** Root dir for sessions + memories + the managed config (~/.zephyrcode by default). */
   home: string;
   /** Use the offline stub gateway instead of a real provider. */
   fakeModel: boolean;
@@ -30,7 +41,17 @@ export interface CliConfig {
   outputStyle?: string;
 }
 
-/** Parse a .env file's KEY=VALUE lines into a record (no interpolation). */
+function num(value: string | undefined, fallback: number): number {
+  const n = value === undefined ? NaN : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** The state/config dir (~/.zephyrcode), from the env or the default. */
+function resolveHome(): string {
+  return resolve(process.env.ZEPHYRCODE_HOME ?? process.env.CODING_AGENT_HOME ?? join(homedir(), ".zephyrcode"));
+}
+
+/** Parse a legacy .env file's KEY=VALUE lines (migration only — we no longer use .env). */
 function parseDotenv(text: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const raw of text.split("\n")) {
@@ -56,39 +77,53 @@ function loadDotenv(path: string): Record<string, string> {
   }
 }
 
-/** The state/config dir (~/.zephyrcode), from the env or the default. */
-function resolveHome(): string {
-  return resolve(process.env.ZEPHYRCODE_HOME ?? process.env.CODING_AGENT_HOME ?? join(homedir(), ".zephyrcode"));
-}
-
 /**
- * Layered environment, lowest precedence first:
- *   global ~/.zephyrcode/.env  <  cwd/.env  <  real process.env
- * The install script writes the API key once into the global file; a project may
- * override it with a local .env, and the live environment always wins.
+ * One-time rescue of a key from the OLD `.env` form into the managed config, so an
+ * existing install keeps working after the switch. Runs only when no managed config
+ * exists yet; afterwards `.env` is never read again. (We retired .env config; this
+ * just migrates the user's existing key so onboarding doesn't re-prompt needlessly.)
  */
-function readEnv(cwd: string, home: string): Record<string, string | undefined> {
-  return { ...loadDotenv(join(home, ".env")), ...loadDotenv(join(cwd, ".env")), ...process.env };
-}
-
-function num(value: string | undefined, fallback: number): number {
-  const n = value === undefined ? NaN : Number(value);
-  return Number.isFinite(n) ? n : fallback;
+function migrateLegacyEnv(home: string, cwd: string): void {
+  if (existsSync(authConfigPath(home))) return;
+  const legacy = { ...loadDotenv(join(home, ".env")), ...loadDotenv(join(cwd, ".env")) };
+  const apiKey = (legacy.DEEPSEEK_API_KEY ?? "").trim();
+  if (!apiKey) return;
+  const provider = resolveProvider(undefined); // legacy .env was always DeepSeek
+  const wantModel = legacy.DEEPSEEK_MODEL?.trim();
+  const model = wantModel && findModel(provider, wantModel) ? wantModel : defaultModel(provider).id;
+  const baseUrl = legacy.DEEPSEEK_BASE_URL?.trim();
+  setActiveProvider(home, provider.id, baseUrl ? { apiKey, baseUrl } : { apiKey }, model);
 }
 
 export function loadConfig(cwd: string = process.cwd()): CliConfig {
   const home = resolveHome();
-  const env = readEnv(cwd, home);
+  migrateLegacyEnv(home, cwd);
+  const stored = loadAuthConfig(home);
+  const env = process.env;
+
+  // Provider: env override → stored → registry default.
+  const provider = resolveProvider(env.ZEPHYRCODE_PROVIDER ?? stored.provider);
+  const creds = stored.providers[provider.id];
+
+  // Key/baseUrl: the provider's own env var always wins, else the stored value.
+  const apiKey = (env[provider.apiKeyEnv] ?? creds?.apiKey ?? "").trim();
+  const baseUrl =
+    (provider.baseUrlEnv ? env[provider.baseUrlEnv] : undefined) ?? creds?.baseUrl ?? provider.defaultBaseUrl;
+
+  // Model: env override → stored → provider default; sizing comes from the model.
+  const wantModel = env.ZEPHYRCODE_MODEL ?? stored.model ?? defaultModel(provider).id;
+  const model = findModel(provider, wantModel) ?? defaultModel(provider);
+
   return {
-    apiKey: env.DEEPSEEK_API_KEY ?? "",
-    model: env.DEEPSEEK_MODEL ?? "deepseek-v4-pro",
-    baseUrl: env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
+    providerId: provider.id,
+    apiKey,
+    model: model.id,
+    baseUrl,
     maxTurns: num(env.AGENT_MAX_TURNS, 24),
     maxBudgetUsd: num(env.AGENT_MAX_BUDGET_USD, 1),
-    // DeepSeek-V4-Pro: ~1M-token context window.
-    contextTokens: num(env.AGENT_CONTEXT_TOKENS, 1_048_576),
-    // Optional output ceiling; unset ⇒ the model's full maximum (handled in agent-core).
-    maxOutputTokens: env.AGENT_MAX_OUTPUT_TOKENS ? num(env.AGENT_MAX_OUTPUT_TOKENS, 0) || undefined : undefined,
+    contextTokens: num(env.AGENT_CONTEXT_TOKENS, model.contextTokens),
+    // Default to the model's full maximum; AGENT_MAX_OUTPUT_TOKENS caps it lower.
+    maxOutputTokens: num(env.AGENT_MAX_OUTPUT_TOKENS, model.maxOutputTokens),
     maxRetries: num(env.AGENT_MAX_RETRIES, 8),
     home,
     fakeModel: env.AGENT_FAKE_MODEL === "1" || env.AGENT_FAKE_MODEL === "true",

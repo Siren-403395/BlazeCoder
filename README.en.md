@@ -43,6 +43,7 @@ git clone https://github.com/zephyr4123/zephyrcode.git && cd zephyrcode && ./ins
 - A **model-driven loop**: gather context → act → verify, until the model stops calling tools
 - Edits files and runs shell **in your working directory**, behind a **permission gate**
 - Ports-and-adapters: the `agent-core` kernel is host-agnostic and runs **in-process** (no HTTP server)
+- **Model-adapter architecture**: DeepSeek V4 Pro today; adding Gemini / Claude is one provider file
 
 </td>
 <td valign="top" width="50%">
@@ -77,12 +78,17 @@ prompt → [model] → tool calls (Read / Edit / Bash …) → results fed back 
 ```bash
 git clone https://github.com/zephyr4123/zephyrcode.git zephyrcode
 cd zephyrcode
-./install.sh           # build + write ~/.zephyrcode/.env + drop a launcher in ~/.local/bin
+./install.sh           # build + drop a launcher in ~/.local/bin + guide you to connect a model
 
 zephyrcode             # start the interactive TUI in the current directory
+zephyrcode --setup     # connect / switch model + key anytime
 zephyrcode --help      # all options
 zephyrcode --update    # git pull + rebuild to the latest
 ```
+
+**First run guides you through connecting a model**
+
+The installer (or your first `zephyrcode` launch) opens a guided setup: **pick a model → paste your API key** (input is masked, never echoed). The key is written to `~/.zephyrcode/config.json` (mode 600). **No more hand-editing a `.env`.**
 
 **Try it with no API key**
 
@@ -90,7 +96,7 @@ zephyrcode --update    # git pull + rebuild to the latest
 AGENT_FAKE_MODEL=1 zephyrcode    # offline stub model, the whole TUI works, no key needed
 ```
 
-> Default model is `deepseek-v4-pro`. If your key can't call it, set `DEEPSEEK_MODEL` in `~/.zephyrcode/.env` to one it can (e.g. `deepseek-chat`).
+> The only model today is `deepseek-v4-pro`. To switch provider or change your key, run `zephyrcode --setup`.
 > The launcher remembers where you cloned the repo; if you move it, re-run `./install.sh`.
 
 ---
@@ -160,13 +166,13 @@ When a tool needs approval: <kbd>y</kbd> allow once · <kbd>a</kbd> always (this
 
 ## Configuration
 
-Read order, lowest to highest: `~/.zephyrcode/.env`  <  `<cwd>/.env`  <  the real environment. Only `DEEPSEEK_API_KEY` is required; everything else has a default.
+Credentials are written to `~/.zephyrcode/config.json` by onboarding (`./install.sh`, first launch, or `zephyrcode --setup`): **you never hand-edit a file, and there is no `.env`**. The variables below are optional overrides (for CI / power users); the real environment always wins.
 
 <table>
 <thead><tr><th>Variable</th><th>Default</th><th>Controls</th></tr></thead>
 <tbody>
-<tr><td><code>DEEPSEEK_API_KEY</code></td><td>(none)</td><td>API key. Empty = offline stub model</td></tr>
-<tr><td><code>DEEPSEEK_MODEL</code></td><td><code>deepseek-v4-pro</code></td><td>Model name (set to one your key can call)</td></tr>
+<tr><td><code>DEEPSEEK_API_KEY</code></td><td>(the saved one)</td><td>Override the stored key (CI / one-off). Nothing configured = offline stub</td></tr>
+<tr><td><code>ZEPHYRCODE_MODEL</code></td><td><code>deepseek-v4-pro</code></td><td>Override the active model id</td></tr>
 <tr><td><code>AGENT_CONTEXT_TOKENS</code></td><td><code>1048576</code></td><td>Context window (DeepSeek-V4-Pro ≈ 1M)</td></tr>
 <tr><td><code>AGENT_MAX_OUTPUT_TOKENS</code></td><td>unset = model max 384K</td><td>Optional output ceiling; unset = unleashed, sized to fit the window</td></tr>
 <tr><td><code>AGENT_MAX_TURNS</code> · <code>AGENT_MAX_BUDGET_USD</code></td><td><code>24</code> · <code>1.0</code></td><td>Per-run tool-turn / spend caps</td></tr>
@@ -178,7 +184,7 @@ Read order, lowest to highest: `~/.zephyrcode/.env`  <  `<cwd>/.env`  <  the rea
 
 ```text
 ~/.zephyrcode/
-  .env                              global credentials (mode 600)
+  config.json                       global credentials: provider + key + model (mode 600, written by onboarding)
   settings.json                     user-level permission rules + hooks
   skills/  agents/  output-styles/  user-scope extensions (always loaded)
   projects/<project-key>/           <basename>-<8-hex of sha256(cwd)>
@@ -292,7 +298,7 @@ packages/
 docs/ARCHITECTURE.md
 ```
 
-`agent-core` has **no** TUI, HTTP, or DeepSeek imports. Everything crosses the boundary through ports (`ModelGateway`, `Workspace`, `Sandbox`, `SessionStore`, `MemoryStore`, `Clock`, `Logger`), so it runs fully under unit tests with in-memory fakes, runs **in-process** in the CLI, and swapping the model is one adapter.
+`agent-core` has **no** TUI, HTTP, or DeepSeek imports. Everything crosses the boundary through ports (`ModelGateway`, `Workspace`, `Sandbox`, `SessionStore`, `MemoryStore`, `Clock`, `Logger`), so it runs fully under unit tests with in-memory fakes, runs **in-process** in the CLI, and swapping/adding a model is one provider (with its own adapter).
 
 ---
 
@@ -312,15 +318,15 @@ pnpm build        # build everything
 - **Integration**: the full loop with a scripted model + in-memory fakes; the headless runner
 - **E2E**: builds the real bundle and drives the real `node dist/zephyrcode.js` process (argv, config, exit codes, headless output)
 
-New kernel capability: **a tool** is a `Tool` in `agent-core/src/tools/builtin/` plus a registration; **a guardrail** is a `PreToolUse` / `PostToolUse` hook (no loop changes); **a model** is one `ModelGateway` adapter.
+New kernel capability: **a tool** is a `Tool` in `agent-core/src/tools/builtin/` plus a registration; **a guardrail** is a `PreToolUse` / `PostToolUse` hook (no loop changes); **a model provider** is one file in `cli/src/providers/` (with its own `ModelGateway` adapter) registered in the registry, and onboarding then lists it automatically.
 
 ---
 
 ## Roadmap
 
+- More model providers: Gemini, Claude, and others (the provider registry is ready; just add a file)
 - OS-level command sandbox (macOS `sandbox-exec` / Linux `bwrap`) behind the existing `Sandbox` port
 - MCP server/tool integration (the tool-call contract is already transport-agnostic)
-- A richer layered config file beyond `.env`
 
 ---
 

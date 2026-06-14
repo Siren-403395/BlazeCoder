@@ -23,9 +23,9 @@ import {
 } from "@coding-agent/core";
 import { HttpWebClient } from "./adapters/webClient";
 import type { AgentRuntime, Logger, PermissionMode, RuleSource } from "@coding-agent/core";
-import { DeepSeekGateway } from "./adapters/deepseekGateway";
 import { StubGateway } from "./adapters/stubGateway";
 import { LocalProcessSandbox } from "./adapters/sandbox";
+import { resolveProvider } from "./providers";
 import type { CliConfig } from "./config";
 import { projectStateDir, settingsPaths } from "./projects";
 import { hooksDisabled, isWorkspaceTrusted, readHooks } from "./settings";
@@ -46,10 +46,16 @@ export interface BuildRuntimeOptions {
 }
 
 export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeOptions = {}): AgentRuntime {
+  // The gateway is built through the provider registry, so swapping/adding a model
+  // backend is one provider file — the runtime stays provider-agnostic. A missing key
+  // (or AGENT_FAKE_MODEL) falls back to the offline stub so the agent still boots.
   const gateway =
     config.fakeModel || !config.apiKey
       ? new StubGateway()
-      : new DeepSeekGateway({ apiKey: config.apiKey, model: config.model, baseUrl: config.baseUrl, maxRetries: config.maxRetries });
+      : resolveProvider(config.providerId).createGateway(
+          { apiKey: config.apiKey, baseUrl: config.baseUrl },
+          { model: config.model, maxRetries: config.maxRetries },
+        );
 
   // Sessions + agent memory are PER-PROJECT: rooted in this workspace's own
   // state dir, never the shared home. (The .env / API key stays global.)

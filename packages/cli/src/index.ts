@@ -8,9 +8,13 @@
 export * from "./adapters/deepseekGateway";
 export * from "./adapters/stubGateway";
 export * from "./adapters/sandbox";
+export * from "./providers";
+export * from "./authStore";
 export * from "./config";
+export * from "./onboarding";
 export * from "./runtime";
 export * from "./headless";
 export * from "./tui/state";
 export * from "./tui/commands";
 export { App } from "./tui/App";
+export { Onboarding } from "./tui/Onboarding";

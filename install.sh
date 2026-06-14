@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # zephyrcode installer — one command to get the `zephyrcode` coding agent on your
 # PATH, configured and ready. Mirrors the Claude Code install model: build, drop a
-# launcher into ~/.local/bin, wire up PATH, and write the API key once.
+# launcher into ~/.local/bin, wire up PATH, then guide you through connecting a model.
 #
 #   ./install.sh
 #
-# Honors env: DEEPSEEK_API_KEY (skips the prompt), ZEPHYRCODE_HOME, ZEPHYRCODE_BIN_DIR.
+# Honors env: DEEPSEEK_API_KEY (sets the key non-interactively), ZEPHYRCODE_HOME,
+# ZEPHYRCODE_BIN_DIR. There is no .env file — onboarding writes ~/.zephyrcode/config.json.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,25 +38,19 @@ say "Building zephyrcode…"
 (cd "$REPO_DIR" && pnpm --filter @coding-agent/cli build >/dev/null)
 [ -f "$BUNDLE" ] || die "Build did not produce $BUNDLE"
 
-# 3. Config dir + API key (written once; auto-configures the environment).
+# 3. Connect a model: provider + API key. Onboarding (the same flow the TUI runs on
+#    first launch) writes ~/.zephyrcode/config.json — no .env to hand-edit. Re-running
+#    install.sh won't re-prompt once a config exists. DEEPSEEK_API_KEY (if set) is taken
+#    non-interactively; otherwise you're prompted (skippable → offline stub for now).
 mkdir -p "$HOME_DIR"
-ENV_FILE="$HOME_DIR/.env"
-if [ ! -f "$ENV_FILE" ]; then
-  KEY="${DEEPSEEK_API_KEY:-}"
-  if [ -z "$KEY" ] && [ -t 0 ]; then
-    printf 'Enter your DeepSeek API key (blank = offline stub model): '
-    read -r KEY
-  fi
-  umask 077
-  cat > "$ENV_FILE" <<EOF
-# zephyrcode config (written by install.sh)
-DEEPSEEK_API_KEY=${KEY}
-DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-pro}
-DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-EOF
-  ok "Wrote config → $ENV_FILE"
+CONFIG_FILE="$HOME_DIR/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  say "Keeping existing config → $CONFIG_FILE"
+elif [ -t 0 ] || [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+  say "Connecting a model…"
+  ZEPHYRCODE_HOME="$HOME_DIR" node "$BUNDLE" --setup || say "Setup skipped — run 'zephyrcode --setup' anytime."
 else
-  say "Keeping existing config → $ENV_FILE"
+  say "No terminal for setup; run 'zephyrcode --setup' (or just 'zephyrcode') to connect a model."
 fi
 
 # 4. Launcher on PATH. Handles `zephyrcode --update` itself (it knows the repo).
@@ -99,6 +94,7 @@ esac
 
 printf '\n'
 ok "zephyrcode installed."
-printf '   Start it:   \033[1mzephyrcode\033[0m\n'
-printf '   Options:    \033[1mzephyrcode --help\033[0m\n'
-printf '   Update it:  \033[1mzephyrcode --update\033[0m\n'
+printf '   Start it:    \033[1mzephyrcode\033[0m\n'
+printf '   Connect key: \033[1mzephyrcode --setup\033[0m\n'
+printf '   Options:     \033[1mzephyrcode --help\033[0m\n'
+printf '   Update it:   \033[1mzephyrcode --update\033[0m\n'
