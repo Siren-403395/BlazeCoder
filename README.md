@@ -30,7 +30,7 @@
 <br>
 
 ```bash
-git clone https://github.com/zephyr4123/zephyrcode.git && cd zephyrcode && ./install.sh
+git clone https://github.com/zephyr4123/blazecoder.git && cd blazecoder && ./install.sh
 ```
 
 <div align="center"><sub>一条命令：构建 → 装上 PATH → 引导你粘贴 API Key。</sub></div>

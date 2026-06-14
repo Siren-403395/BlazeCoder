@@ -30,7 +30,7 @@ Powered by DeepSeek V4 Pro, with a permission gate guarding every action that la
 <br>
 
 ```bash
-git clone https://github.com/zephyr4123/zephyrcode.git && cd zephyrcode && ./install.sh
+git clone https://github.com/zephyr4123/blazecoder.git && cd blazecoder && ./install.sh
 ```
 
 <div align="center"><sub>One command: build, put it on your PATH, then walk you through pasting an API key.</sub></div>
