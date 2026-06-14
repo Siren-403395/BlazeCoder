@@ -9,16 +9,20 @@ import type { SessionSummary } from "@coding-agent/core";
 import type { TodoItem } from "@coding-agent/shared";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
+import { TAGLINE, WORDMARK_ROWS, WORDMARK_WIDTH } from "./banner";
 import type { SlashCommand } from "./commands";
 import type { Item, PendingPermission } from "./state";
 
 /** Near-black for text printed ON the amber chip (warm, high-contrast on #e8a64d). */
 const ON_ACCENT = "#15110a";
 
+/** A top-lit amber ramp (bright → dim) applied row-by-row to the block wordmark for depth. */
+const WORDMARK_RAMP = ["#f3c06a", "#ecac52", "#e8a64d", "#d99644", "#c4863c"];
+
 /**
  * The product lockup: a solid amber "chip" reading ✶ zephyrcode. A filled color block
- * (not bare letters) so the mark reads as a deliberate badge wherever it appears
- * (welcome screen + onboarding). Shared so both stay identical.
+ * (not bare letters) so the mark reads as a deliberate badge. Used on onboarding and as
+ * the welcome screen's fallback on terminals too narrow for the big block wordmark.
  */
 export function Wordmark() {
   return (
@@ -28,18 +32,35 @@ export function Wordmark() {
   );
 }
 
+/** The big 5-row pixel wordmark (ZEPHYRCODE), each scan-line shaded by the top-lit ramp. */
+export function BigWordmark() {
+  return (
+    <Box flexDirection="column">
+      {WORDMARK_ROWS.map((row, i) => (
+        <Text key={i} color={WORDMARK_RAMP[i] ?? theme.accent} bold>
+          {row}
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
 /**
- * The welcome screen shown on an empty session: the wordmark + workspace facts wrapped
- * in a single bordered card (the logo is framed, not floating), with the hints beneath it.
+ * The welcome screen shown on an empty session: the big block wordmark + workspace facts
+ * wrapped in a single rounded amber card (the logo is framed, not floating). The card
+ * hugs the wordmark; the orientation hints sit beneath it. Narrow terminals fall back to
+ * the compact chip so the block art never wraps.
  */
 export function WelcomeBanner({ model, cwd, effort, width }: { model: string; cwd: string; effort: string; width: number }) {
-  const cardWidth = Math.min(Math.max(width - 2, 30), 72);
+  const big = width >= WORDMARK_WIDTH + 8; // room for the art + border + padding
   return (
     <Box flexDirection="column" marginY={1}>
-      <Box flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={2} paddingY={1} width={cardWidth}>
-        <Box>
-          <Wordmark />
-          <Text color={theme.faint}>{"   a command-line coding agent"}</Text>
+      {/* alignSelf flex-start so the card hugs the wordmark instead of stretching full-width
+          (a tight gold plaque, no empty gutter on the right). */}
+      <Box alignSelf="flex-start" flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={2} paddingY={1}>
+        {big ? <BigWordmark /> : <Wordmark />}
+        <Box marginTop={1}>
+          <Text color={theme.faint}>{TAGLINE}</Text>
         </Box>
         <Box marginTop={1} flexDirection="column">
           <Text>

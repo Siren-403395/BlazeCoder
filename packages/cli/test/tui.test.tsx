@@ -78,7 +78,7 @@ describe("welcome banner", () => {
     const { lastFrame, unmount } = render(<App runtime={runtime} effort="high" />);
     await new Promise((r) => setTimeout(r, 80));
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("zephyrcode"); // the wordmark chip rendered
+    expect(frame).toContain("█"); // the big block wordmark rendered
     expect(frame).toContain("command-line coding agent"); // tagline
     expect(frame).toContain("/help"); // orientation line
     unmount();
