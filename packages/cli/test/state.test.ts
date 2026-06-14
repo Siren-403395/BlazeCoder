@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyEvent, initialState, reduce } from "../src/tui/state";
+import { applyEvent, initialState, isFinalItem, reduce, splitItems } from "../src/tui/state";
+import type { Item } from "../src/tui/state";
 
 describe("TUI state reducer", () => {
   it("records the prompt and enters running", () => {
@@ -148,6 +149,66 @@ describe("TUI state reducer", () => {
     expect(s.outputStyle).toBe("poet");
     s = applyEvent(s, { type: "set_output_style", style: undefined });
     expect(s.outputStyle).toBeUndefined();
+  });
+
+  it("bumps epoch on reset and hydrate (so <Static> re-keys and the screen replaces)", () => {
+    const start = initialState();
+    expect(start.epoch).toBe(0);
+    const afterReset = applyEvent(start, { type: "reset" });
+    expect(afterReset.epoch).toBe(1);
+    const afterHydrate = applyEvent(afterReset, {
+      type: "hydrate",
+      session: {
+        id: "s", createdAt: 1, updatedAt: 1, model: "m", title: "t", cwd: "/", turns: 0, costUsd: 0,
+        usage: { inputTokens: 0, outputTokens: 0 }, status: "done", messages: [{ role: "user", content: "hi" }],
+      },
+    });
+    expect(afterHydrate.epoch).toBe(2);
+  });
+
+  it("does not cap committed items (the <Static> prefix must only grow within a session)", () => {
+    let s = initialState();
+    for (let i = 0; i < 250; i++) s = applyEvent(s, { type: "user_prompt", text: `p${i}` });
+    // All 250 retained (no trimming) so <Static> never has to reprint a shifted prefix.
+    expect(s.items.filter((i) => i.kind === "user")).toHaveLength(250);
+  });
+});
+
+describe("splitItems (committed scrollback vs live tail)", () => {
+  const user = (id: string): Item => ({ kind: "user", id, text: "u" });
+  const doneAsst = (id: string): Item => ({ kind: "assistant", id, text: "a", streaming: false });
+  const liveAsst = (id: string): Item => ({ kind: "assistant", id, text: "a", streaming: true });
+  const runningTool = (id: string): Item => ({ kind: "tool", id, name: "Bash", status: "running", input: {} });
+  const okTool = (id: string): Item => ({ kind: "tool", id, name: "Bash", status: "ok", input: {} });
+
+  it("treats finished items as final and in-flight ones as live", () => {
+    expect(isFinalItem(user("u"))).toBe(true);
+    expect(isFinalItem(doneAsst("a"))).toBe(true);
+    expect(isFinalItem(okTool("t"))).toBe(true);
+    expect(isFinalItem(liveAsst("a"))).toBe(false);
+    expect(isFinalItem(runningTool("t"))).toBe(false);
+  });
+
+  it("commits the longest final prefix; the rest is live", () => {
+    const items = [user("u1"), doneAsst("a1"), liveAsst("a2")];
+    const { committed, live } = splitItems(items);
+    expect(committed.map((i) => i.id)).toEqual(["u1", "a1"]);
+    expect(live.map((i) => i.id)).toEqual(["a2"]);
+  });
+
+  it("splits at the FIRST non-final item, keeping order even if a later item is final", () => {
+    // running tool first, a finished tool after it → both stay live so order can't invert.
+    const items = [user("u1"), runningTool("t1"), okTool("t2")];
+    const { committed, live } = splitItems(items);
+    expect(committed.map((i) => i.id)).toEqual(["u1"]);
+    expect(live.map((i) => i.id)).toEqual(["t1", "t2"]);
+  });
+
+  it("commits everything when all items are final (idle)", () => {
+    const items = [user("u1"), doneAsst("a1"), okTool("t1")];
+    const { committed, live } = splitItems(items);
+    expect(committed).toHaveLength(3);
+    expect(live).toHaveLength(0);
   });
 
   it("hydrates scrollback from a persisted session (resume), without rendering reasoning", () => {

@@ -53,6 +53,12 @@ export interface TuiState {
   seq: number;
   /** Id of the in-flight streaming assistant item, if any. */
   liveAssistantId?: string;
+  /**
+   * Bumped on hydrate (/resume) and reset (/clear). The view re-keys its <Static> on this
+   * so the committed-scrollback list restarts cleanly (and the screen is wiped) instead of
+   * the new transcript appending under the old one.
+   */
+  epoch: number;
 }
 
 export type UiAction =
@@ -77,7 +83,28 @@ export function initialState(effort = "high"): TuiState {
     tokensTotal: 0,
     todos: [],
     seq: 0,
+    epoch: 0,
   };
+}
+
+/** True once an item is finalized (it won't change again) and is safe to commit to <Static>. */
+export function isFinalItem(item: Item): boolean {
+  if (item.kind === "assistant") return !item.streaming;
+  if (item.kind === "tool") return item.status !== "running";
+  return true; // user · notice · compact · result are final the moment they appear
+}
+
+/**
+ * Split scrollback at the FIRST non-final item: everything before it is committed
+ * (printed once via <Static>, so it scrolls into native terminal history — no repaint,
+ * no flicker, scrollable), and the rest is the live tail (a streaming reply / running
+ * tools) rendered in the dynamic region. Splitting at the first non-final item — rather
+ * than filtering — keeps visual order correct even when a later tool finishes first.
+ */
+export function splitItems(items: Item[]): { committed: Item[]; live: Item[] } {
+  let i = 0;
+  while (i < items.length && isFinalItem(items[i]!)) i++;
+  return { committed: items.slice(0, i), live: items.slice(i) };
 }
 
 function id(state: TuiState, prefix: string): [string, number] {
@@ -106,8 +133,9 @@ function firstLine(text: string, max = 200): string {
 export function applyEvent(state: TuiState, action: UiAction): TuiState {
   switch (action.type) {
     case "reset":
-      // The output style is a runtime-level setting; it survives a /clear.
-      return { ...initialState(state.effort), model: state.model, outputStyle: state.outputStyle };
+      // The output style is a runtime-level setting; it survives a /clear. Bump epoch so
+      // <Static> restarts (the cleared screen shows a fresh, empty transcript).
+      return { ...initialState(state.effort), model: state.model, outputStyle: state.outputStyle, epoch: state.epoch + 1 };
 
     case "set_effort":
       return { ...state, effort: action.effort };
@@ -121,9 +149,10 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
 
     case "hydrate": {
       const { items, seq } = hydrateItems(state.seq, action.session.messages);
-      // Replace the screen entirely with the resumed transcript (bounded), so a
-      // resume never stacks on top of whatever was already shown.
-      return { ...state, items: cap(items), seq, model: action.session.model, status: "done", turnChars: 0 };
+      // Bump epoch so <Static> re-keys and reprints the resumed transcript fresh; the view
+      // wipes the screen first so it replaces (never stacks on) whatever was shown. The
+      // initial print is bounded so resuming a very long session doesn't dump 10k lines.
+      return { ...state, items: cap(items), seq, model: action.session.model, status: "done", turnChars: 0, epoch: state.epoch + 1 };
     }
 
     case "user_prompt": {
@@ -135,7 +164,9 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
         permission: undefined,
         liveAssistantId: undefined,
         turnChars: 0,
-        items: cap([...state.items, { kind: "user", id: uid, text: action.text }]),
+        // No cap here: committed items feed an append-only <Static>, so the prefix must
+        // only ever grow within a session (trimming it would make <Static> reprint).
+        items: [...state.items, { kind: "user", id: uid, text: action.text }],
       };
     }
 

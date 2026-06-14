@@ -70,7 +70,14 @@ function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
       )}
       <Text color={theme.muted}> {item.name}</Text>
       {detail ? <Text color={theme.faint}> {detail}</Text> : null}
-      {item.summary && item.status !== "running" ? <Text color={theme.faint}>{`  ${item.summary}${dur}`}</Text> : null}
+      {/* Read's "summary" is just the first numbered line of the file — pure noise next to
+          the path, so we drop it. Other tools' summaries (Bash exit code, Write/Edit result,
+          Grep/Glob counts) carry signal and stay. */}
+      {item.summary && item.status !== "running" && item.name !== "Read" ? (
+        <Text color={theme.faint}>{`  ${item.summary}${dur}`}</Text>
+      ) : item.status !== "running" && dur ? (
+        <Text color={theme.faint}>{dur}</Text>
+      ) : null}
     </Box>
   );
 }

@@ -15,7 +15,7 @@
 
 import { homedir } from "node:os";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Static, useApp, useInput, useStdout } from "ink";
 import {
   EFFORTS,
   escalateFromPrompt,
@@ -28,14 +28,13 @@ import {
   type SessionSummary,
   type Skill,
 } from "@coding-agent/core";
-import { applyEvent, initialState } from "./state";
+import { applyEvent, initialState, splitItems } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
 import { ChoicePicker, CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
 import { freshSeed, loadingWord, tipAt } from "./flavor";
-import { theme } from "./theme";
 
-/** Cap the number of scrollback items painted at once so the frame stays finite. */
-const MAX_VISIBLE_ITEMS = 50;
+/** Clear screen + scrollback + home the cursor — issued before a /resume or /clear repaints. */
+const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
 
 type Completion =
   | { kind: "command"; matches: { name: string; argHint?: string }[] }
@@ -153,12 +152,13 @@ export function App({
     async (summary: SessionSummary) => {
       const s = await runtime.getSession(summary.id);
       if (s) {
+        stdout?.write(CLEAR_SCREEN); // wipe the current screen so the resumed transcript replaces, not stacks
         dispatch({ type: "hydrate", session: s });
         sessionId.current = s.id;
       }
       setPicker(null);
     },
-    [runtime],
+    [runtime, stdout],
   );
 
   // Switch the active output style on the runtime (takes effect next turn) and mirror it
@@ -186,6 +186,7 @@ export function App({
           exit();
           return;
         case "clear":
+          stdout?.write(CLEAR_SCREEN); // wipe the screen so the fresh session starts clean
           dispatch({ type: "reset" });
           sessionId.current = undefined;
           return;
@@ -259,7 +260,7 @@ export function App({
           dispatch({ type: "notice", level: "warn", message: `Unknown command: /${name}` });
       }
     },
-    [exit, openResume, applyStyle, runtime],
+    [exit, openResume, applyStyle, runtime, stdout],
   );
 
   const submit = useCallback(
@@ -445,10 +446,12 @@ export function App({
     setLine(draft.slice(0, cursor) + input + draft.slice(cursor), cursor + input.length);
   });
 
-  // Paint only a trailing window of the transcript so the rendered height stays
-  // bounded (long sessions never "blow up"); older items scroll out of view.
-  const hidden = Math.max(0, state.items.length - MAX_VISIBLE_ITEMS);
-  const visible = hidden > 0 ? state.items.slice(-MAX_VISIBLE_ITEMS) : state.items;
+  // Split the transcript: finalized items are COMMITTED to <Static> (printed once, they
+  // scroll into the terminal's native history — no repaint, no flicker, and the user can
+  // scroll up), while the live tail (a streaming reply / running tools) repaints in the
+  // small dynamic region below. This is the fix for the whole-screen flicker + viewport-
+  // locked-to-bottom problem of rendering the entire transcript dynamically every frame.
+  const { committed, live } = splitItems(state.items);
 
   // Live "working…" line content.
   const word = loadingWord(wordSeed.current, Math.floor(elapsed / 3));
@@ -460,17 +463,16 @@ export function App({
 
   return (
     <Box flexDirection="column">
+      {/* Committed scrollback: printed once into native terminal history, re-keyed on
+          /resume + /clear (the screen is wiped first) so a new transcript never stacks. */}
+      <Static key={state.epoch} items={committed}>
+        {(item) => <ItemView key={item.id} item={item} />}
+      </Static>
+
       {state.items.length === 0 ? (
         <WelcomeBanner model={runtime.model} cwd={prettyPath(runtime.cwd)} effort={state.effort} width={width} />
       ) : (
-        <>
-          {hidden > 0 ? (
-            <Text color={theme.faint}>{`⋯ ${hidden} earlier message${hidden === 1 ? "" : "s"} hidden`}</Text>
-          ) : null}
-          {visible.map((item) => (
-            <ItemView key={item.id} item={item} />
-          ))}
-        </>
+        live.map((item) => <ItemView key={item.id} item={item} />)
       )}
 
       {!picker && !state.permission ? <TodoPanel todos={state.todos} /> : null}
