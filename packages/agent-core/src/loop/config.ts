@@ -4,11 +4,11 @@
  * and the per-iteration LoopState (transitions.ts). buildLoopConfig is the pure
  * function that derives the snapshot — the joined system prompt, project rules,
  * tool schemas, and resolved effort knobs — so the loop body reads constants, not
- * recomputed values. (maxOutputTokens stays a per-run mutable local because
- * output-truncation recovery escalates it.)
+ * recomputed values. (The per-request output budget is NOT snapshotted here: the loop
+ * sizes it each turn from the live input estimate so output can use the whole window.)
  */
 
-import { resolveEffort } from "../effort";
+import { MODEL_MAX_OUTPUT_TOKENS, resolveEffort } from "../effort";
 import type { ThinkingBudget } from "../effort";
 import { buildProjectRules } from "../memory/projectRules";
 import { buildSystemPrompt } from "../prompts";
@@ -25,8 +25,9 @@ export interface LoopRunConfig {
   tools: ToolSchema[];
   thinking: boolean;
   thinkingBudget?: ThinkingBudget;
-  /** Starting output budget (the loop escalates a mutable copy on truncation). */
-  baseMaxOutputTokens: number;
+  /** Ceiling for the per-request output budget (default: the model max). The loop sizes the
+   *  actual max_tokens per turn = min(this, window − input), so output is unleashed, not fixed. */
+  maxOutputCap: number;
   temperature?: number;
   maxTurns: number;
   maxBudgetUsd: number;
@@ -34,7 +35,7 @@ export interface LoopRunConfig {
 }
 
 export function buildLoopConfig(config: AgentLoopConfig, registry: ToolRegistry, workspaceRoot: string): LoopRunConfig {
-  const { thinking, budget, maxOutputTokens } = resolveEffort(config.effort, config.maxOutputTokens);
+  const { thinking, budget } = resolveEffort(config.effort);
   const system = buildSystemPrompt({
     toolNames: new Set(registry.names()),
     effort: config.effort,
@@ -49,7 +50,7 @@ export function buildLoopConfig(config: AgentLoopConfig, registry: ToolRegistry,
     tools: registry.schemas(),
     thinking,
     thinkingBudget: budget,
-    baseMaxOutputTokens: maxOutputTokens,
+    maxOutputCap: config.maxOutputTokens ?? MODEL_MAX_OUTPUT_TOKENS,
     temperature: config.temperature,
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,

@@ -1,16 +1,14 @@
 /**
  * Reasoning "effort" — the CLI affordance the old deep-thinking toggle became.
- * It is a sticky session setting plus a per-turn keyword escalation, and it maps
- * directly onto DeepSeek-V4-Pro's THREE native reasoning modes:
+ * It controls ONLY DeepSeek-V4-Pro's reasoning DEPTH (its three native thinking modes).
+ * It does NOT touch the output-token budget: output is unleashed to the model's maximum
+ * (see `outputBudget`), reduced only when the context window physically can't hold it.
  *
  *   low   -> Non-think   (thinking off)
- *   high  -> Think High  (thinking on, budget "high" — structured, fixed budget)
- *   ultra -> Think Max   (thinking on, budget "max"  — unlimited reasoning budget)
+ *   high  -> Think High  (thinking on, budget "high")
+ *   ultra -> Think Max   (thinking on, budget "max" — deepest reasoning)
  *
- * Earlier DeepSeek models only exposed thinking on/off, so this used to fake a
- * gradient with the output-token ceiling. V4-Pro added a real `thinking.budget`
- * knob, so we drive that instead; the output-token ceiling is now only a guard
- * against truncation (Think Max can emit very long chains of thought).
+ * It is a sticky session setting plus a per-turn "ultrathink" keyword escalation.
  */
 
 export type Effort = "low" | "high" | "ultra";
@@ -29,33 +27,41 @@ export interface ResolvedEffort {
   thinking: boolean;
   /** Native reasoning depth when thinking is on. */
   budget?: ThinkingBudget;
-  /** Output-token ceiling (a truncation guard, not the depth lever). */
-  maxOutputTokens: number;
 }
 
-/** Map an effort level to DeepSeek-V4-Pro's thinking knobs + an output ceiling. */
-export function resolveEffort(effort: Effort = "high", baseMaxOutputTokens = 8000): ResolvedEffort {
+/** Map an effort level to DeepSeek-V4-Pro's thinking knobs (depth only — never output). */
+export function resolveEffort(effort: Effort = "high"): ResolvedEffort {
   switch (effort) {
     case "low":
-      return { thinking: false, maxOutputTokens: baseMaxOutputTokens };
+      return { thinking: false };
     case "high":
-      return { thinking: true, budget: "high", maxOutputTokens: Math.round(baseMaxOutputTokens * 1.5) };
+      return { thinking: true, budget: "high" };
     case "ultra":
-      return { thinking: true, budget: "max", maxOutputTokens: baseMaxOutputTokens * 2 };
+      return { thinking: true, budget: "max" };
   }
 }
 
-/** Hard ceiling for the output-token budget when recovering from truncation. */
-export const OUTPUT_TOKEN_CEILING = 32_000;
+/**
+ * DeepSeek-V4-Pro's hard maximum output per request: 384K tokens (the model also has a
+ * ~1M-token context window). This is the ceiling we let output reach — we never cap below it.
+ */
+export const MODEL_MAX_OUTPUT_TOKENS = 384_000;
 
 /**
- * Compute a larger output budget after the model truncated (stopReason max_tokens).
- * Quadruples the current budget, capped at OUTPUT_TOKEN_CEILING. Returns undefined
- * when already at the ceiling (no more room to escalate).
+ * The output-token budget (`max_tokens`) for a single request. We hand the model its FULL
+ * maximum and only shrink it when the input is large enough that input + output would
+ * overflow the context window — so output is unleashed (up to 384K when there's room)
+ * rather than pinned to a small fixed cap. `cap` lets a caller lower the ceiling (e.g. for
+ * cost control) and defaults to the model max; `pad` is framing/estimate headroom.
  */
-export function escalateOutputTokens(current: number): number | undefined {
-  if (current >= OUTPUT_TOKEN_CEILING) return undefined;
-  return Math.min(current * 4, OUTPUT_TOKEN_CEILING);
+export function outputBudget(
+  contextTokens: number,
+  inputTokens: number,
+  cap: number = MODEL_MAX_OUTPUT_TOKENS,
+  pad = 8_000,
+): number {
+  const room = contextTokens - inputTokens - pad;
+  return Math.max(1_024, Math.min(cap, room));
 }
 
 const ESCALATE_RE = /\b(ultrathink|think (?:harder|hard|more|deeply|a lot|step by step))\b/i;

@@ -42,6 +42,7 @@ import type { PermissionUpdate } from "./permissions/update";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig } from "./context/compaction";
 import { loadMemoryIndex } from "./memory/autoMemory";
+import { MODEL_MAX_OUTPUT_TOKENS } from "./effort";
 import type { Effort } from "./effort";
 import { FileSystemWorkspace } from "./workspace/fsWorkspace";
 import { ReadLedger } from "./workspace/ledger";
@@ -286,7 +287,9 @@ export class AgentRuntime {
       maxBudgetUsd: opts.maxBudgetUsd ?? 1,
       contextTokens,
       temperature: opts.temperature ?? 0.2,
-      maxOutputTokens: opts.maxOutputTokens ?? 8000,
+      // The output CEILING (default: the model's full max). The loop sizes the actual
+      // per-request budget down from here only as far as the window requires.
+      maxOutputTokens: opts.maxOutputTokens ?? MODEL_MAX_OUTPUT_TOKENS,
     };
     this.defaultEffort = opts.defaultEffort ?? "high";
     this.settingsFiles = opts.settingsFiles;

@@ -14,9 +14,7 @@ import { buildPostCompactFileMessage, buildSummaryRequest, isSubstantialNotes, s
 
 export interface CompactionConfig {
   contextTokens: number;
-  /** Added to the run's maxOutputTokens when reserving output headroom from the window. */
-  outputReservePad: number;
-  /** Cap on the reserved output headroom. */
+  /** Tokens reserved from the window for the model's output — bounds how large input may grow. */
   outputReserveCap: number;
   /** Fraction of the EFFECTIVE window (context minus output reserve) at which we clear old tool results. */
   clearThreshold: number;
@@ -40,20 +38,20 @@ export interface CompactionConfig {
 }
 
 export const DEFAULT_COMPACTION: CompactionConfig = {
-  contextTokens: 65_536,
-  // Reserve only what the model's OUTPUT needs (+ a small framing pad), not a third of the
-  // window. With an 8k output budget this is ~12k, leaving a ~53k effective input window —
-  // so summarization isn't triggered at ~50% of the window by a single exploration turn.
-  outputReservePad: 4_000,
-  outputReserveCap: 12_000,
+  // DeepSeek-V4-Pro's full ~1M-token context window — we no longer cap it small.
+  contextTokens: 1_048_576,
+  // Keep ~64k free for output (output can still grow far larger when input is small — the
+  // loop sizes max_tokens = min(model max, window − input) per turn). With a 1M window this
+  // leaves a ~984k effective input window, so compaction stays rare and lossless until full.
+  outputReserveCap: 64_000,
   clearThreshold: 0.7,
-  bufferTokens: 13_000,
-  keepRecentToolResults: 3,
+  bufferTokens: 24_000,
+  keepRecentToolResults: 4,
   keepRecentMessages: 4,
   maxThrash: 3,
-  summaryKeepMinTokens: 10_000,
+  summaryKeepMinTokens: 16_000,
   summaryKeepMinMessages: 5,
-  summaryKeepMaxTokens: 40_000,
+  summaryKeepMaxTokens: 96_000,
 };
 
 export class CompactionThrashError extends Error {
@@ -113,10 +111,14 @@ export class ContextManager {
     private readonly gateway?: ModelGateway,
   ) {}
 
-  /** Effective usable window = context minus the output/framing reserve. */
-  private effectiveWindow(maxOutputTokens: number): number {
-    const reserve = Math.min(maxOutputTokens + this.config.outputReservePad, this.config.outputReserveCap);
-    return Math.max(1, this.config.contextTokens - reserve);
+  /**
+   * Effective usable INPUT window = context minus a reserved slice kept free for output.
+   * The per-request output budget (set in the loop) can still grow up to the model max when
+   * input is small; this reserve just guarantees there's always room for output, so it bounds
+   * how large input may grow before we compact.
+   */
+  private effectiveWindow(): number {
+    return Math.max(1, this.config.contextTokens - this.config.outputReserveCap);
   }
 
   private estimate(
@@ -139,8 +141,6 @@ export class ContextManager {
       system: string;
       projectRules: string;
       tools: ToolSchema[];
-      /** The run's output budget; sizes the reserved headroom. */
-      maxOutputTokens?: number;
       /** The server's authoritative input-token count from the previous turn, if any. */
       realInputTokens?: number;
       /** Read-ledger + workspace enable post-summarization fresh-file rehydration. */
@@ -154,7 +154,7 @@ export class ContextManager {
     emit: EventSink,
     signal: AbortSignal,
   ): Promise<void> {
-    const effective = this.effectiveWindow(params.maxOutputTokens ?? 8000);
+    const effective = this.effectiveWindow();
     const clearAt = effective * this.config.clearThreshold;
     const compactAt = Math.max(clearAt, effective - this.config.bufferTokens);
 

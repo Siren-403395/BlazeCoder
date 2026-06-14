@@ -196,7 +196,7 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(events.some((e) => e.type === "notice" && e.level === "warn" && /SessionEnd/.test(e.message))).toBe(true);
   });
 
-  it("recovers from output truncation (escalate budget, then nudge to resume, then complete)", async () => {
+  it("recovers from output truncation by nudging the model to resume in smaller pieces", async () => {
     const truncated = (text: string): ModelResponse => ({
       text,
       toolCalls: [],
@@ -204,15 +204,15 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
       usage: { inputTokens: 10, outputTokens: 5 },
       costUsd: 0,
     });
-    // max_tokens (escalate) → max_tokens (nudge resume) → end_turn (complete).
-    const rt = makeRuntime([truncated("partial 1"), truncated("partial 2"), reply("final answer", [])]);
+    // Output is sized to the whole remaining window, so there's no budget to escalate to:
+    // max_tokens (keep partial + nudge resume) → end_turn (complete).
+    const rt = makeRuntime([truncated("partial 1"), reply("final answer", [])]);
     const { emit, events } = sink();
     const { session, result } = await rt.run({ prompt: "write a long thing" }, emit, signal());
 
     expect(result.subtype).toBe("success");
     expect(result.summary).toBe("final answer");
-    // First truncation → an info notice about a larger budget; second → a warn resume nudge.
-    expect(events.some((e) => e.type === "notice" && e.level === "info" && /larger output budget/.test(e.message))).toBe(true);
+    // Truncation → a warn resume nudge (no "larger budget" escalation anymore).
     expect(events.some((e) => e.type === "notice" && e.level === "warn" && /resume/i.test(e.message))).toBe(true);
     // The resume nudge landed in the transcript.
     expect(session.messages.some((m) => m.role === "user" && /Output token limit hit/.test(m.content))).toBe(true);

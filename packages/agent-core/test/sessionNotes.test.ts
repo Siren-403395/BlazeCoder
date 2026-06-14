@@ -4,7 +4,7 @@ import type { SessionState } from "../src/index";
 import { reply, ScriptedGateway } from "./fakes";
 
 const signal = new AbortController().signal;
-const cfg = { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 } as const;
+const cfg = { contextTokens: 60, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 } as const;
 
 function session(): SessionState {
   return {

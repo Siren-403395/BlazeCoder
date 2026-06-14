@@ -114,5 +114,6 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,
     contextTokens: config.contextTokens,
+    maxOutputTokens: config.maxOutputTokens,
   });
 }

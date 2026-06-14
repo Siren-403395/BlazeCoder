@@ -16,6 +16,8 @@ export interface CliConfig {
   maxTurns: number;
   maxBudgetUsd: number;
   contextTokens: number;
+  /** Optional ceiling on output tokens per request; omit to use the model's full maximum. */
+  maxOutputTokens?: number;
   /** Max transient-failure retries per model call. */
   maxRetries: number;
   /** Root dir for sessions + memories + global config (~/.zephyrcode by default). */
@@ -83,7 +85,10 @@ export function loadConfig(cwd: string = process.cwd()): CliConfig {
     baseUrl: env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
     maxTurns: num(env.AGENT_MAX_TURNS, 24),
     maxBudgetUsd: num(env.AGENT_MAX_BUDGET_USD, 1),
-    contextTokens: num(env.AGENT_CONTEXT_TOKENS, 65536),
+    // DeepSeek-V4-Pro: ~1M-token context window.
+    contextTokens: num(env.AGENT_CONTEXT_TOKENS, 1_048_576),
+    // Optional output ceiling; unset ⇒ the model's full maximum (handled in agent-core).
+    maxOutputTokens: env.AGENT_MAX_OUTPUT_TOKENS ? num(env.AGENT_MAX_OUTPUT_TOKENS, 0) || undefined : undefined,
     maxRetries: num(env.AGENT_MAX_RETRIES, 8),
     home,
     fakeModel: env.AGENT_FAKE_MODEL === "1" || env.AGENT_FAKE_MODEL === "true",

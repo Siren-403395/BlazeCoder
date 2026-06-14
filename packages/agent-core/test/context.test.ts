@@ -96,7 +96,7 @@ describe("sessionContext", () => {
 describe("ContextManager compaction", () => {
   it("stage 1: clears old tool results without an LLM call", async () => {
     const cm = new ContextManager(
-      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 100, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
     );
@@ -118,7 +118,7 @@ describe("ContextManager compaction", () => {
   it("stage 2: summarizes history into a summary block", async () => {
     const gw = new ScriptedGateway("m", [reply("SUMMARY")]);
     const cm = new ContextManager(
-      { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 60, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
       gw,
@@ -139,7 +139,7 @@ describe("ContextManager compaction", () => {
     const huge = "S".repeat(420);
     const gw = new ScriptedGateway("m", [reply(huge)]);
     const cm = new ContextManager(
-      { contextTokens: 50, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 1 },
+      { contextTokens: 50, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 1 },
       new FixedClock(),
       silentLogger,
       gw,
@@ -156,7 +156,7 @@ describe("ContextManager compaction", () => {
 
   it("clears only whitelisted (Read/Bash/Grep/Glob) old results, keeps Edit/Write + the most recent", async () => {
     const cm = new ContextManager(
-      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.2, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 100, outputReserveCap: 0, clearThreshold: 0.2, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
     );
@@ -184,7 +184,7 @@ describe("ContextManager compaction", () => {
     led.record("/main.ts", (await ws.stat("/main.ts"))!);
     const gw = new ScriptedGateway("m", [reply("SUMMARY")]);
     const cm = new ContextManager(
-      { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.1, bufferTokens: 55, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 60, outputReserveCap: 0, clearThreshold: 0.1, bufferTokens: 55, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
       gw,
@@ -206,7 +206,7 @@ describe("ContextManager compaction", () => {
 
   it("fires onPreCompact once when compacting, and not when under threshold", async () => {
     const cm = new ContextManager(
-      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 100, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
     );
@@ -232,7 +232,6 @@ describe("ContextManager compaction", () => {
     const cm = new ContextManager(
       {
         contextTokens: 100,
-        outputReservePad: 0,
         outputReserveCap: 0,
         clearThreshold: 0.1,
         bufferTokens: 95,
@@ -288,7 +287,7 @@ describe("ContextManager compaction", () => {
       { role: "assistant", content: "W".repeat(40), toolCalls: [] },
     ]);
   }
-  const failCfg = { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 } as const;
+  const failCfg = { contextTokens: 60, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 } as const;
 
   it("a summarize that throws increments the failure counter and emits a notice (no throw)", async () => {
     const cm = new ContextManager(failCfg, new FixedClock(), silentLogger, new FlakySummarizer(99));
@@ -327,7 +326,7 @@ describe("ContextManager compaction", () => {
   it("compactNow forces summarization regardless of thresholds", async () => {
     const gw = new ScriptedGateway("m", [reply("FORCED SUMMARY")]);
     const cm = new ContextManager(
-      { contextTokens: 1_000_000, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 1_000_000, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
       gw,
@@ -344,7 +343,7 @@ describe("ContextManager compaction", () => {
 
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {
     const cm = new ContextManager(
-      { contextTokens: 100, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 100, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       silentLogger,
     );

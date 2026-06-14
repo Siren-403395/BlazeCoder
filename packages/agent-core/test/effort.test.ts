@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EFFORTS, escalateFromPrompt, isEffort, resolveEffort } from "../src/index";
+import { EFFORTS, escalateFromPrompt, isEffort, MODEL_MAX_OUTPUT_TOKENS, outputBudget, resolveEffort } from "../src/index";
 
 describe("resolveEffort (maps to DeepSeek-V4-Pro's three native modes)", () => {
   it("has exactly three levels", () => {
@@ -24,15 +24,36 @@ describe("resolveEffort (maps to DeepSeek-V4-Pro's three native modes)", () => {
     expect(r.budget).toBe("max");
   });
 
-  it("raises the output-token guard up the ladder", () => {
-    const base = 8000;
-    expect(resolveEffort("low", base).maxOutputTokens).toBe(base);
-    expect(resolveEffort("high", base).maxOutputTokens).toBeGreaterThan(base);
-    expect(resolveEffort("ultra", base).maxOutputTokens).toBeGreaterThan(resolveEffort("high", base).maxOutputTokens);
+  it("controls thinking depth only — it never carries an output budget", () => {
+    expect(resolveEffort("low")).not.toHaveProperty("maxOutputTokens");
+    expect(resolveEffort("ultra")).not.toHaveProperty("maxOutputTokens");
   });
 
   it("defaults to high", () => {
     expect(resolveEffort().budget).toBe("high");
+  });
+});
+
+describe("outputBudget (unleash output, clamp only to fit the window)", () => {
+  it("hands the model its full max when there's plenty of room", () => {
+    expect(outputBudget(1_048_576, 20_000)).toBe(MODEL_MAX_OUTPUT_TOKENS); // 384k
+    expect(MODEL_MAX_OUTPUT_TOKENS).toBe(384_000);
+  });
+
+  it("shrinks only when input + output would overflow the window", () => {
+    // input near the top of a 1M window → budget = window − input − pad, below the model max.
+    const budget = outputBudget(1_048_576, 900_000);
+    expect(budget).toBeLessThan(MODEL_MAX_OUTPUT_TOKENS);
+    expect(budget).toBeGreaterThan(100_000); // still huge — nowhere near the old 8k/32k caps
+    expect(900_000 + budget).toBeLessThanOrEqual(1_048_576);
+  });
+
+  it("honors an explicit lower cap (e.g. for cost control)", () => {
+    expect(outputBudget(1_048_576, 10_000, 50_000)).toBe(50_000);
+  });
+
+  it("never returns below a small floor even if input is enormous", () => {
+    expect(outputBudget(1_048_576, 1_048_576)).toBe(1_024);
   });
 });
 

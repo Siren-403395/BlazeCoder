@@ -36,7 +36,7 @@ describe("compaction logging + stable prefix", () => {
     const logger = { ...silentLogger, info: vi.fn() };
     const gw = new ScriptedGateway("m", [reply("SUMMARY")]);
     const cm = new ContextManager(
-      { contextTokens: 60, outputReservePad: 0, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 },
+      { contextTokens: 60, outputReserveCap: 0, clearThreshold: 0.3, bufferTokens: 10, keepRecentToolResults: 5, keepRecentMessages: 1, maxThrash: 5 },
       new FixedClock(),
       logger,
       gw,

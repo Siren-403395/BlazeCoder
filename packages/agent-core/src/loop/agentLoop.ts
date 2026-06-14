@@ -18,9 +18,9 @@ import type {
   SteeringQueue,
   Workspace,
 } from "../ports";
-import { assembleRequest, computeBudget } from "../context/sessionContext";
+import { assembleRequest, computeBudget, estimateRequestTokens } from "../context/sessionContext";
 import { CompactionThrashError, ContextManager, ContextOverflowError } from "../context/compaction";
-import { escalateOutputTokens, type Effort } from "../effort";
+import { outputBudget, type Effort } from "../effort";
 import { buildLoopConfig } from "./config";
 import { DenialTracker } from "../permissions/denialTracking";
 import { initialLoopState, terminalToSubtype } from "./transitions";
@@ -103,8 +103,6 @@ export async function runAgentLoop(
   const system = loop.system;
   const thinking = loop.thinking;
   const budget = loop.thinkingBudget;
-  // Mutable: output-truncation recovery escalates this within the run.
-  let maxOutputTokens = loop.baseMaxOutputTokens;
 
   emit({
     type: "system",
@@ -157,7 +155,6 @@ export async function runAgentLoop(
           system,
           projectRules,
           tools: toolSchemas,
-          maxOutputTokens,
           realInputTokens: session.lastRealInputTokens,
           ledger,
           workspace,
@@ -181,11 +178,15 @@ export async function runAgentLoop(
       projectRules,
       messages: session.messages,
       tools: toolSchemas,
-      maxOutputTokens,
+      maxOutputTokens: 0, // placeholder; sized below from the live input estimate
       temperature: loop.temperature,
       thinking,
       thinkingBudget: budget,
     });
+    // Unleash output: hand the model up to its full maximum, shrinking only so this turn's
+    // input + output fit the context window. (Output is never pinned to a small fixed cap;
+    // effort controls thinking depth, not output length.)
+    request.maxOutputTokens = outputBudget(loop.contextTokens, estimateRequestTokens(request), loop.maxOutputCap);
 
     let response: ModelResponse;
     try {
@@ -229,26 +230,18 @@ export async function runAgentLoop(
     // Authoritative count for the NEXT turn's compaction gate (beats the heuristic).
     session.lastRealInputTokens = response.usage.inputTokens;
 
-    // Output-truncation recovery: the model hit its output budget mid-answer with no
-    // tool calls. Recover instead of mistaking the truncated text for a finished turn.
+    // Output-truncation recovery: the model hit its (already-maximal) output budget mid-answer
+    // with no tool calls. The budget is sized to the whole remaining window, so there's nothing
+    // to escalate to — keep the partial answer and nudge the model to resume in smaller pieces
+    // (the next turn's budget is recomputed, and compaction frees input headroom if needed).
     if (response.toolCalls.length === 0 && response.stopReason === "max_tokens" && state.recoveryCount < 3) {
-      const escalated = state.recoveryCount === 0 ? escalateOutputTokens(maxOutputTokens) : undefined;
-      if (escalated) {
-        // First time: silently retry the SAME request with a bigger budget (discard the
-        // truncated turn — it never enters the transcript).
-        maxOutputTokens = escalated;
-        emit({ type: "notice", level: "info", message: `Output truncated; retrying with a larger output budget (${escalated} tokens).` });
-        state = { ...state, transition: { reason: "output_truncation_recovery", attempt: state.recoveryCount + 1 }, recoveryCount: state.recoveryCount + 1 };
-        continue;
-      }
-      // Already escalated (or at the ceiling): keep the partial work and nudge the model to resume.
       session.messages.push({ role: "assistant", content: response.text, reasoning: response.reasoning, toolCalls: [] });
       emit({ type: "assistant", text: response.text, reasoning: response.reasoning, toolCalls: [] });
       session.messages.push({
         role: "user",
         content: "Output token limit hit. Resume directly — no apology, no recap. Pick up mid-thought; break the remaining work into smaller pieces.",
       });
-      emit({ type: "notice", level: "warn", message: "Output truncated again; asked the model to resume in smaller pieces." });
+      emit({ type: "notice", level: "warn", message: "Output truncated; asked the model to resume in smaller pieces." });
       state = { ...state, transition: { reason: "output_truncation_recovery", attempt: state.recoveryCount + 1 }, recoveryCount: state.recoveryCount + 1 };
       continue;
     }

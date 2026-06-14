@@ -103,7 +103,8 @@ Config is read from, lowest priority first: `~/.zephyrcode/.env`  <  `<cwd>/.env
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API endpoint (any OpenAI-compatible host). |
 | `AGENT_MAX_TURNS` | `24` | Max tool-use turns before the loop halts. |
 | `AGENT_MAX_BUDGET_USD` | `1.0` | Per-run spend cap (USD). |
-| `AGENT_CONTEXT_TOKENS` | `65536` | Context window — drives the budget gauge + compaction triggers. |
+| `AGENT_CONTEXT_TOKENS` | `1048576` | Context window (DeepSeek-V4-Pro ≈ 1M) — drives the budget gauge + compaction. |
+| `AGENT_MAX_OUTPUT_TOKENS` | unset → model max (384K) | Optional output ceiling. Unset = unleashed (sized per turn to fit the window). |
 | `AGENT_MAX_RETRIES` | `8` | Max transient-failure retries per model call. |
 | `AGENT_FAKE_MODEL` | off | `1`/`true` → offline stub gateway (no key needed). |
 | `AGENT_WEB` | off | `1`/`true` → enable the `WebSearch` / `WebFetch` tools. |
@@ -179,7 +180,7 @@ The context window is treated as the scarce resource: a token-budget gauge drive
 
 ### Effort
 
-Three reasoning levels map onto DeepSeek's native thinking modes: `low` (thinking off) · `high` (thinking on) · `ultra` (max budget). A per-turn "ultrathink" keyword escalates a single turn to max.
+Three reasoning levels map onto DeepSeek's native thinking modes: `low` (thinking off) · `high` (thinking on) · `ultra` (max budget). A per-turn "ultrathink" keyword escalates a single turn to max. **Effort controls thinking depth only — never output length.** Output is unleashed to the model's full maximum (DeepSeek-V4-Pro: 384K tokens), sized down per turn only as far as the ~1M context window requires, so long answers and big file writes are never truncated by an artificial cap.
 
 ### Sessions, sub-agents, hooks
 
