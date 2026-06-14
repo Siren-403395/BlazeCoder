@@ -11,6 +11,7 @@
     "dev:electron": "pnpm build:main && wait-on http://127.0.0.1:5173 && node scripts/start-electron.cjs",
     "build:main": "tsup",
     "build": "pnpm build:main && vite build",
+    "start": "electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

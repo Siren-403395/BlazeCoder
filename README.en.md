@@ -17,7 +17,7 @@ Not a sandboxed toy. Frontend, backend, scripts, anything.</p>
 <p>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A5%2020-e8a64d?style=flat-square&labelColor=2b2b2b">
-  <img alt="tests" src="https://img.shields.io/badge/tests-341%20passing-e8a64d?style=flat-square&labelColor=2b2b2b">
+  <img alt="tests" src="https://img.shields.io/badge/tests-546%20passing-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="context" src="https://img.shields.io/badge/context-1M%20tokens-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="model" src="https://img.shields.io/badge/model-deepseek--v4--pro-e8a64d?style=flat-square&labelColor=2b2b2b">
 </p>
@@ -81,10 +81,13 @@ cd zephyrcode
 ./install.sh           # build + drop a launcher in ~/.local/bin + guide you to connect a model
 
 zephyrcode             # start the interactive TUI in the current directory
+zephyrcode --gui       # launch the desktop GUI (Electron) — same agent as the TUI
 zephyrcode --setup     # connect / switch model + key anytime
 zephyrcode --help      # all options
 zephyrcode --update    # git pull + rebuild to the latest
 ```
+
+> **Two front-ends, one agent.** Use `zephyrcode` in the terminal, or `zephyrcode --gui` for a desktop window (it builds itself once on first launch). Both share the same `~/.zephyrcode/config.json` and the same agent kernel — connect a model once, use it from either.
 
 **First run guides you through connecting a model**
 
@@ -129,6 +132,7 @@ AGENT_FAKE_MODEL=1 zephyrcode    # offline stub model, the whole TUI works, no k
 <tr><td><code>--resume [id]</code></td><td>Resume a session by id; omit id to list recent sessions</td></tr>
 <tr><td><code>-p</code>, <code>--print &lt;text&gt;</code></td><td>Run one prompt headlessly and print the result (scripts / CI)</td></tr>
 <tr><td><code>--output-format &lt;fmt&gt;</code></td><td>Headless output: <code>text</code> | <code>json</code> | <code>stream-json</code></td></tr>
+<tr><td><code>--gui</code></td><td>Launch the desktop GUI (Electron) instead of the terminal UI</td></tr>
 <tr><td><code>--yolo</code></td><td>Headless: auto-approve tool calls (dangerous, trusted CI only)</td></tr>
 <tr><td><code>--update</code> · <code>-v</code> · <code>-h</code></td><td>Update to latest · version · help</td></tr>
 </tbody>
@@ -289,16 +293,21 @@ A pnpm + Turborepo monorepo, ports and adapters:
 ```text
 packages/
   shared/      types shared across the agent (file / event / session schema, safety)
-  agent-core/  the portable, unit-tested kernel, depends only on injected ports:
+  agent-core/  the portable, unit-tested kernel (@zephyrcode/core), depends only on ports:
                loop · context (compaction/memory) · tools · permissions/hooks · sessions
                · workspace (real FS + boundary + read-before-edit ledger)
                · skills / sub-agents / output-styles · effort
-  cli/         the app: an Ink TUI + headless mode + the Node/OS adapters
-               (DeepSeek gateway, local-process sandbox), wired to agent-core in-process
+  host/        the Node/OS wiring (@zephyrcode/host): model gateway · local-process sandbox
+               · config/settings/credentials · session+memory stores · provider registry
+               · headless renderer · buildRuntime(). No UI code at all.
+  cli/         terminal host: Ink TUI + headless, wires host + agent-core in-process
+  desktop/     desktop host: an Electron GUI, a sibling of the TUI; also wires host in-process
 docs/ARCHITECTURE.md
 ```
 
-`agent-core` has **no** TUI, HTTP, or DeepSeek imports. Everything crosses the boundary through ports (`ModelGateway`, `Workspace`, `Sandbox`, `SessionStore`, `MemoryStore`, `Clock`, `Logger`), so it runs fully under unit tests with in-memory fakes, runs **in-process** in the CLI, and swapping/adding a model is one provider (with its own adapter).
+The dependency graph is a clean DAG: `shared ← core ← host ← {cli, desktop}`. Both UI hosts depend on `host` and **never on each other** — the TUI and the GUI are interchangeable sibling adapters over one runtime. The GUI renderer is an **Ink-free island** (it type-imports kernel types only, never a value import), so adding a web / vscode host later is just one more package with no change to core/cli.
+
+`agent-core` has **no** UI, HTTP, or DeepSeek imports. Everything crosses the boundary through ports (`ModelGateway`, `Workspace`, `Sandbox`, `SessionStore`, `MemoryStore`, `Clock`, `Logger`), so it runs fully under unit tests with in-memory fakes, runs **in-process** under any host, and swapping/adding a model is one provider (with its own adapter) in `host`.
 
 ---
 
@@ -308,11 +317,14 @@ docs/ARCHITECTURE.md
 pnpm install
 pnpm --filter @zephyrcode/cli zephyrcode    # run the TUI via tsx (no build step)
 pnpm --filter @zephyrcode/cli build         # produce packages/cli/dist/zephyrcode.js
+pnpm desktop                                # desktop GUI in dev mode (Vite HMR + Electron)
 
 pnpm typecheck    # all packages
-pnpm test         # unit + integration + e2e (341 tests)
+pnpm test         # unit + integration + e2e (546 tests)
 pnpm build        # build everything
 ```
+
+> End users run `zephyrcode --gui` (loads the built GUI); `pnpm desktop` is the dev command with hot reload.
 
 - **Unit**: every `agent-core` module + shared safety primitives + the TUI reducer
 - **Integration**: the full loop with a scripted model + in-memory fakes; the headless runner

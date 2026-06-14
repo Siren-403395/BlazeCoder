@@ -19,6 +19,7 @@ import {
   type OutputFormat,
 } from "@zephyrcode/host";
 import { isEffort, type Effort } from "@zephyrcode/core";
+import { launchDesktop } from "./desktop";
 
 /** Wipe the screen + scrollback so the chat starts clean after the onboarding panel. */
 const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
@@ -40,10 +41,12 @@ interface Args {
   yolo: boolean;
   /** Re-run onboarding (provider/model/key) and exit. */
   setup: boolean;
+  /** Launch the Electron desktop GUI instead of the terminal UI. */
+  gui: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { help: false, version: false, continue: false, yolo: false, setup: false };
+  const args: Args = { help: false, version: false, continue: false, yolo: false, setup: false, gui: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--help" || a === "-h") args.help = true;
@@ -64,6 +67,7 @@ function parseArgs(argv: string[]): Args {
     else if (a.startsWith("--output-format=")) args.format = a.slice(16) as OutputFormat;
     else if (a === "--yolo" || a === "--dangerously-allow-all") args.yolo = true;
     else if (a === "--setup" || a === "--login") args.setup = true;
+    else if (a === "--gui" || a === "--desktop") args.gui = true;
   }
   return args;
 }
@@ -79,6 +83,7 @@ Options:
   --resume [id]      Resume a session by id (omit id to list recent sessions)
   -p, --print <text> Run one prompt headlessly (no TUI) and print the result
   --output-format    Headless output: text | json | stream-json (default text)
+  --gui              Launch the desktop GUI (Electron) instead of the terminal UI
   --yolo             Headless: auto-approve tool calls (DANGEROUS; for trusted CI)
   --setup            Connect or change your model provider + API key, then exit
   --update           Update zephyrcode to the latest build (handled by the launcher)
@@ -121,6 +126,12 @@ async function main(): Promise<void> {
   if (args.help) {
     process.stdout.write(`${USAGE}\n`);
     return;
+  }
+
+  // Desktop GUI: hand off to Electron and exit with its code. The GUI is a sibling host that
+  // loads the same ~/.zephyrcode/config.json in its own process, so no setup/onboarding here.
+  if (args.gui) {
+    process.exit(await launchDesktop());
   }
 
   const cwd = args.cwd ? resolve(args.cwd) : process.cwd();
