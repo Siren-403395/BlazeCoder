@@ -26,12 +26,21 @@ describe("slash-command palette", () => {
   it("matches on aliases too", () => {
     expect(palette("/reset").matches.map((c) => c.name)).toEqual(["clear"]);
   });
+
+  it("lists the /skill and /output-style commands", () => {
+    const all = palette("/").matches.map((c) => c.name);
+    expect(all).toContain("skill");
+    expect(all).toContain("output-style");
+    expect(palette("/output").matches.map((c) => c.name)).toEqual(["output-style"]);
+  });
 });
 
 describe("findCommand", () => {
   it("resolves names and aliases", () => {
     expect(findCommand("effort")?.name).toBe("effort");
     expect(findCommand("reset")?.name).toBe("clear");
+    expect(findCommand("skill")?.name).toBe("skill");
+    expect(findCommand("output-style")?.name).toBe("output-style");
     expect(findCommand("nope")).toBeUndefined();
   });
 });

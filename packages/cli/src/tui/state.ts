@@ -37,6 +37,8 @@ export interface TuiState {
   status: RunStatus;
   model?: string;
   effort: string;
+  /** The active output style name, if any (mirrors runtime.outputStyle; shown on the input rule). */
+  outputStyle?: string;
   /** Estimated output chars streamed this turn — drives the live token counter. */
   turnChars: number;
   turns: number;
@@ -57,6 +59,7 @@ export type UiAction =
   | AgentEvent
   | { type: "user_prompt"; text: string }
   | { type: "set_effort"; effort: string }
+  | { type: "set_output_style"; style?: string }
   | { type: "permission_resolved" }
   | { type: "hydrate"; session: SessionState }
   | { type: "reset" };
@@ -103,10 +106,14 @@ function firstLine(text: string, max = 200): string {
 export function applyEvent(state: TuiState, action: UiAction): TuiState {
   switch (action.type) {
     case "reset":
-      return { ...initialState(state.effort), model: state.model };
+      // The output style is a runtime-level setting; it survives a /clear.
+      return { ...initialState(state.effort), model: state.model, outputStyle: state.outputStyle };
 
     case "set_effort":
       return { ...state, effort: action.effort };
+
+    case "set_output_style":
+      return { ...state, outputStyle: action.style };
 
     case "permission_resolved":
       // The user answered the prompt; the loop resumes and will emit more events.

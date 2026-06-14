@@ -154,6 +154,7 @@ export function InputBox({
   ghost,
   placeholder,
   effort,
+  outputStyle,
   width,
   showCursor = true,
 }: {
@@ -162,10 +163,11 @@ export function InputBox({
   ghost?: string | null;
   placeholder?: string;
   effort: string;
+  outputStyle?: string;
   width: number;
   showCursor?: boolean;
 }) {
-  const label = ` ✶ ${effort} `;
+  const label = ` ✶ ${effort}${outputStyle ? ` · ${outputStyle}` : ""} `;
   const dashes = Math.max(2, width - label.length - 1);
   return (
     <Box flexDirection="column" marginTop={1}>
@@ -306,6 +308,45 @@ export function SessionPicker({ sessions, index }: { sessions: SessionSummary[];
         })
       )}
       <Text color={theme.faint}>↑↓ select · Enter open · Esc cancel</Text>
+    </Box>
+  );
+}
+
+/**
+ * A generic single-select list in the same bordered style as SessionPicker, driven by
+ * `{ name, description }` items. Shared by the /skill and /output-style palettes (Skill
+ * and OutputStyle both satisfy this shape, so no adapter is needed).
+ */
+export function ChoicePicker({
+  title,
+  items,
+  index,
+}: {
+  title: string;
+  items: { name: string; description: string }[];
+  index: number;
+}) {
+  return (
+    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.accent} paddingX={1}>
+      <Text color={theme.accent} bold>
+        {title}
+      </Text>
+      {items.length === 0 ? (
+        <Text color={theme.faint}>None available.</Text>
+      ) : (
+        items.map((it, i) => {
+          const selected = i === index;
+          return (
+            <Box key={it.name}>
+              <Text color={selected ? theme.accent : theme.muted} bold={selected}>
+                {(selected ? "❯ " : "  ") + it.name}
+              </Text>
+              <Text color={theme.faint}>{`  ${it.description}`}</Text>
+            </Box>
+          );
+        })
+      )}
+      <Text color={theme.faint}>↑↓ select · Enter choose · Esc cancel</Text>
     </Box>
   );
 }

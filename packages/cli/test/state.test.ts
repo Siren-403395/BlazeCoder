@@ -128,9 +128,10 @@ describe("TUI state reducer", () => {
     expect(s.items.at(-1)).toMatchObject({ kind: "result", subtype: "success", summary: "Done." });
   });
 
-  it("reset clears the transcript but keeps model and effort", () => {
+  it("reset clears the transcript but keeps model, effort, and output style", () => {
     const s = reduce([
       { type: "set_effort", effort: "ultra" },
+      { type: "set_output_style", style: "concise" },
       { type: "system", subtype: "init", sessionId: "s", model: "m", tools: [], maxTurns: 24, contextTokens: 100 },
       { type: "user_prompt", text: "go" },
     ]);
@@ -138,7 +139,15 @@ describe("TUI state reducer", () => {
     expect(cleared.items).toHaveLength(0);
     expect(cleared.model).toBe("m");
     expect(cleared.effort).toBe("ultra");
+    expect(cleared.outputStyle).toBe("concise"); // a runtime-level setting survives /clear
     expect(cleared.status).toBe("idle");
+  });
+
+  it("set_output_style sets and clears the active style", () => {
+    let s = applyEvent(initialState(), { type: "set_output_style", style: "poet" });
+    expect(s.outputStyle).toBe("poet");
+    s = applyEvent(s, { type: "set_output_style", style: undefined });
+    expect(s.outputStyle).toBeUndefined();
   });
 
   it("hydrates scrollback from a persisted session (resume), without rendering reasoning", () => {

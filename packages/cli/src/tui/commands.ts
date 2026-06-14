@@ -19,6 +19,8 @@ export interface SlashCommand {
 export const COMMANDS: SlashCommand[] = [
   { name: "resume", description: "Resume a previous conversation" },
   { name: "effort", description: "Set reasoning depth: low (off) · high · ultra", argHint: EFFORTS.join(" | "), argChoices: [...EFFORTS] },
+  { name: "skill", description: "Pick and run a project skill" },
+  { name: "output-style", description: "Switch the output style (applies next turn)" },
   { name: "usage", description: "Show token usage and session cost" },
   { name: "context", description: "Show how full the context window is" },
   { name: "clear", description: "Start a new session with empty context; the previous one stays on disk (resume with /resume)", aliases: ["reset"] },

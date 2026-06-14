@@ -19,15 +19,18 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import {
   EFFORTS,
   escalateFromPrompt,
+  expandSkillBody,
   isEffort,
   type AgentRuntime,
   type Effort,
+  type OutputStyle,
   type SessionState,
   type SessionSummary,
+  type Skill,
 } from "@coding-agent/core";
 import { applyEvent, initialState } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
-import { CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
+import { ChoicePicker, CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
 import { freshSeed, loadingWord, tipAt } from "./flavor";
 import { theme } from "./theme";
 
@@ -37,6 +40,15 @@ const MAX_VISIBLE_ITEMS = 50;
 type Completion =
   | { kind: "command"; matches: { name: string; argHint?: string }[] }
   | { kind: "file"; matches: string[]; start: number };
+
+/** A modal list overlay. All three share the picker slot + the one useInput branch. */
+type Picker =
+  | { kind: "session"; items: SessionSummary[]; index: number }
+  | { kind: "skill"; items: Skill[]; index: number }
+  | { kind: "style"; items: OutputStyle[]; index: number };
+
+/** Sentinel style row that reverts to the base prompt (selected → setOutputStyle(undefined)). */
+const NO_STYLE: OutputStyle = { name: "(default)", description: "no style · base zephyrcode prompt", prompt: "" };
 
 function formatElapsed(sec: number): string {
   return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
@@ -62,14 +74,16 @@ export function App({
   initialSession?: SessionState;
 }) {
   const [state, dispatch] = useReducer(applyEvent, undefined, () => {
-    const base = initialState(effort);
+    // Mirror the runtime's startup output style so the input rule shows it from frame one.
+    const base = { ...initialState(effort), outputStyle: runtime.outputStyle };
     return initialSession ? applyEvent(base, { type: "hydrate", session: initialSession }) : base;
   });
   const [draft, setDraft] = useState("");
   const [cursor, setCursor] = useState(0);
   const [compIndex, setCompIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [picker, setPicker] = useState<{ sessions: SessionSummary[]; index: number } | null>(null);
+  // One picker slot, one priority position in useInput; the kind drives Enter's action.
+  const [picker, setPicker] = useState<Picker | null>(null);
   const { exit } = useApp();
   const { stdout } = useStdout();
   const width = Math.max(40, stdout?.columns ?? 80);
@@ -132,7 +146,7 @@ export function App({
   }, []);
 
   const openResume = useCallback(async () => {
-    setPicker({ sessions: await runtime.listSessions(), index: 0 });
+    setPicker({ kind: "session", items: await runtime.listSessions(), index: 0 });
   }, [runtime]);
 
   const openSession = useCallback(
@@ -142,6 +156,23 @@ export function App({
         dispatch({ type: "hydrate", session: s });
         sessionId.current = s.id;
       }
+      setPicker(null);
+    },
+    [runtime],
+  );
+
+  // Switch the active output style on the runtime (takes effect next turn) and mirror it
+  // in the UI. The sentinel "(default)" row reverts to the base prompt.
+  const applyStyle = useCallback(
+    (style: OutputStyle) => {
+      const real = style.name === NO_STYLE.name ? undefined : style;
+      runtime.setOutputStyle(real);
+      dispatch({ type: "set_output_style", style: real?.name });
+      dispatch({
+        type: "notice",
+        level: "info",
+        message: real ? `Output style → ${real.name} (applies next turn)` : "Output style cleared (base prompt)",
+      });
       setPicker(null);
     },
     [runtime],
@@ -186,19 +217,49 @@ export function App({
         case "resume":
           await openResume();
           return;
+        case "skill":
+          if (runtime.skills.length === 0) {
+            dispatch({
+              type: "notice",
+              level: "warn",
+              message: "No skills found. Add one under .zephyrcode/skills/<name>/SKILL.md (or ~/.zephyrcode/skills).",
+            });
+          } else {
+            setPicker({ kind: "skill", items: runtime.skills, index: 0 });
+          }
+          return;
+        case "output-style": {
+          if (runtime.outputStyles.length === 0) {
+            dispatch({
+              type: "notice",
+              level: "warn",
+              message: "No output styles found. Add one under .zephyrcode/output-styles/<name>.md (or ~/.zephyrcode/output-styles).",
+            });
+            return;
+          }
+          if (arg) {
+            // Direct switch: /output-style <name> (default|none|off reverts to the base prompt).
+            const target = /^(default|none|off)$/i.test(arg) ? NO_STYLE : runtime.outputStyles.find((s) => s.name === arg);
+            if (target) applyStyle(target);
+            else dispatch({ type: "notice", level: "warn", message: `Unknown output style: ${arg}` });
+          } else {
+            setPicker({ kind: "style", items: [NO_STYLE, ...runtime.outputStyles], index: 0 });
+          }
+          return;
+        }
         case "help":
           dispatch({
             type: "notice",
             level: "info",
             message:
-              "/resume · /effort <low|high|ultra> · /usage · /context · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
+              "/resume · /effort <low|high|ultra> · /skill · /output-style · /usage · /context · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
           });
           return;
         default:
           dispatch({ type: "notice", level: "warn", message: `Unknown command: /${name}` });
       }
     },
-    [exit, openResume],
+    [exit, openResume, applyStyle, runtime],
   );
 
   const submit = useCallback(
@@ -301,12 +362,20 @@ export function App({
       return;
     }
 
-    // 2) Session picker.
+    // 2) Picker (resume / skill / output-style): one block, Enter action by kind.
     if (picker) {
       if (key.upArrow) setPicker((p) => (p ? { ...p, index: Math.max(0, p.index - 1) } : p));
-      else if (key.downArrow) setPicker((p) => (p ? { ...p, index: Math.min(p.sessions.length - 1, p.index + 1) } : p));
-      else if (key.return && picker.sessions.length) void openSession(picker.sessions[picker.index]!);
-      else if (key.escape) setPicker(null);
+      else if (key.downArrow) setPicker((p) => (p ? { ...p, index: Math.min(p.items.length - 1, p.index + 1) } : p));
+      else if (key.return && picker.items.length) {
+        if (picker.kind === "session") void openSession(picker.items[picker.index]!);
+        else if (picker.kind === "skill") {
+          const skill = picker.items[picker.index]!;
+          setPicker(null);
+          void submit(expandSkillBody(skill)); // run the recipe as a turn (Claude-Code-style expansion)
+        } else {
+          applyStyle(picker.items[picker.index]!);
+        }
+      } else if (key.escape) setPicker(null);
       return;
     }
 
@@ -408,8 +477,12 @@ export function App({
 
       {busy && !state.permission && !picker ? <LoadingLine word={word} meta={meta} /> : null}
 
-      {picker ? (
-        <SessionPicker sessions={picker.sessions} index={picker.index} />
+      {picker?.kind === "session" ? (
+        <SessionPicker sessions={picker.items} index={picker.index} />
+      ) : picker?.kind === "skill" ? (
+        <ChoicePicker title="Run a skill" items={picker.items} index={picker.index} />
+      ) : picker?.kind === "style" ? (
+        <ChoicePicker title="Set output style" items={picker.items} index={picker.index} />
       ) : state.permission ? (
         <PermissionPrompt p={state.permission} />
       ) : (
@@ -420,6 +493,7 @@ export function App({
             ghost={ghost}
             placeholder={busy ? "working… (type + enter to steer · esc to interrupt)" : "Ask, or / for commands, @ for files"}
             effort={state.effort}
+            outputStyle={state.outputStyle}
             width={width}
             showCursor={true}
           />
