@@ -9,8 +9,7 @@
 
 import { useCallback, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
-import { setActiveProvider } from "../authStore";
-import { defaultModel, type ModelOption, type Provider } from "../providers";
+import { setActiveProvider, defaultModel, type ModelOption, type Provider } from "@zephyrcode/host";
 import { theme } from "./theme";
 import { Wordmark } from "./view";
 

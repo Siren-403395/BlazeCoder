@@ -26,7 +26,8 @@
 
     "paths": {
       "@zephyrcode/shared": ["./packages/shared/src/index.ts"],
-      "@zephyrcode/core": ["./packages/agent-core/src/index.ts"]
+      "@zephyrcode/core": ["./packages/agent-core/src/index.ts"],
+      "@zephyrcode/host": ["./packages/host/src/index.ts"]
     }
   }
 }

@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@zephyrcode/core": "workspace:*",
+    "@zephyrcode/host": "workspace:*",
     "@zephyrcode/shared": "workspace:*",
     "ink": "^5",
     "ink-spinner": "^5",

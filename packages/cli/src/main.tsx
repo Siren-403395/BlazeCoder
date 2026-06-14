@@ -8,12 +8,16 @@ import { resolve } from "node:path";
 import { render } from "ink";
 import { App } from "./tui/App";
 import { Onboarding } from "./tui/Onboarding";
-import { loadConfig } from "./config";
-import { runSetup, shouldRunOnboardingGate } from "./onboarding";
-import { PROVIDERS } from "./providers";
-import { migrateLegacySessions } from "./projects";
-import { buildRuntime } from "./runtime";
-import { runHeadless, type OutputFormat } from "./headless";
+import {
+  loadConfig,
+  runSetup,
+  shouldRunOnboardingGate,
+  PROVIDERS,
+  migrateLegacySessions,
+  buildRuntime,
+  runHeadless,
+  type OutputFormat,
+} from "@zephyrcode/host";
 import { isEffort, type Effort } from "@zephyrcode/core";
 
 /** Wipe the screen + scrollback so the chat starts clean after the onboarding panel. */

@@ -9,7 +9,7 @@
 
 import type { AgentEvent } from "@zephyrcode/shared";
 import type { AgentRuntime, Effort } from "@zephyrcode/core";
-import { toolDetail } from "./tui/theme";
+import { toolDetail } from "./format";
 
 export type OutputFormat = "text" | "json" | "stream-json";
 

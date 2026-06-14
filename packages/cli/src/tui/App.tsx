@@ -29,7 +29,7 @@ import {
   type Skill,
 } from "@zephyrcode/core";
 import { applyEvent, initialState, splitItems } from "./state";
-import { gitChanges } from "../git";
+import { gitChanges } from "@zephyrcode/host";
 import { modeById, modeForPermission, nextModeId } from "./modes";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
 import { ChoicePicker, CommandPalette, FileCompletion, formatTokens, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
