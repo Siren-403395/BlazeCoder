@@ -175,6 +175,96 @@ describe("PermissionEngine", () => {
     expect(asked).toBe(false);
   });
 
+  it("auto mode runs every tool without prompting (full autonomy)", async () => {
+    const { engine } = makeEngine({ mode: "auto" });
+    let asked = false;
+    const emit: EventSink = (e) => {
+      if (e.type === "permission_request") asked = true;
+    };
+    expect((await engine.check(tool("read_file", true), {}, { emit, signal })).behavior).toBe("allow");
+    expect((await engine.check(tool("Write", false), { file_path: "/a" }, { emit, signal })).behavior).toBe("allow");
+    expect((await engine.check(tool("Bash", false), { command: "npm test" }, { emit, signal })).behavior).toBe("allow");
+    expect(asked).toBe(false); // nothing prompted — fully automatic
+  });
+
+  it("auto mode keeps the safety floor: a catastrophic command STILL escalates to a human prompt", async () => {
+    const { engine, broker } = makeEngine({ mode: "auto" });
+    let asked = false;
+    const run = await engine.check(tool("Bash", false), { command: "rm -rf ~" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          asked = true;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(asked).toBe(true); // unlike bypass, auto does not silently run a catastrophic command
+    expect(run.behavior).toBe("deny");
+  });
+
+  it("auto mode keeps the safety floor: protected paths are still denied", async () => {
+    const { engine } = makeEngine({ mode: "auto" });
+    const res = await engine.check(tool("write_file", false), { path: "/.git/config" }, { emit: () => {}, signal });
+    expect(res.behavior).toBe("deny");
+  });
+
+  it("auto mode floor holds even against a hook-allow: a catastrophic command STILL escalates", async () => {
+    // Regression: a PreToolUse hook returning allow (with updatedInput) used to short-circuit BEFORE
+    // risk classification, letting a hook-allowed `rm -rf ~` run silently. The floor now outranks the hook.
+    const hooks = new HookBus().onPreToolUse(() => ({ decision: "allow", updatedInput: { command: "rm -rf ~" } }));
+    const { engine, broker } = makeEngine({ mode: "auto", hooks });
+    let asked = false;
+    const run = await engine.check(tool("Bash", false), { command: "rm -rf ~" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          asked = true;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(asked).toBe(true); // hook-allow does NOT bypass the catastrophic floor
+    expect(run.behavior).toBe("deny");
+  });
+
+  it("a non-catastrophic hook-allow still short-circuits to allow (no regression)", async () => {
+    const hooks = new HookBus().onPreToolUse(() => ({ decision: "allow", updatedInput: { command: "npm test" } }));
+    const { engine } = makeEngine({ mode: "default", hooks });
+    let asked = false;
+    const run = await engine.check(tool("Bash", false), { command: "npm test" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") asked = true;
+      },
+      signal,
+    });
+    expect(asked).toBe(false);
+    expect(run.behavior).toBe("allow");
+    expect(run.behavior === "allow" && run.decisionReason.type).toBe("hook");
+  });
+
+  it("auto mode keeps the safety floor: a matching ask rule STILL forces a human prompt", async () => {
+    const { engine, broker } = makeEngine({ mode: "auto", ask: ["Bash(git push:*)"] });
+    let asked = false;
+    const run = await engine.check(tool("Bash", false), { command: "git push origin main" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          asked = true;
+          broker.resolve(e.requestId, { behavior: "allow" });
+        }
+      },
+      signal,
+    });
+    expect(asked).toBe(true);
+    expect(run.behavior).toBe("allow");
+  });
+
+  it("auto mode: an explicit deny rule still denies (deny beats mode)", async () => {
+    const { engine } = makeEngine({ mode: "auto", deny: ["Bash(curl:*)"] });
+    const r = await engine.check(tool("Bash", false), { command: "curl http://example.com" }, { emit: () => {}, signal });
+    expect(r.behavior).toBe("deny");
+  });
+
   it("attaches advisory risk to a Bash permission_request, and nothing to other tools", async () => {
     const { engine, broker } = makeEngine({ mode: "default" });
     let bashRisk: unknown;

@@ -12,6 +12,7 @@ import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { TAGLINE, WORDMARK_ROWS, WORDMARK_WIDTH } from "./banner";
 import type { SlashCommand } from "./commands";
+import { modeById } from "./modes";
 import type { Item, PendingPermission } from "./state";
 
 /** Compact token count: 1234 → "1.2k", 1_048_576 → "1.0m". Shared by the live gauge and /context. */
@@ -81,7 +82,7 @@ export function WelcomeBanner({ model, cwd, effort, width }: { model: string; cw
         </Box>
       </Box>
       <Box marginTop={1} paddingX={1}>
-        <Text color={theme.faint}>{"/help  ·  @ files  ·  ↑ history  ·  /resume  ·  say “ultrathink” to go deep"}</Text>
+        <Text color={theme.faint}>{"/help  ·  @ files  ·  ↑ history  ·  shift+tab modes  ·  say “ultrathink” to go deep"}</Text>
       </Box>
     </Box>
   );
@@ -311,9 +312,44 @@ export function LoadingLine({ word, meta }: { word: string; meta: string }) {
 }
 
 /**
- * The prompt input: the editable line inside a full rounded box (clear top + bottom
- * borders, so it reads as a real field, not a floating line), with the current effort
- * (and output style, if any) on a faint status row beneath it.
+ * The rounded box's TOP border with a right-aligned label baked INTO the rule (Claude-Code style:
+ * `╭───────── ✶ high ─╮`). Drawn by hand so the effort/style sits in the border itself; the body
+ * below is an Ink box with `borderTop={false}`, so its left/right/bottom borders meet these corners.
+ * Falls back to a plain rule when the terminal is too narrow to embed the label.
+ */
+function TopBorder({ width, label }: { width: number; label: string }) {
+  const inner = width - 2; // dashes between the two corners
+  const tag = ` ${label} `;
+  const rightPad = 1; // dashes between the label and the right corner
+  const leftDashes = inner - tag.length - rightPad;
+  if (leftDashes < 1) {
+    return <Text color={theme.accent}>{`╭${"─".repeat(Math.max(0, inner))}╮`}</Text>;
+  }
+  return (
+    <Text>
+      <Text color={theme.accent}>{`╭${"─".repeat(leftDashes)}`}</Text>
+      <Text color={theme.faint}>{tag}</Text>
+      <Text color={theme.accent}>{`${"─".repeat(rightPad)}╮`}</Text>
+    </Text>
+  );
+}
+
+/** The bottom-left mode indicator (Claude-Code style: `▶▶ auto mode on (shift+tab to cycle)`). Baseline modes render nothing. */
+function ModeIndicator({ mode }: { mode: string }) {
+  const m = modeById(mode);
+  if (!m.indicator) return null;
+  return (
+    <Box paddingLeft={1}>
+      <Text color={theme.accent} bold>{`${m.indicator.glyph} ${m.indicator.label} `}</Text>
+      <Text color={theme.faint}>(shift+tab to cycle)</Text>
+    </Box>
+  );
+}
+
+/**
+ * The prompt input: the editable line inside a rounded box whose TOP border carries the current
+ * effort (and output style, if any), right-aligned in the rule itself. The active non-baseline
+ * permission mode (e.g. Auto) shows as a bracketed indicator at the bottom-left, beneath the box.
  */
 export function InputBox({
   value,
@@ -322,6 +358,7 @@ export function InputBox({
   placeholder,
   effort,
   outputStyle,
+  mode = "normal",
   width,
   showCursor = true,
 }: {
@@ -331,18 +368,19 @@ export function InputBox({
   placeholder?: string;
   effort: string;
   outputStyle?: string;
+  mode?: string;
   width: number;
   showCursor?: boolean;
 }) {
   const status = `✶ ${effort}${outputStyle ? ` · ${outputStyle}` : ""}`;
+  const boxWidth = Math.max(20, width);
   return (
-    <Box flexDirection="column" marginTop={1} width={Math.max(20, width)}>
-      <Box borderStyle="round" borderColor={theme.accent} paddingX={1}>
+    <Box flexDirection="column" marginTop={1} width={boxWidth}>
+      <TopBorder width={boxWidth} label={status} />
+      <Box borderStyle="round" borderColor={theme.accent} borderTop={false} paddingX={1}>
         <InputLine value={value} cursor={cursor} ghost={ghost} placeholder={placeholder} showCursor={showCursor} />
       </Box>
-      <Box justifyContent="flex-end" paddingRight={1}>
-        <Text color={theme.faint}>{status}</Text>
-      </Box>
+      <ModeIndicator mode={mode} />
     </Box>
   );
 }

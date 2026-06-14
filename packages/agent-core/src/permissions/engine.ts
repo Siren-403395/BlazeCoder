@@ -176,9 +176,11 @@ export class PermissionEngine {
     // 1) Hooks.
     const hook = await this.hookBus.runPreToolUse({ toolName: tool.name, input, tool });
     if (hook.decision === "deny") return { behavior: "deny", message: hook.message, decisionReason: { type: "hook" } };
-    if (hook.decision === "allow") {
-      return { behavior: "allow", input: hook.updatedInput ?? input, decisionReason: { type: "hook" } };
-    }
+    // A hook-allow may REWRITE the input (updatedInput); adopt it NOW so risk classification and
+    // every gate below operate on the command that would actually run. (We do not return yet — the
+    // catastrophic floor outranks even a hook, handled after risk is known.)
+    if (hook.decision === "allow" && hook.updatedInput) input = hook.updatedInput;
+
     let forceAsk = false;
     let askReason = `Allow ${tool.name}?`;
     let askDecisionReason: DecisionReason = { type: "mode", mode: this.mode };
@@ -189,7 +191,8 @@ export class PermissionEngine {
     }
 
     // Risk classification for a Bash command — advisory for the prompt, and the source of
-    // the catastrophic tripwire below.
+    // the catastrophic tripwire below. Computed BEFORE the hook-allow short-circuit so a
+    // hook-allowed catastrophic command can't slip past the floor.
     const risk =
       tool.name === TOOL_NAMES.bash && typeof input.command === "string"
         ? classifyCommand(input.command)
@@ -203,6 +206,14 @@ export class PermissionEngine {
     if (risk?.catastrophic && this.mode !== "bypassPermissions") {
       askReason = `This command is irreversibly destructive (${risk.reason}). Confirm to proceed.`;
       askDecisionReason = { type: "other", detail: `catastrophic: ${risk.reason}` };
+    }
+
+    // Honor a hook-allow here — a hook's verdict beats rules + mode — EXCEPT the catastrophic floor
+    // outranks even a hook (just as it outranks a broad allow rule at gate 4): a hook-allowed
+    // irreversible command falls through to the gates so it STILL escalates to a human. bypass was
+    // already excluded above (askDecisionReason stays "mode" there), so it short-circuits as before.
+    if (hook.decision === "allow" && !(risk?.catastrophic && this.mode !== "bypassPermissions")) {
+      return { behavior: "allow", input, decisionReason: { type: "hook" } };
     }
 
     // 2) Protected paths.
@@ -249,7 +260,14 @@ export class PermissionEngine {
     }
 
     // 6) Mode disposition.
-    const disposition: "allow" | "ask" | "deny" = forceAsk ? "ask" : this.modeDisposition(tool);
+    let disposition: "allow" | "ask" | "deny" = forceAsk ? "ask" : this.modeDisposition(tool);
+    // Catastrophic floor: an irreversibly destructive command escalates an auto-ALLOW (only
+    // "auto" mode reaches here with allow + a catastrophic Bash call — default/acceptEdits already
+    // "ask" it, plan "deny"s it) to a human confirmation. askReason was prepped above with the
+    // warning. bypass was excluded there (askDecisionReason stays {type:"mode"}), so it is untouched.
+    if (disposition === "allow" && risk?.catastrophic && askDecisionReason.type === "other") {
+      disposition = "ask";
+    }
     if (disposition === "allow") return { behavior: "allow", input, decisionReason: { type: "mode", mode: this.mode } };
     if (disposition === "deny") {
       return { behavior: "deny", message: `Tool "${tool.name}" is not permitted in ${this.mode} mode.`, decisionReason: { type: "mode", mode: this.mode } };
@@ -278,6 +296,10 @@ export class PermissionEngine {
     if (CONTROL_TOOLS.has(tool.name)) return "allow"; // side-effect-free control tools
     switch (this.mode) {
       case "bypassPermissions":
+        return "allow";
+      case "auto":
+        // Full auto: run everything without prompting. The safety floor (protected paths,
+        // secrets, the catastrophic-command escalation in check()) still applies upstream.
         return "allow";
       case "plan":
         return tool.readOnly ? "allow" : "deny";

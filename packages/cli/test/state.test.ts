@@ -230,6 +230,14 @@ describe("TUI state reducer", () => {
     expect(cleared.status).toBe("idle");
   });
 
+  it("set_mode updates the active UI mode; reset preserves it (a runtime-level setting)", () => {
+    expect(initialState().mode).toBe("normal");
+    let s = applyEvent(initialState(), { type: "set_mode", mode: "auto" });
+    expect(s.mode).toBe("auto");
+    s = applyEvent(s, { type: "reset" });
+    expect(s.mode).toBe("auto"); // survives /clear, like effort/output-style
+  });
+
   it("set_output_style sets and clears the active style", () => {
     let s = applyEvent(initialState(), { type: "set_output_style", style: "poet" });
     expect(s.outputStyle).toBe("poet");

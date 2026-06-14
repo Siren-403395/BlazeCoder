@@ -141,6 +141,26 @@ describe("agent loop reduces over immutable LoopState", () => {
     expect(result.subtype).toBe("error_max_turns");
   });
 
+  it("runs UNCAPPED when both caps are undefined (no premature stop past the old 24-turn default)", async () => {
+    let n = 0;
+    // Loop a tool call to turn 30, well past the old default cap of 24, then finish.
+    const deps = makeDeps([() => (++n < 30 ? reply("loop", [call(`g${n}`, "Glob", { pattern: "**/*" })]) : reply("done", []))]);
+    deps.config.maxTurns = undefined;
+    deps.config.maxBudgetUsd = undefined;
+    const s = session();
+    const result = await runAgentLoop(s, "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
+    expect(result.subtype).toBe("success");
+    expect(s.turns).toBeGreaterThanOrEqual(29); // it kept going past where the old cap would have stopped it
+  });
+
+  it("the budget cap still trips when explicitly set (opt-in safety net)", async () => {
+    const deps = makeDeps([() => reply("loop", [call("g", "Glob", { pattern: "**/*" })])]);
+    deps.config.maxTurns = undefined; // isolate the budget cap
+    deps.config.maxBudgetUsd = 0.00025; // ~3 turns of reply() cost (0.0001/turn)
+    const result = await runAgentLoop(session(), "go", new InMemoryWorkspace(), deps, () => {}, new AbortController().signal);
+    expect(result.subtype).toBe("error_max_budget_usd");
+  });
+
   it("backfills synthetic tool_results so no tool_use is orphaned at max-turns", async () => {
     const deps = makeDeps([() => reply("loop", [call("g", "Glob", { pattern: "**/*" })])]);
     deps.config.maxTurns = 2;

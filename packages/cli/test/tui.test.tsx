@@ -11,7 +11,7 @@ import {
 import type { ModelGateway, ModelRequest, ModelResponse } from "@zephyrcode/core";
 import type { FileDiff } from "@zephyrcode/shared";
 import { App } from "../src/index";
-import { InputLine, ItemView, PermissionPrompt } from "../src/tui/view";
+import { InputBox, InputLine, ItemView, PermissionPrompt } from "../src/tui/view";
 
 class ScriptedGateway implements ModelGateway {
   readonly model = "scripted";
@@ -209,6 +209,30 @@ describe("InputLine (multi-line)", () => {
   });
 });
 
+describe("InputBox (effort baked into the top border + bottom-left mode indicator)", () => {
+  it("bakes the effort (and output style) into the top border rule, not a row below", () => {
+    const { lastFrame, unmount } = render(
+      <InputBox value="" cursor={0} effort="high" outputStyle="poet" mode="normal" width={60} showCursor={false} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("✶ high"); // effort label
+    expect(frame).toContain("poet"); // output style rides along
+    expect(frame).toContain("╮"); // top-right corner of the hand-drawn border (label sits in the rule)
+    expect(frame).not.toContain("auto mode on"); // baseline mode: no indicator
+    unmount();
+  });
+
+  it("shows the bracketed bottom-left indicator only in a non-baseline mode (auto)", () => {
+    const { lastFrame, unmount } = render(
+      <InputBox value="" cursor={0} effort="high" mode="auto" width={60} showCursor={false} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("▶▶ auto mode on");
+    expect(frame).toContain("(shift+tab to cycle)");
+    unmount();
+  });
+});
+
 describe("welcome banner", () => {
   it("shows the logo + orientation on an empty session", async () => {
     const runtime = createAgentRuntime({
@@ -379,6 +403,25 @@ describe("App end-to-end (scripted runtime)", () => {
     // tool row, and rendered as a block (proving tool → event → reducer → DiffBlock).
     expect(frame).toContain("+ # Notes");
 
+    unmount();
+  });
+
+  it("Shift+Tab cycles the permission mode (normal → auto) and applies it to the runtime", async () => {
+    const clock = new FixedClock(1);
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([step("hi")]),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+    });
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} effort="low" />);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(lastFrame() ?? "").not.toContain("auto mode on"); // starts in the baseline mode
+    stdin.write("\u001b[Z"); // Shift+Tab (CSI Z / backtab)
+    await waitFor(() => (lastFrame() ?? "").includes("auto mode on"));
+    expect(runtime.permissionMode).toBe("auto"); // the engine mode was actually flipped
     unmount();
   });
 

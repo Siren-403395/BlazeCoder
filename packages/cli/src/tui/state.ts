@@ -40,6 +40,8 @@ export interface TuiState {
   status: RunStatus;
   model?: string;
   effort: string;
+  /** The active UI permission-mode id (Shift+Tab cycle; mirrors runtime.permissionMode). */
+  mode: string;
   /** The active output style name, if any (mirrors runtime.outputStyle; shown on the input rule). */
   outputStyle?: string;
   /** Estimated output chars streamed this turn — drives the live token counter. */
@@ -68,6 +70,7 @@ export type UiAction =
   | AgentEvent
   | { type: "user_prompt"; text: string }
   | { type: "set_effort"; effort: string }
+  | { type: "set_mode"; mode: string }
   | { type: "set_output_style"; style?: string }
   | { type: "permission_resolved" }
   | { type: "context_report"; report: ContextReport }
@@ -79,6 +82,7 @@ export function initialState(effort = "high"): TuiState {
     items: [],
     status: "idle",
     effort,
+    mode: "normal",
     turnChars: 0,
     turns: 0,
     maxTurns: 0,
@@ -139,10 +143,13 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
     case "reset":
       // The output style is a runtime-level setting; it survives a /clear. Bump epoch so
       // <Static> restarts (the cleared screen shows a fresh, empty transcript).
-      return { ...initialState(state.effort), model: state.model, outputStyle: state.outputStyle, epoch: state.epoch + 1 };
+      return { ...initialState(state.effort), model: state.model, mode: state.mode, outputStyle: state.outputStyle, epoch: state.epoch + 1 };
 
     case "set_effort":
       return { ...state, effort: action.effort };
+
+    case "set_mode":
+      return { ...state, mode: action.mode };
 
     case "set_output_style":
       return { ...state, outputStyle: action.style };
@@ -178,7 +185,7 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       return {
         ...state,
         model: action.model,
-        maxTurns: action.maxTurns,
+        maxTurns: action.maxTurns ?? 0, // 0 = uncapped (not displayed; kept for parity)
         tokensTotal: action.contextTokens,
       };
 

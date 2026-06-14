@@ -24,8 +24,10 @@ export interface CliConfig {
   /** Active model id. */
   model: string;
   baseUrl: string;
-  maxTurns: number;
-  maxBudgetUsd: number;
+  /** Tool-use turn cap; undefined = unlimited (only set via AGENT_MAX_TURNS). */
+  maxTurns?: number;
+  /** $ cost cap; undefined = unlimited (only set via AGENT_MAX_BUDGET_USD). */
+  maxBudgetUsd?: number;
   contextTokens: number;
   /** Optional ceiling on output tokens per request; omit to use the model's full maximum. */
   maxOutputTokens?: number;
@@ -46,6 +48,14 @@ function num(value: string | undefined, fallback: number): number {
   if (!s) return fallback; // unset OR empty/whitespace (e.g. `VAR=` in CI) → the default
   const n = Number(s);
   return Number.isFinite(n) ? n : fallback;
+}
+
+/** Like num(), but returns undefined when unset/blank — for OPT-IN caps where absent = no cap. */
+function optNum(value: string | undefined): number | undefined {
+  const s = value?.trim();
+  if (!s) return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /** A trimmed env value, or undefined when unset/empty, so `??` chains fall through correctly. */
@@ -130,8 +140,9 @@ export function loadConfig(_cwd: string = process.cwd()): CliConfig {
     apiKey,
     model: model.id,
     baseUrl,
-    maxTurns: num(env.AGENT_MAX_TURNS, 24),
-    maxBudgetUsd: num(env.AGENT_MAX_BUDGET_USD, 1),
+    // Off by default — a coding agent shouldn't be throttled mid-project. Set the env var to opt in.
+    maxTurns: optNum(env.AGENT_MAX_TURNS),
+    maxBudgetUsd: optNum(env.AGENT_MAX_BUDGET_USD),
     contextTokens: num(env.AGENT_CONTEXT_TOKENS, model.contextTokens),
     // Default to the model's full maximum; AGENT_MAX_OUTPUT_TOKENS caps it lower.
     maxOutputTokens: num(env.AGENT_MAX_OUTPUT_TOKENS, model.maxOutputTokens),

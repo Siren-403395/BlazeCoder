@@ -14,7 +14,7 @@ import { dirname } from "node:path";
 import type { PermissionMode, PermissionRule, PermissionSettings, RuleBehavior, RuleSource } from "@zephyrcode/shared";
 import { ruleValueFromString } from "./rule";
 
-const MODES = new Set<PermissionMode>(["default", "acceptEdits", "plan", "bypassPermissions"]);
+const MODES = new Set<PermissionMode>(["default", "acceptEdits", "auto", "plan", "bypassPermissions"]);
 
 /** Coerce arbitrary parsed JSON into a valid PermissionSettings (drops junk). */
 function sanitize(parsed: unknown): PermissionSettings {

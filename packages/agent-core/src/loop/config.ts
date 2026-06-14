@@ -29,8 +29,10 @@ export interface LoopRunConfig {
    *  actual max_tokens per turn = min(this, window − input), so output is unleashed, not fixed. */
   maxOutputCap: number;
   temperature?: number;
-  maxTurns: number;
-  maxBudgetUsd: number;
+  /** Tool-use turn cap; undefined = unlimited (see AgentLoopConfig). */
+  maxTurns?: number;
+  /** $ cost cap; undefined = unlimited. */
+  maxBudgetUsd?: number;
   contextTokens: number;
 }
 

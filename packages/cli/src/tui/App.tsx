@@ -29,6 +29,8 @@ import {
   type Skill,
 } from "@zephyrcode/core";
 import { applyEvent, initialState, splitItems } from "./state";
+import { gitChanges } from "../git";
+import { modeById, modeForPermission, nextModeId } from "./modes";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
 import { ChoicePicker, CommandPalette, FileCompletion, formatTokens, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
 import { freshSeed, loadingWord, tipAt } from "./flavor";
@@ -69,8 +71,9 @@ export function App({
   initialSession?: SessionState;
 }) {
   const [state, dispatch] = useReducer(applyEvent, undefined, () => {
-    // Mirror the runtime's startup output style so the input rule shows it from frame one.
-    const base = { ...initialState(effort), outputStyle: runtime.outputStyle };
+    // Mirror the runtime's startup output style + permission mode so the input box reflects them
+    // from frame one (hydrate spreads state, so the mode survives a resumed session).
+    const base = { ...initialState(effort), outputStyle: runtime.outputStyle, mode: modeForPermission(runtime.permissionMode).id };
     return initialSession ? applyEvent(base, { type: "hydrate", session: initialSession }) : base;
   });
   const [draft, setDraft] = useState("");
@@ -152,6 +155,14 @@ export function App({
     histCursor.current = 0;
   }, []);
 
+  // Shift+Tab: advance the permission-mode cycle (normal ⇄ auto …) and apply it to the runtime.
+  // Reads the live mode off stateRef so it never closes over a stale value.
+  const cycleMode = useCallback(() => {
+    const next = nextModeId(stateRef.current.mode);
+    runtime.setPermissionMode(modeById(next).permission);
+    dispatch({ type: "set_mode", mode: next });
+  }, [runtime]);
+
   const openResume = useCallback(async () => {
     setPicker({ kind: "session", items: await runtime.listSessions(), index: 0 });
   }, [runtime]);
@@ -215,6 +226,15 @@ export function App({
           const report = await runtime.contextReport(sessionId.current).catch(() => null);
           if (report) dispatch({ type: "context_report", report });
           else dispatch({ type: "notice", level: "info", message: "Context usage will appear after the first turn." });
+          return;
+        }
+        case "changes": {
+          // Read-only: git is the rollback substrate (it sees Bash side-effects too); we just surface it.
+          const { message } = await gitChanges(runtime.cwd).catch((err) => ({
+            ok: false,
+            message: `Could not read git status: ${err instanceof Error ? err.message : String(err)}`,
+          }));
+          dispatch({ type: "notice", level: "info", message });
           return;
         }
         case "compact": {
@@ -291,7 +311,7 @@ export function App({
             type: "notice",
             level: "info",
             message:
-              "/resume · /effort <low|high|ultra> · /skill · /output-style · /usage · /context · /compact · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
+              "/resume · /effort <low|high|ultra> · /skill · /output-style · /usage · /context · /changes · /compact · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Shift+Tab cycles permission modes (normal ⇄ auto). Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
           });
           return;
         default:
@@ -445,6 +465,13 @@ export function App({
           applyStyle(picker.items[picker.index]!);
         }
       } else if (key.escape) setPicker(null);
+      return;
+    }
+
+    // 2.5) Shift+Tab cycles the permission mode, whether idle or running (a permission prompt /
+    //      picker is handled above and returns first). Distinct from plain Tab (completion accept).
+    if (key.tab && key.shift) {
+      cycleMode();
       return;
     }
 
@@ -602,6 +629,7 @@ export function App({
             }
             effort={state.effort}
             outputStyle={state.outputStyle}
+            mode={state.mode}
             width={width}
             showCursor={true}
           />

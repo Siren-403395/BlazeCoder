@@ -165,6 +165,10 @@ export interface RunOutcome {
   result: AgentRunResult;
 }
 
+/** Fallback turn cap for a sub-agent whose definition (and the main loop) set none — keeps an
+ *  unattended delegated agent bounded even after the main loop's caps were removed. */
+const DEFAULT_SUBAGENT_MAX_TURNS = 50;
+
 const disabledSandbox: Sandbox = {
   available: false,
   async run() {
@@ -300,8 +304,10 @@ export class AgentRuntime {
       promptOverride: opts.system,
       extraInstructions: opts.extraInstructions,
       userRules: opts.userRules,
-      maxTurns: opts.maxTurns ?? 24,
-      maxBudgetUsd: opts.maxBudgetUsd ?? 1,
+      // No default caps: a coding agent should run until it (or the user) decides it's done.
+      // Pass maxTurns/maxBudgetUsd explicitly (or set the AGENT_MAX_* env vars) to opt into a cap.
+      maxTurns: opts.maxTurns,
+      maxBudgetUsd: opts.maxBudgetUsd,
       contextTokens,
       temperature: opts.temperature ?? 0.2,
       // The output CEILING (default: the model's full max). The loop sizes the actual
@@ -390,7 +396,10 @@ export class AgentRuntime {
         effort: this.defaultEffort,
         promptVariant: "subagent",
         promptOverride: def.systemPrompt,
-        maxTurns: def.maxTurns ?? this.loopConfig.maxTurns,
+        // Sub-agents stay BOUNDED even when the main loop is uncapped: nobody watches a
+        // sub-agent directly, so an unbounded one is a worse runaway. Fall back to a generous
+        // finite default when neither the definition nor the (now uncapped) main loop sets one.
+        maxTurns: def.maxTurns ?? this.loopConfig.maxTurns ?? DEFAULT_SUBAGENT_MAX_TURNS,
       },
     };
     return runSubagent(prompt, deps, { workspace: this.workspace, signal });

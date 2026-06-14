@@ -53,8 +53,11 @@ export interface AgentLoopConfig {
   userRules?: string;
   /** Passively-recalled memory index for THIS run (set per-run in AgentRuntime.run; sub-agents omit it). */
   memorySection?: string;
-  maxTurns: number;
-  maxBudgetUsd: number;
+  /** Hard ceiling on tool-use turns. Omit (undefined) for NO cap — the loop runs until the
+   *  model is done, the user interrupts, or a context/compaction terminal trips. */
+  maxTurns?: number;
+  /** Hard ceiling on accumulated $ cost. Omit (undefined) for NO cap (same rationale as maxTurns). */
+  maxBudgetUsd?: number;
   contextTokens: number;
   temperature?: number;
   maxOutputTokens?: number;
@@ -282,12 +285,16 @@ export async function runAgentLoop(
     }
 
     session.turns += 1;
-    if (session.turns > loop.maxTurns) {
+    // Both caps are OPT-IN safety nets (off by default): turns and budget are crude proxies
+    // that throttle a big project's exploration, so they only trip when explicitly configured
+    // (env AGENT_MAX_TURNS / AGENT_MAX_BUDGET_USD). The real backstops are the user's Esc, the
+    // context-overflow / compaction-thrash terminals, and the denial-loop nudge.
+    if (loop.maxTurns !== undefined && session.turns > loop.maxTurns) {
       const message = `Reached the maximum of ${loop.maxTurns} tool-use turns.`;
       emit({ type: "notice", level: "warn", message });
       return finish({ reason: "max_turns" }, message);
     }
-    if (session.costUsd > loop.maxBudgetUsd) {
+    if (loop.maxBudgetUsd !== undefined && session.costUsd > loop.maxBudgetUsd) {
       const message = `Reached the budget cap of $${loop.maxBudgetUsd.toFixed(2)}.`;
       emit({ type: "notice", level: "warn", message });
       return finish({ reason: "max_budget" }, message);

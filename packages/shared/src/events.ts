@@ -54,7 +54,8 @@ export type AgentEvent =
       sessionId: string;
       model: string;
       tools: string[];
-      maxTurns: number;
+      /** The active tool-use turn cap, or undefined when uncapped (the default). */
+      maxTurns?: number;
       contextTokens: number;
     }
   /** A model turn: assistant prose, optional reasoning trace, and any tool calls. */

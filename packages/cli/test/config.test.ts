@@ -73,6 +73,25 @@ describe("loadConfig", () => {
     expect(loadConfig(cwd).contextTokens).toBe(200000);
   });
 
+  it("leaves maxTurns / maxBudgetUsd UNCAPPED (undefined) by default", () => {
+    const c = loadConfig(cwd);
+    expect(c.maxTurns).toBeUndefined();
+    expect(c.maxBudgetUsd).toBeUndefined();
+  });
+
+  it("opts into the caps only when the AGENT_MAX_* env vars are set", () => {
+    process.env.AGENT_MAX_TURNS = "40";
+    process.env.AGENT_MAX_BUDGET_USD = "5";
+    const c = loadConfig(cwd);
+    expect(c.maxTurns).toBe(40);
+    expect(c.maxBudgetUsd).toBe(5);
+  });
+
+  it("treats an empty AGENT_MAX_TURNS as unset (no cap), not 0", () => {
+    process.env.AGENT_MAX_TURNS = "";
+    expect(loadConfig(cwd).maxTurns).toBeUndefined();
+  });
+
   it("one-time migrates an old global ~/.zephyrcode/.env key into the managed config", () => {
     writeFileSync(join(home, ".env"), "DEEPSEEK_API_KEY=sk-legacy-global\nDEEPSEEK_MODEL=deepseek-v4-pro\n");
     expect(existsSync(authConfigPath(home))).toBe(false);

@@ -20,7 +20,18 @@ export const PERMISSION_RULE_SOURCES: readonly RuleSource[] = ["user", "project"
 /** Sources that persist to a settings file (session/cliArg are in-memory only). */
 export const PERSISTENT_RULE_SOURCES: readonly RuleSource[] = ["user", "project", "local"];
 
-export type PermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
+/**
+ * Permission modes, in roughly increasing autonomy:
+ *  - default          : read auto; every write/command asks.
+ *  - acceptEdits      : file edits auto; commands still ask.
+ *  - auto             : FULL AUTO — every tool runs without prompting, BUT the safety floor
+ *                       still holds (protected paths denied, secrets blocked, an irreversibly
+ *                       destructive command escalates to a human confirmation). The everyday
+ *                       "just run it" mode.
+ *  - plan             : read-only; all mutations denied (planning).
+ *  - bypassPermissions: the explicit YOLO escape hatch — skips the safety floor too.
+ */
+export type PermissionMode = "default" | "acceptEdits" | "auto" | "plan" | "bypassPermissions";
 
 export interface PermissionRuleValue {
   toolName: string;
