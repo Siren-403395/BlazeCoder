@@ -1,0 +1,10 @@
+{
+  "//": "Renderer compile unit (DOM, JSX) — and the default vite/editor config. Deliberately NO node types: a node builtin imported into the renderer is a COMPILE error here, which (with the guard test) keeps the renderer free of host/cli/node value imports.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src/renderer", "src/shared"]
+}

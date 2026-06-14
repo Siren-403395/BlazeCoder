@@ -10,6 +10,8 @@
   },
   "scripts": {
     "zephyrcode": "pnpm --filter @zephyrcode/cli zephyrcode",
+    "desktop": "pnpm --filter @zephyrcode/desktop dev",
+    "desktop:build": "pnpm --filter @zephyrcode/desktop build",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

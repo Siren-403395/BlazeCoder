@@ -1,0 +1,8 @@
+{
+  "//": "Headless unit tests (node env) for the PURE modules — reducer, transcript, validate, the import guard. No DOM, no Electron: this is the renderer brain's regression net, runnable without a browser.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["test"]
+}

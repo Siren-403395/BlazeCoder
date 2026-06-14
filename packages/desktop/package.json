@@ -1,0 +1,42 @@
+{
+  "name": "@zephyrcode/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "zephyrcode desktop — an Electron GUI host over the shared @zephyrcode/host runtime. A sibling adapter to the Ink TUI; never depends on it.",
+  "main": "./dist/main/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k -n renderer,electron \"pnpm dev:renderer\" \"pnpm dev:electron\"",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "dev:electron": "pnpm build:main && wait-on http://127.0.0.1:5173 && node scripts/start-electron.cjs",
+    "build:main": "tsup",
+    "build": "pnpm build:main && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo",
+    "lint": "echo \"(no linter configured for @zephyrcode/desktop)\""
+  },
+  "dependencies": {
+    "@zephyrcode/core": "workspace:*",
+    "@zephyrcode/host": "workspace:*",
+    "@zephyrcode/shared": "workspace:*",
+    "lucide-react": "^0.468.0",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.1",
+    "tsup": "^8",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8",
+    "wait-on": "^8.0.1"
+  }
+}
