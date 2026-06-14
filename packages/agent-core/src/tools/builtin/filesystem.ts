@@ -10,7 +10,7 @@
  * transcript.
  */
 
-import { inferLanguage, isSecretPath, looksLikeSecret } from "@coding-agent/shared";
+import { inferLanguage, isSecretPath, looksLikeSecret } from "@zephyrcode/shared";
 import { WorkspaceBoundaryError } from "../../workspace/boundary";
 import type { Tool, ToolContext, ToolResult } from "../registry";
 import { TOOL_NAMES } from "../toolNames";

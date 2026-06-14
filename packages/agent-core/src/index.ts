@@ -5,7 +5,7 @@
  */
 
 import { relative } from "node:path";
-import { isSecretPath, looksLikeSecret } from "@coding-agent/shared";
+import { isSecretPath, looksLikeSecret } from "@zephyrcode/shared";
 import type {
   Clock,
   EventSink,
@@ -35,7 +35,7 @@ import { HookBus } from "./permissions/hooks";
 import type { PostToolUseHook, PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
 import type { BrokerDecision, PermissionMode } from "./permissions/engine";
-import type { PermissionRule, RuleSource } from "@coding-agent/shared";
+import type { PermissionRule, RuleSource } from "@zephyrcode/shared";
 import { ruleValueFromString } from "./permissions/rule";
 import { persistPermissionUpdate, supportsPersistence } from "./permissions/update";
 import type { PermissionUpdate } from "./permissions/update";

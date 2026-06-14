@@ -306,8 +306,8 @@ docs/ARCHITECTURE.md
 
 ```bash
 pnpm install
-pnpm --filter @coding-agent/cli zephyrcode    # run the TUI via tsx (no build step)
-pnpm --filter @coding-agent/cli build         # produce packages/cli/dist/zephyrcode.js
+pnpm --filter @zephyrcode/cli zephyrcode    # run the TUI via tsx (no build step)
+pnpm --filter @zephyrcode/cli build         # produce packages/cli/dist/zephyrcode.js
 
 pnpm typecheck    # all packages
 pnpm test         # unit + integration + e2e (341 tests)

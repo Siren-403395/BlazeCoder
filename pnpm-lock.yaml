@@ -17,7 +17,7 @@ importers:
 
   packages/agent-core:
     dependencies:
-      '@coding-agent/shared':
+      '@zephyrcode/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -33,10 +33,10 @@ importers:
 
   packages/cli:
     dependencies:
-      '@coding-agent/core':
+      '@zephyrcode/core':
         specifier: workspace:*
         version: link:../agent-core
-      '@coding-agent/shared':
+      '@zephyrcode/shared':
         specifier: workspace:*
         version: link:../shared
       ink:

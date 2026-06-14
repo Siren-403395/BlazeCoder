@@ -5,15 +5,15 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { StopReason, ToolCall } from "@coding-agent/shared";
+import type { StopReason, ToolCall } from "@zephyrcode/shared";
 import type {
   ModelGateway,
   ModelRequest,
   ModelResponse,
   ModelStreamHandlers,
   TranscriptMessage,
-} from "@coding-agent/core";
-import { ContextOverflowError } from "@coding-agent/core";
+} from "@zephyrcode/core";
+import { ContextOverflowError } from "@zephyrcode/core";
 import { HttpError, NonRetryableError, parseRetryAfter, withRetry } from "./withRetry";
 
 const CONTEXT_OVERFLOW_RE = /context length|maximum context|context_length_exceeded|too long|exceeds the maximum/i;

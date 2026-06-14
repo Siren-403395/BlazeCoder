@@ -8,7 +8,6 @@ import { authConfigPath, loadAuthConfig, saveAuthConfig } from "../src/authStore
 // Every env var loadConfig consults — cleared before each test so we control inputs.
 const RELEVANT = [
   "ZEPHYRCODE_HOME",
-  "CODING_AGENT_HOME",
   "ZEPHYRCODE_PROVIDER",
   "ZEPHYRCODE_MODEL",
   "DEEPSEEK_API_KEY",

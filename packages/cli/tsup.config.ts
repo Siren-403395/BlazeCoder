@@ -13,7 +13,7 @@ export default defineConfig({
   target: "node20",
   banner: { js: "#!/usr/bin/env node" },
   // Bundle the workspace packages (they ship as TS source, not built artifacts).
-  noExternal: [/^@coding-agent\//],
+  noExternal: [/^@zephyrcode\//],
   clean: true,
   shims: false,
   dts: false,

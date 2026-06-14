@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent } from "@coding-agent/shared";
+import type { AgentEvent } from "@zephyrcode/shared";
 import {
   createAgentRuntime,
   FixedClock,

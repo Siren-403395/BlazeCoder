@@ -14,7 +14,7 @@ import { PROVIDERS } from "./providers";
 import { migrateLegacySessions } from "./projects";
 import { buildRuntime } from "./runtime";
 import { runHeadless, type OutputFormat } from "./headless";
-import { isEffort, type Effort } from "@coding-agent/core";
+import { isEffort, type Effort } from "@zephyrcode/core";
 
 /** Wipe the screen + scrollback so the chat starts clean after the onboarding panel. */
 const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";

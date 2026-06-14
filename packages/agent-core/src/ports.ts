@@ -1,7 +1,7 @@
 /**
  * Ports — the injected boundary of agent-core.
  *
- * agent-core depends ONLY on these interfaces (plus @coding-agent/shared types and
+ * agent-core depends ONLY on these interfaces (plus @zephyrcode/shared types and
  * Node built-ins). No TUI, no HTTP, no DeepSeek import reaches the loop. Every
  * port has an in-memory fake for tests; the CLI package provides the real adapters
  * (DeepSeek gateway, OS sandbox) and wires the runtime in-process.
@@ -16,10 +16,10 @@ import type {
   TokenUsage,
   ToolCall,
   TranscriptMessage,
-} from "@coding-agent/shared";
+} from "@zephyrcode/shared";
 
 // The conversation transcript + session shapes are FE↔BE contracts; they live in
-// @coding-agent/shared and are re-exported here so the loop, store, and adapters
+// @zephyrcode/shared and are re-exported here so the loop, store, and adapters
 // can keep importing them from the ports boundary.
 export type {
   SessionState,
@@ -27,7 +27,7 @@ export type {
   SessionSummary,
   ToolResultRecord,
   TranscriptMessage,
-} from "@coding-agent/shared";
+} from "@zephyrcode/shared";
 
 export type JSONSchema = Record<string, unknown>;
 

@@ -11,7 +11,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { PermissionMode, PermissionRule, PermissionSettings, RuleBehavior, RuleSource } from "@coding-agent/shared";
+import type { PermissionMode, PermissionRule, PermissionSettings, RuleBehavior, RuleSource } from "@zephyrcode/shared";
 import { ruleValueFromString } from "./rule";
 
 const MODES = new Set<PermissionMode>(["default", "acceptEdits", "plan", "bypassPermissions"]);

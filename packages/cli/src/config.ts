@@ -56,7 +56,7 @@ function envStr(value: string | undefined): string | undefined {
 
 /** The state/config dir (~/.zephyrcode), from the env or the default. */
 function resolveHome(): string {
-  return resolve(process.env.ZEPHYRCODE_HOME ?? process.env.CODING_AGENT_HOME ?? join(homedir(), ".zephyrcode"));
+  return resolve(process.env.ZEPHYRCODE_HOME ?? join(homedir(), ".zephyrcode"));
 }
 
 /** Parse a legacy .env file's KEY=VALUE lines (migration only — we no longer use .env). */

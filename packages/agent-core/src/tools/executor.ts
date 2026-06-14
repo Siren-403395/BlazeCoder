@@ -7,7 +7,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ToolCall } from "@coding-agent/shared";
+import type { ToolCall } from "@zephyrcode/shared";
 import type { Clock } from "../ports";
 import type { ToolResultRecord } from "../ports";
 import type { PermissionEngine } from "../permissions/engine";

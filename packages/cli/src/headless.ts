@@ -7,8 +7,8 @@
  * runtime was built in bypass mode (--yolo), since nobody can answer them.
  */
 
-import type { AgentEvent } from "@coding-agent/shared";
-import type { AgentRuntime, Effort } from "@coding-agent/core";
+import type { AgentEvent } from "@zephyrcode/shared";
+import type { AgentRuntime, Effort } from "@zephyrcode/core";
 import { toolDetail } from "./tui/theme";
 
 export type OutputFormat = "text" | "json" | "stream-json";

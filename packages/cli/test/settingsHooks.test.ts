@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isWorkspaceTrusted, matchesPattern, readHooks, trustWorkspace } from "../src/settings";
 import { makeCommandPreToolUseHook } from "../src/adapters/commandHook";
-import type { Tool } from "@coding-agent/core";
+import type { Tool } from "@zephyrcode/core";
 
 const dirs: string[] = [];
 const tmp = () => {

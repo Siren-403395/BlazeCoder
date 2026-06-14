@@ -1,5 +1,5 @@
 {
-  "name": "@coding-agent/shared",
+  "name": "@zephyrcode/shared",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
-    "lint": "echo \"(no linter configured for @coding-agent/shared)\""
+    "lint": "echo \"(no linter configured for @zephyrcode/shared)\""
   },
   "devDependencies": {
     "typescript": "^5.7.2",

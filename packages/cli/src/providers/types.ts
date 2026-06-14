@@ -8,7 +8,7 @@
  * are entirely provider-agnostic: adding a provider is one file + one registry line.
  */
 
-import type { ModelGateway } from "@coding-agent/core";
+import type { ModelGateway } from "@zephyrcode/core";
 
 /** A single selectable model and its window/output sizing. */
 export interface ModelOption {

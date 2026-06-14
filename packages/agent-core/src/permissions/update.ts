@@ -5,7 +5,7 @@
  * parse→serialize round-trip so `Bash(git:*)`, `Bash(git:*)` and duplicates collapse.
  */
 
-import type { PermissionMode, PermissionSettings, RuleBehavior, RuleSource } from "@coding-agent/shared";
+import type { PermissionMode, PermissionSettings, RuleBehavior, RuleSource } from "@zephyrcode/shared";
 import { readSettings, writeSettings } from "./settingsStore";
 import { ruleValueFromString, ruleValueToString } from "./rule";
 

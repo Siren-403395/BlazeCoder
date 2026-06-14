@@ -4,7 +4,7 @@
  * a sibling file with its own gateway; nothing else in the app changes.
  */
 
-import { MODEL_MAX_OUTPUT_TOKENS } from "@coding-agent/core";
+import { MODEL_MAX_OUTPUT_TOKENS } from "@zephyrcode/core";
 import { DeepSeekGateway } from "../adapters/deepseekGateway";
 import type { Provider } from "./types";
 

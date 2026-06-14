@@ -9,7 +9,7 @@
  * region can show a growing token counter while it thinks.
  */
 
-import type { AgentEvent, SessionState, TodoItem, TranscriptMessage } from "@coding-agent/shared";
+import type { AgentEvent, SessionState, TodoItem, TranscriptMessage } from "@zephyrcode/shared";
 
 export type ToolStatus = "running" | "ok" | "error";
 

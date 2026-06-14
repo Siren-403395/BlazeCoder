@@ -1,5 +1,5 @@
 {
-  "name": "@coding-agent/cli",
+  "name": "@zephyrcode/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -22,11 +22,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
-    "lint": "echo \"(no linter configured for @coding-agent/cli)\""
+    "lint": "echo \"(no linter configured for @zephyrcode/cli)\""
   },
   "dependencies": {
-    "@coding-agent/core": "workspace:*",
-    "@coding-agent/shared": "workspace:*",
+    "@zephyrcode/core": "workspace:*",
+    "@zephyrcode/shared": "workspace:*",
     "ink": "^5",
     "ink-spinner": "^5",
     "ink-text-input": "^6",

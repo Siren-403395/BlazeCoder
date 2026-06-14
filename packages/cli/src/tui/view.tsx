@@ -5,8 +5,8 @@
 
 import { Box, Text, useStdout } from "ink";
 import Spinner from "ink-spinner";
-import type { SessionSummary } from "@coding-agent/core";
-import type { TodoItem } from "@coding-agent/shared";
+import type { SessionSummary } from "@zephyrcode/core";
+import type { TodoItem } from "@zephyrcode/shared";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { TAGLINE, WORDMARK_ROWS, WORDMARK_WIDTH } from "./banner";

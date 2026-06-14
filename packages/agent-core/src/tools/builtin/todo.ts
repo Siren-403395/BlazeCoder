@@ -7,7 +7,7 @@
  * the reference clone's ~180-line prompt.
  */
 
-import type { TodoItem, TodoStatus } from "@coding-agent/shared";
+import type { TodoItem, TodoStatus } from "@zephyrcode/shared";
 import type { Tool, ToolContext, ToolResult } from "../registry";
 import { TOOL_NAMES } from "../toolNames";
 

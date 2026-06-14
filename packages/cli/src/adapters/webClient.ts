@@ -4,7 +4,7 @@
  * failures return a short error string the model can react to, never throw.
  */
 
-import type { WebClient, WebSearchResult } from "@coding-agent/core";
+import type { WebClient, WebSearchResult } from "@zephyrcode/core";
 
 const UA = "Mozilla/5.0 (compatible; zephyrcode/0.1; +https://example.invalid)";
 const MAX_FETCH_CHARS = 100_000;

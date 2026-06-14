@@ -4,7 +4,7 @@
  * executor in App. Adding a command is one row here.
  */
 
-import { EFFORTS } from "@coding-agent/core";
+import { EFFORTS } from "@zephyrcode/core";
 
 export interface SlashCommand {
   name: string;

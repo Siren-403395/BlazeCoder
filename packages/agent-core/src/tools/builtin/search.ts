@@ -6,7 +6,7 @@
  */
 
 import { relative, sep } from "node:path";
-import { isSecretPath } from "@coding-agent/shared";
+import { isSecretPath } from "@zephyrcode/shared";
 import { WorkspaceBoundaryError } from "../../workspace/boundary";
 import type { Tool, ToolContext, ToolResult } from "../registry";
 import { TOOL_NAMES } from "../toolNames";

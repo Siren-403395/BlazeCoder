@@ -35,7 +35,7 @@ fi
 say "Installing dependencies…"
 (cd "$REPO_DIR" && pnpm install --silent)
 say "Building zephyrcode…"
-(cd "$REPO_DIR" && pnpm --filter @coding-agent/cli build >/dev/null)
+(cd "$REPO_DIR" && pnpm --filter @zephyrcode/cli build >/dev/null)
 [ -f "$BUNDLE" ] || die "Build did not produce $BUNDLE"
 
 # 3. Connect a model: provider + API key. Onboarding (the same flow the TUI runs on
@@ -62,7 +62,7 @@ ZEPHYRCODE_REPO="$REPO_DIR"
 if [ "\${1:-}" = "--update" ]; then
   cd "\$ZEPHYRCODE_REPO" || { printf '\033[31m✘ zephyrcode repo not found at %s (re-run install.sh)\033[0m\n' "\$ZEPHYRCODE_REPO" >&2; exit 1; }
   git pull --ff-only || printf '\033[33m▸\033[0m git pull did not update (offline or non-fast-forward); rebuilding the current checkout.\n' >&2
-  pnpm install --silent && pnpm --filter @coding-agent/cli build >/dev/null \\
+  pnpm install --silent && pnpm --filter @zephyrcode/cli build >/dev/null \\
     && printf '\033[32m✔\033[0m zephyrcode rebuilt.\n'
   exit \$?
 fi

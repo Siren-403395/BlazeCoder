@@ -10,7 +10,7 @@
  * reactive-compaction) land in later tasks and key off `transition.reason`.
  */
 
-import type { ResultSubtype } from "@coding-agent/shared";
+import type { ResultSubtype } from "@zephyrcode/shared";
 
 export type Terminal =
   | { reason: "completed" }

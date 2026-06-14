@@ -20,9 +20,9 @@ import {
   silentLogger,
   systemClock,
   webTools,
-} from "@coding-agent/core";
+} from "@zephyrcode/core";
 import { HttpWebClient } from "./adapters/webClient";
-import type { AgentRuntime, Logger, PermissionMode, RuleSource } from "@coding-agent/core";
+import type { AgentRuntime, Logger, PermissionMode, RuleSource } from "@zephyrcode/core";
 import { StubGateway } from "./adapters/stubGateway";
 import { LocalProcessSandbox } from "./adapters/sandbox";
 import { resolveProvider } from "./providers";

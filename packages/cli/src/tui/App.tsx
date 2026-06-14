@@ -27,7 +27,7 @@ import {
   type SessionState,
   type SessionSummary,
   type Skill,
-} from "@coding-agent/core";
+} from "@zephyrcode/core";
 import { applyEvent, initialState, splitItems } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
 import { ChoicePicker, CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";

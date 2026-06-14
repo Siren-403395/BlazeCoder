@@ -306,8 +306,8 @@ docs/ARCHITECTURE.md
 
 ```bash
 pnpm install
-pnpm --filter @coding-agent/cli zephyrcode    # 用 tsx 直接跑 TUI（免构建）
-pnpm --filter @coding-agent/cli build         # 产出 packages/cli/dist/zephyrcode.js
+pnpm --filter @zephyrcode/cli zephyrcode    # 用 tsx 直接跑 TUI（免构建）
+pnpm --filter @zephyrcode/cli build         # 产出 packages/cli/dist/zephyrcode.js
 
 pnpm typecheck    # 全部包
 pnpm test         # 单元 + 集成 + e2e（341 个）

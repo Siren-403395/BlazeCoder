@@ -12,7 +12,7 @@ import {
   silentLogger,
 } from "../src/index";
 import type { SessionState, TranscriptMessage } from "../src/index";
-import type { AgentEvent } from "@coding-agent/shared";
+import type { AgentEvent } from "@zephyrcode/shared";
 import type { ModelGateway, ModelResponse } from "../src/index";
 import { truncateHeadForSummary } from "../src/index";
 import { reply, ScriptedGateway } from "./fakes";

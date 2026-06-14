@@ -16,8 +16,8 @@ import {
   InMemorySessionStore,
   InMemoryWorkspace,
   silentLogger,
-} from "@coding-agent/core";
-import type { ModelGateway, ModelResponse, SessionState } from "@coding-agent/core";
+} from "@zephyrcode/core";
+import type { ModelGateway, ModelResponse, SessionState } from "@zephyrcode/core";
 import { App } from "../src/index";
 
 class StubGW implements ModelGateway {

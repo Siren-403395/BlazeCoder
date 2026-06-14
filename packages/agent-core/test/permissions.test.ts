@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent } from "@coding-agent/shared";
+import type { AgentEvent } from "@zephyrcode/shared";
 import { HookBus, PermissionBroker, PermissionEngine } from "../src/index";
 import type { BrokerDecision, EventSink, PermissionMode, PermissionRule, Tool } from "../src/index";
 

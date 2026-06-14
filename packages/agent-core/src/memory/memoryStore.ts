@@ -9,7 +9,7 @@
 
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
-import { isUnsafeRelativePath } from "@coding-agent/shared";
+import { isUnsafeRelativePath } from "@zephyrcode/shared";
 import type { MemoryStore } from "../ports";
 
 const ROOT = "/memories";
