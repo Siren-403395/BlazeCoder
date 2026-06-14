@@ -44,6 +44,11 @@ export class InMemoryMemoryStore implements MemoryStore {
     throw new Error(`No such memory file or directory: ${p}`);
   }
 
+  async read(path: string): Promise<string | null> {
+    const p = assertMemoryPath(path);
+    return this.files.has(p) ? this.files.get(p)! : null;
+  }
+
   async create(path: string, content: string): Promise<void> {
     this.files.set(assertMemoryPath(path), content);
   }
@@ -102,6 +107,14 @@ export class FileMemoryStore implements MemoryStore {
       return numbered(content);
     } catch {
       return `No such memory file (or it is a directory): ${path}`;
+    }
+  }
+
+  async read(path: string): Promise<string | null> {
+    try {
+      return await readFile(this.toFs(path), "utf8");
+    } catch {
+      return null;
     }
   }
 

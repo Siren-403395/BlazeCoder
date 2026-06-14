@@ -39,6 +39,7 @@ import { persistPermissionUpdate, supportsPersistence } from "./permissions/upda
 import type { PermissionUpdate } from "./permissions/update";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig } from "./context/compaction";
+import { loadMemoryIndex } from "./memory/autoMemory";
 import type { Effort } from "./effort";
 import { FileSystemWorkspace } from "./workspace/fsWorkspace";
 import { ReadLedger } from "./workspace/ledger";
@@ -69,6 +70,7 @@ export * from "./effort";
 export * from "./memory/memoryStore";
 export * from "./memory/memoryTool";
 export * from "./memory/projectRules";
+export * from "./memory/autoMemory";
 export * from "./session/store";
 export * from "./workspace";
 export * from "./util";
@@ -356,9 +358,18 @@ export class AgentRuntime {
     for (const ctx of startContext) session.messages.push({ role: "user", content: ctx });
 
     try {
+      // Passive auto-memory: read the project memory index ONCE for this turn and inject
+      // it via projectRules (a synthetic user message, re-sent each turn, survives
+      // compaction). Top-level run only — sub-agents get a fresh context (spawn omits it).
+      const memorySection = await loadMemoryIndex(this.memory).catch(() => "");
+      const base = this.loopDeps(opts.effort ?? this.defaultEffort);
       // The blocking Stop hook fires INSIDE the loop (at the completion point) so it
       // can force another turn; here we only persist + SessionEnd afterward.
-      const deps = { ...this.loopDeps(opts.effort ?? this.defaultEffort), steering: opts.steering };
+      const deps: AgentLoopDeps = {
+        ...base,
+        steering: opts.steering,
+        config: { ...base.config, memorySection: memorySection || undefined },
+      };
       const result = await runAgentLoop(session, opts.prompt, this.workspace, deps, emit, signal);
       return { session, result };
     } finally {

@@ -130,6 +130,8 @@ export interface Sandbox {
 
 export interface MemoryStore {
   view(path: string): Promise<string>;
+  /** Raw file content (no line numbers), or null if it does not exist. For passive recall. */
+  read(path: string): Promise<string | null>;
   create(path: string, content: string): Promise<void>;
   strReplace(path: string, oldStr: string, newStr: string): Promise<void>;
   insert(path: string, line: number, content: string): Promise<void>;

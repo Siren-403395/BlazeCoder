@@ -51,6 +51,8 @@ export interface AgentLoopConfig {
   /** Which prompt contract to build: "main" (default) or the leaner "subagent". */
   promptVariant?: "main" | "subagent";
   userRules?: string;
+  /** Passively-recalled memory index for THIS run (set per-run in AgentRuntime.run; sub-agents omit it). */
+  memorySection?: string;
   maxTurns: number;
   maxBudgetUsd: number;
   contextTokens: number;

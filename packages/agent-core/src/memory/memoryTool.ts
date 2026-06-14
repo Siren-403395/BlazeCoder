@@ -12,7 +12,7 @@ export const memoryTool: Tool = {
   name: TOOL_NAMES.memory,
   readOnly: false,
   description:
-    "Persistent memory sandboxed to /memories. Commands: view (read a file or list a dir), create (write a file), str_replace (replace exact text), insert (insert at a 1-indexed line), delete, rename. ALWAYS view /memories at the start of a task to recall prior context; your context window may reset at any time.",
+    "Persistent memory sandboxed to /memories. Commands: view (read a file or list a dir), create (write a file), str_replace (replace exact text), insert (insert at a 1-indexed line), delete, rename. /memories/MEMORY.md is the INDEX: it is recalled automatically into your context each turn, so keep it a short high-signal list (one line per durable fact, pointing at fuller notes in sibling files). Record durable facts as you learn them and update MEMORY.md to match; view a referenced file for the full detail. Your context window may reset at any time.",
   inputSchema: {
     type: "object",
     properties: {

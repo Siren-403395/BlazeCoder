@@ -14,14 +14,17 @@ export interface ProjectRulesInput {
   userRules?: string;
   /** Optional volatile environment lines (platform, git status, model) injected by the frontend. */
   environment?: string[];
+  /** Passively-recalled memory index (see autoMemory.loadMemoryIndex), injected as its own section. */
+  memory?: string;
 }
 
-export function buildProjectRules({ root, userRules, environment }: ProjectRulesInput): string {
+export function buildProjectRules({ root, userRules, environment, memory }: ProjectRulesInput): string {
   return [
     "# Environment (advisory, refreshed each turn)",
     `Working directory: ${root}`,
     ...(environment ?? []),
     userRules ? `\n## Project conventions\n${userRules}` : "",
+    memory ? `\n## Memory (recalled from past sessions)\n${memory}` : "",
   ]
     .filter(Boolean)
     .join("\n");

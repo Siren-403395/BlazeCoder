@@ -45,7 +45,7 @@ export function buildLoopConfig(config: AgentLoopConfig, registry: ToolRegistry,
   }).join("\n\n");
   return {
     system,
-    projectRules: buildProjectRules({ root: workspaceRoot, userRules: config.userRules }),
+    projectRules: buildProjectRules({ root: workspaceRoot, userRules: config.userRules, memory: config.memorySection }),
     tools: registry.schemas(),
     thinking,
     thinkingBudget: budget,
