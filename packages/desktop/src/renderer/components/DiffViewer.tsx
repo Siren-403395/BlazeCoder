@@ -1,4 +1,4 @@
-import type { FileDiff } from "@zephyrcode/shared";
+import type { FileDiff } from "@blazecoder/shared";
 import { shortPath } from "../app/format";
 
 /** A git-style structured diff (no before/after content — only the computed line diff). */

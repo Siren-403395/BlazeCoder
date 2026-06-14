@@ -2,8 +2,8 @@
  * Configuration for the CLI: which model PROVIDER + model to drive, the runtime
  * caps, and where session/memory state lives.
  *
- * Credentials come from the MANAGED config file (~/.zephyrcode/config.json), written
- * by onboarding — the TUI first-run gate, `zephyrcode --setup`, or install.sh — never
+ * Credentials come from the MANAGED config file (~/.blazecoder/config.json), written
+ * by onboarding — the TUI first-run gate, `blazecoder --setup`, or install.sh — never
  * by hand. There are no `.env` files anymore: the only override is the real process
  * environment (the provider's own key var, e.g. DEEPSEEK_API_KEY, plus the AGENT_*
  * caps), which always wins so CI and power users can inject values without a file.
@@ -11,7 +11,7 @@
  *   managed config.json   <   process.env
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { authConfigPath, loadAuthConfig, setActiveProvider } from "./authStore";
@@ -33,7 +33,7 @@ export interface CliConfig {
   maxOutputTokens?: number;
   /** Max transient-failure retries per model call. */
   maxRetries: number;
-  /** Root dir for sessions + memories + the managed config (~/.zephyrcode by default). */
+  /** Root dir for sessions + memories + the managed config (~/.blazecoder by default). */
   home: string;
   /** Use the offline stub gateway instead of a real provider. */
   fakeModel: boolean;
@@ -64,9 +64,9 @@ function envStr(value: string | undefined): string | undefined {
   return t ? t : undefined;
 }
 
-/** The state/config dir (~/.zephyrcode), from the env or the default. */
+/** The state/config dir (~/.blazecoder), from the env or the default. */
 function resolveHome(): string {
-  return resolve(process.env.ZEPHYRCODE_HOME ?? join(homedir(), ".zephyrcode"));
+  return resolve(process.env.BLAZECODER_HOME ?? join(homedir(), ".blazecoder"));
 }
 
 /** Parse a legacy .env file's KEY=VALUE lines (migration only — we no longer use .env). */
@@ -96,7 +96,7 @@ function loadDotenv(path: string): Record<string, string> {
 }
 
 /**
- * One-time rescue of a key from the OLD build's global config (`~/.zephyrcode/.env`,
+ * One-time rescue of a key from the OLD build's global config (`~/.blazecoder/.env`,
  * the only file the previous installer wrote) into the managed config, so upgrading
  * keeps working without re-onboarding. Runs ONLY when no managed config exists yet;
  * afterwards `.env` is never read again. We deliberately do NOT read a project-local
@@ -115,14 +115,32 @@ function migrateLegacyEnv(home: string): void {
   setActiveProvider(home, provider.id, baseUrl ? { apiKey, baseUrl } : { apiKey }, model);
 }
 
+/**
+ * One-time upgrade across the product rename: if the new default state dir (~/.blazecoder)
+ * does not exist yet but the previous one (~/.zephyrcode) does, copy it over so the managed
+ * config (API key), sessions, memory and permission settings survive without re-onboarding.
+ * Only runs for the DEFAULT home — an explicit BLAZECODER_HOME is never second-guessed.
+ * Best-effort: a failed copy just falls back to first-run onboarding, never a crash.
+ */
+export function migrateRenamedHome(home: string, previous: string): void {
+  if (process.env.BLAZECODER_HOME) return;
+  if (existsSync(home) || !existsSync(previous)) return;
+  try {
+    cpSync(previous, home, { recursive: true });
+  } catch {
+    /* fall through to onboarding */
+  }
+}
+
 export function loadConfig(_cwd: string = process.cwd()): CliConfig {
   const home = resolveHome();
+  migrateRenamedHome(home, join(homedir(), ".zephyrcode"));
   migrateLegacyEnv(home);
   const stored = loadAuthConfig(home);
   const env = process.env;
 
   // Provider: env override → stored → registry default. Empty env strings fall through.
-  const provider = resolveProvider(envStr(env.ZEPHYRCODE_PROVIDER) ?? stored.provider);
+  const provider = resolveProvider(envStr(env.BLAZECODER_PROVIDER) ?? stored.provider);
   const creds = stored.providers[provider.id];
 
   // Key/baseUrl: a non-empty provider env var wins, else the stored value. (An empty
@@ -132,7 +150,7 @@ export function loadConfig(_cwd: string = process.cwd()): CliConfig {
     (provider.baseUrlEnv ? envStr(env[provider.baseUrlEnv]) : undefined) ?? creds?.baseUrl ?? provider.defaultBaseUrl;
 
   // Model: env override → stored → provider default; sizing comes from the model.
-  const wantModel = envStr(env.ZEPHYRCODE_MODEL) ?? stored.model ?? defaultModel(provider).id;
+  const wantModel = envStr(env.BLAZECODER_MODEL) ?? stored.model ?? defaultModel(provider).id;
   const model = findModel(provider, wantModel) ?? defaultModel(provider);
 
   return {

@@ -1,7 +1,7 @@
 /**
  * `ca` entry point. Parses argv, loads config, builds the in-process runtime, and
  * either renders the Ink TUI or runs one prompt headlessly (--print). The bundled
- * dist/zephyrcode.js gets its node shebang from the tsup banner.
+ * dist/blazecoder.js gets its node shebang from the tsup banner.
  */
 
 import { resolve } from "node:path";
@@ -17,8 +17,8 @@ import {
   buildRuntime,
   runHeadless,
   type OutputFormat,
-} from "@zephyrcode/host";
-import { isEffort, type Effort } from "@zephyrcode/core";
+} from "@blazecoder/host";
+import { isEffort, type Effort } from "@blazecoder/core";
 import { launchDesktop } from "./desktop";
 
 /** Wipe the screen + scrollback so the chat starts clean after the onboarding panel. */
@@ -72,9 +72,9 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-const USAGE = `zephyrcode — a command-line coding agent
+const USAGE = `blazecoder — a command-line coding agent
 
-Usage: zephyrcode [options]
+Usage: blazecoder [options]
 
 Options:
   --cwd <dir>        Working directory the agent edits (default: current dir)
@@ -86,7 +86,7 @@ Options:
   --gui              Launch the desktop GUI (Electron) instead of the terminal UI
   --yolo             Headless: auto-approve tool calls (DANGEROUS; for trusted CI)
   --setup            Connect or change your model provider + API key, then exit
-  --update           Update zephyrcode to the latest build (handled by the launcher)
+  --update           Update blazecoder to the latest build (handled by the launcher)
   -v, --version      Print version
   -h, --help         Print this help
 
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   }
 
   // Desktop GUI: hand off to Electron and exit with its code. The GUI is a sibling host that
-  // loads the same ~/.zephyrcode/config.json in its own process, so no setup/onboarding here.
+  // loads the same ~/.blazecoder/config.json in its own process, so no setup/onboarding here.
   if (args.gui) {
     process.exit(await launchDesktop());
   }
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
   const format: OutputFormat = args.format && ["text", "json", "stream-json"].includes(args.format) ? args.format : "text";
   let config = loadConfig(cwd);
 
-  // Explicit reconfigure: `zephyrcode --setup`. Readline flow (works piped), then exit.
+  // Explicit reconfigure: `blazecoder --setup`. Readline flow (works piped), then exit.
   if (args.setup) {
     await runSetup(config.home);
     return;
@@ -181,7 +181,7 @@ async function main(): Promise<void> {
   }
 
   if (!config.apiKey && !config.fakeModel) {
-    process.stderr.write("Warning: no API key configured; running with the offline stub model. Run `zephyrcode --setup` to connect one.\n");
+    process.stderr.write("Warning: no API key configured; running with the offline stub model. Run `blazecoder --setup` to connect one.\n");
   }
 
   // Headless: run one prompt, print, and exit with the run's status.

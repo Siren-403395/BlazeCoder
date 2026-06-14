@@ -9,7 +9,7 @@
  * coarse block (all removed then all added) and are capped to a render budget.
  */
 
-import type { DiffHunk, DiffLine, FileDiff } from "@zephyrcode/shared";
+import type { DiffHunk, DiffLine, FileDiff } from "@blazecoder/shared";
 
 export interface DiffOptions {
   /** Unchanged lines kept around each change (git default 3). */

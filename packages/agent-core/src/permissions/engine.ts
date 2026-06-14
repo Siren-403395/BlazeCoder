@@ -18,7 +18,7 @@
  * carries a `decisionReason` so the TUI can explain WHY and hint /permissions.
  */
 
-import type { PermissionMode, PermissionRule, RuleBehavior, RuleSource } from "@zephyrcode/shared";
+import type { PermissionMode, PermissionRule, RuleBehavior, RuleSource } from "@blazecoder/shared";
 import type { EventSink } from "../ports";
 import type { Tool } from "../tools/registry";
 import { TOOL_NAMES } from "../tools/toolNames";
@@ -28,7 +28,7 @@ import { isProtectedPath } from "./protectedPaths";
 import { matchesRule, ruleValueFromString, ruleValueToString } from "./rule";
 import { getSuggestions } from "./suggestions";
 
-export type { PermissionMode, PermissionRule, PermissionRuleValue, PermissionSettings, RuleBehavior, RuleSource } from "@zephyrcode/shared";
+export type { PermissionMode, PermissionRule, PermissionRuleValue, PermissionSettings, RuleBehavior, RuleSource } from "@blazecoder/shared";
 
 /** Why a decision was reached — drives TUI explanations and analytics. */
 export type DecisionReason =

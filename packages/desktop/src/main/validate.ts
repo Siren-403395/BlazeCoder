@@ -6,7 +6,7 @@
  * the service, which alone holds that state.
  */
 
-import type { RuleSource } from "@zephyrcode/shared";
+import type { RuleSource } from "@blazecoder/shared";
 import { EFFORTS as EFFORT_LIST } from "../shared/ipc";
 import type { DesktopRunRequest, Effort, PermissionDecisionRequest } from "../shared/ipc";
 

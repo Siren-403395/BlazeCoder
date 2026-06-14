@@ -5,7 +5,7 @@
  * ledger's staleness check is exercised the same way it is on real disk.
  */
 
-import { inferLanguage, type ProjectFile } from "@zephyrcode/shared";
+import { inferLanguage, type ProjectFile } from "@blazecoder/shared";
 import type { FileStamp, ReadFile, Workspace } from "../ports";
 import { isWithin, resolveWithin } from "./boundary";
 

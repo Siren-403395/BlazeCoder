@@ -59,7 +59,7 @@ export const TIPS: string[] = [
   "/resume reopens a past conversation right where you left off.",
   "/usage shows what you've spent; /context shows how full the window is.",
   "Esc interrupts a running turn; Ctrl+C quits.",
-  "zephyrcode edits real files and runs real commands in your working directory.",
+  "blazecoder edits real files and runs real commands in your working directory.",
   "/clear starts a fresh session — the old one stays on disk for /resume.",
   "Markdown in replies is rendered: headings, lists, and highlighted code.",
   "Shift+Enter (or end a line with \\) drops to a new line — write multi-line prompts.",

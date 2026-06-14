@@ -5,10 +5,10 @@
  * (Promise); the one push channel (agent:event) is main->renderer `send`.
  */
 
-import type { AgentEvent, PermissionMode, ResultSubtype, RuleSource, SessionState, SessionSummary } from "@zephyrcode/shared";
+import type { AgentEvent, PermissionMode, ResultSubtype, RuleSource, SessionState, SessionSummary } from "@blazecoder/shared";
 
 /**
- * Reasoning effort. A literal mirror of @zephyrcode/core's Effort: importing the type from
+ * Reasoning effort. A literal mirror of @blazecoder/core's Effort: importing the type from
  * core would drag core's node-using source into the renderer compile unit (which carries no
  * node types by design). Structurally identical, so it stays assignable to core's Effort
  * where the main process hands it to the runtime.
@@ -48,7 +48,7 @@ export interface CompactResult {
   tokensAfter: number;
 }
 
-/** The whitelisted surface the preload exposes as `window.zephyrcode`. */
+/** The whitelisted surface the preload exposes as `window.blazecoder`. */
 export interface DesktopApi {
   openProjectDialog(): Promise<DesktopProject | undefined>;
   openProjectPath(cwd: string): Promise<DesktopProject>;

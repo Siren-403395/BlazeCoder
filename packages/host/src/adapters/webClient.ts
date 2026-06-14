@@ -4,9 +4,9 @@
  * failures return a short error string the model can react to, never throw.
  */
 
-import type { WebClient, WebSearchResult } from "@zephyrcode/core";
+import type { WebClient, WebSearchResult } from "@blazecoder/core";
 
-const UA = "Mozilla/5.0 (compatible; zephyrcode/0.1; +https://example.invalid)";
+const UA = "Mozilla/5.0 (compatible; blazecoder/0.1; +https://example.invalid)";
 const MAX_FETCH_CHARS = 100_000;
 
 function stripHtml(html: string): string {

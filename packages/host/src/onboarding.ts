@@ -2,7 +2,7 @@
  * Onboarding: how a fresh install gets a provider + model + API key without the
  * user ever hand-editing a file. Two surfaces share this core:
  *   - the TUI first-run gate (Ink; see tui/Onboarding.tsx) — the pretty path,
- *   - `zephyrcode --setup` and install.sh (readline; `runSetup` below) — the script path.
+ *   - `blazecoder --setup` and install.sh (readline; `runSetup` below) — the script path.
  * Both end by writing the managed config via setActiveProvider().
  */
 
@@ -76,7 +76,7 @@ export async function runHeadlessSetup(home: string, io: SetupIo): Promise<Setup
     for (let attempt = 0; attempt < 3; attempt++) {
       const line = await io.ask(`Paste your ${provider.label} API key (blank to skip): `);
       if (line === null) {
-        io.write("No input available; skipping for now — run `zephyrcode --setup` later.\n");
+        io.write("No input available; skipping for now — run `blazecoder --setup` later.\n");
         return { saved: false };
       }
       const candidate = line.trim();
@@ -92,7 +92,7 @@ export async function runHeadlessSetup(home: string, io: SetupIo): Promise<Setup
       io.write(`  ${err} Try again.\n`);
     }
     if (!key) {
-      io.write("Too many invalid attempts; skipping. Run `zephyrcode --setup` to retry.\n");
+      io.write("Too many invalid attempts; skipping. Run `blazecoder --setup` to retry.\n");
       return { saved: false };
     }
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRequest } from "@zephyrcode/core";
+import type { ModelRequest } from "@blazecoder/core";
 import { buildDeepSeekBody } from "../src/adapters/deepseekGateway";
 
 function req(over: Partial<ModelRequest> = {}): ModelRequest {

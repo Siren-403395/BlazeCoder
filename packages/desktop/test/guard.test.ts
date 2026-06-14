@@ -1,8 +1,8 @@
 /**
  * The mechanical architecture invariant: the renderer is an Ink-free, node-free island.
- * It may TYPE-import @zephyrcode/core/shared/host (erased at build) but must never VALUE-
- * import @zephyrcode/host (its barrel pulls node:fs/child_process and would break Vite),
- * and must never touch @zephyrcode/cli or ink at all. This is the ~one test that keeps the
+ * It may TYPE-import @blazecoder/core/shared/host (erased at build) but must never VALUE-
+ * import @blazecoder/host (its barrel pulls node:fs/child_process and would break Vite),
+ * and must never touch @blazecoder/cli or ink at all. This is the ~one test that keeps the
  * sibling-adapter boundary from eroding.
  */
 
@@ -31,8 +31,8 @@ const FROM_RE = /\b(import|export)\s+(type\s+)?[^;{]*?\bfrom\s+["']([^"']+)["']/
 const BARE_IMPORT_RE = /\bimport\s+["']([^"']+)["']/g;
 const DYNAMIC_RE = /\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g;
 
-const forbidden = (spec: string) => spec === "@zephyrcode/cli" || spec === "ink" || spec.startsWith("ink/");
-const isHost = (spec: string) => spec === "@zephyrcode/host" || spec.startsWith("@zephyrcode/host/");
+const forbidden = (spec: string) => spec === "@blazecoder/cli" || spec === "ink" || spec.startsWith("ink/");
+const isHost = (spec: string) => spec === "@blazecoder/host" || spec.startsWith("@blazecoder/host/");
 
 describe("renderer isolation guard", () => {
   const files = walk(RENDERER);
@@ -41,7 +41,7 @@ describe("renderer isolation guard", () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it("never reaches @zephyrcode/cli or ink, and only TYPE-imports @zephyrcode/host (no value/re-export/dynamic)", () => {
+  it("never reaches @blazecoder/cli or ink, and only TYPE-imports @blazecoder/host (no value/re-export/dynamic)", () => {
     const violations: string[] = [];
     for (const file of files) {
       const src = readFileSync(file, "utf8");

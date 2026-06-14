@@ -1,7 +1,7 @@
 /**
  * Web tools — WebSearch + WebFetch — behind an injected WebClient port so
  * agent-core stays host-agnostic (the CLI provides the concrete HTTP adapter).
- * Off by default (zephyrcode runs against DeepSeek, not a server-side search), so
+ * Off by default (blazecoder runs against DeepSeek, not a server-side search), so
  * the runtime only registers these when a WebClient is configured.
  *
  * The descriptions carry the reference clone's load-bearing rules verbatim

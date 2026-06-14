@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Check, ShieldAlert, X } from "lucide-react";
-import type { RuleSource } from "@zephyrcode/shared";
+import type { RuleSource } from "@blazecoder/shared";
 import type { PermissionPrompt } from "../app/types";
 import { stringifyInput } from "../app/format";
 

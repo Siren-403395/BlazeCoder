@@ -9,7 +9,7 @@
 import { mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { inferLanguage, type ProjectFile } from "@zephyrcode/shared";
+import { inferLanguage, type ProjectFile } from "@blazecoder/shared";
 import type { FileStamp, ReadFile, Workspace } from "../ports";
 import { isWithin, resolveWithin, WorkspaceBoundaryError } from "./boundary";
 import { compileIgnore, isIgnored, type IgnoreRule } from "./gitignore";

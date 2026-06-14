@@ -44,7 +44,7 @@ function createWindow(): void {
     height: 940,
     minWidth: 1120,
     minHeight: 720,
-    title: "zephyrcode",
+    title: "blazecoder",
     backgroundColor: "#0f1115",
     webPreferences: {
       preload: join(runtimeDir, "preload.cjs"),
@@ -68,12 +68,12 @@ function createWindow(): void {
   // the Vite dev server's own reloads are allowed. setWindowOpenHandler covers window.open but
   // not same-frame navigation, so model-injected navigation could otherwise replace the app.
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    const dev = process.env.ZEPHYRCODE_DESKTOP_DEV_SERVER;
+    const dev = process.env.BLAZECODER_DESKTOP_DEV_SERVER;
     if (dev && url.startsWith(dev)) return;
     event.preventDefault();
   });
 
-  const devServer = process.env.ZEPHYRCODE_DESKTOP_DEV_SERVER;
+  const devServer = process.env.BLAZECODER_DESKTOP_DEV_SERVER;
   if (devServer) {
     void mainWindow.loadURL(devServer);
   } else {
@@ -88,7 +88,7 @@ function service(): AgentService {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.openProjectDialog, async () => {
-    const options: OpenDialogOptions = { title: "Open a zephyrcode workspace", properties: ["openDirectory"] };
+    const options: OpenDialogOptions = { title: "Open a blazecoder workspace", properties: ["openDirectory"] };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     if (result.canceled || !result.filePaths[0]) return undefined;
     return service().openProject(result.filePaths[0]);

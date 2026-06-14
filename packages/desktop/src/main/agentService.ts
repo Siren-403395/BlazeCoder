@@ -10,15 +10,15 @@
  *   - clean teardown: an abort or a run error drains any parked permission and tells the
  *     renderer, so a stuck modal can never strand the UI.
  *
- * The runtime wiring (buildRuntime/loadConfig) comes from @zephyrcode/host — the same
+ * The runtime wiring (buildRuntime/loadConfig) comes from @blazecoder/host — the same
  * wiring the TUI uses, which is what makes the GUI a true sibling adapter.
  */
 
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
-import { buildRuntime, loadConfig } from "@zephyrcode/host";
-import type { AgentRuntime } from "@zephyrcode/core";
-import type { AgentEvent, SessionState, SessionSummary } from "@zephyrcode/shared";
+import { buildRuntime, loadConfig } from "@blazecoder/host";
+import type { AgentRuntime } from "@blazecoder/core";
+import type { AgentEvent, SessionState, SessionSummary } from "@blazecoder/shared";
 import type {
   CompactResult,
   DesktopProject,
@@ -185,7 +185,7 @@ export class AgentService {
   }
 
   private requireRuntime(): AgentRuntime {
-    if (!this.runtime) throw new Error("Open a project before running zephyrcode.");
+    if (!this.runtime) throw new Error("Open a project before running blazecoder.");
     return this.runtime;
   }
 }

@@ -7,7 +7,7 @@
  * the reference clone's ~180-line prompt.
  */
 
-import type { TodoItem, TodoStatus } from "@zephyrcode/shared";
+import type { TodoItem, TodoStatus } from "@blazecoder/shared";
 import type { Tool, ToolContext, ToolResult } from "../registry";
 import { TOOL_NAMES } from "../toolNames";
 
@@ -86,7 +86,7 @@ export const todoWriteTool: Tool = {
     const done = items.filter((i) => i.status === "completed").length;
     let content = `Todo list (${done}/${items.length} done):\n${lines.join("\n")}`;
 
-    // Verification nudge: reinforce zephyrcode's verify-before-done culture.
+    // Verification nudge: reinforce blazecoder's verify-before-done culture.
     const allDone = items.every((i) => i.status === "completed");
     if (allDone && items.length >= 3 && !items.some((i) => /verif|test|build|lint|typecheck/i.test(`${i.content} ${i.activeForm}`))) {
       content += "\n\nNOTE: You closed 3+ tasks with no verification step — run the build/tests before reporting the work done.";

@@ -9,7 +9,7 @@
  */
 
 import { spawn } from "node:child_process";
-import type { Sandbox, SandboxResult } from "@zephyrcode/core";
+import type { Sandbox, SandboxResult } from "@blazecoder/core";
 
 const MAX_STREAM_CHARS = 30_000;
 const SIGKILL_GRACE_MS = 3_000;

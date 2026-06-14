@@ -1,5 +1,5 @@
 {
-  "name": "@zephyrcode/core",
+  "name": "@blazecoder/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,10 +14,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
-    "lint": "echo \"(no linter configured for @zephyrcode/core)\""
+    "lint": "echo \"(no linter configured for @blazecoder/core)\""
   },
   "dependencies": {
-    "@zephyrcode/shared": "workspace:*"
+    "@blazecoder/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

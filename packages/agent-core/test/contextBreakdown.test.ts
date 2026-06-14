@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TranscriptMessage } from "@zephyrcode/shared";
+import type { TranscriptMessage } from "@blazecoder/shared";
 import { computeContextBreakdown } from "../src/index";
 
 const tools = [

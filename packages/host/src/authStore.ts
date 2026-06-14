@@ -1,6 +1,6 @@
 /**
- * The managed credential store: `~/.zephyrcode/config.json`. This REPLACES the old
- * hand-edited `.env` files. Onboarding (the TUI gate and `zephyrcode --setup`) and
+ * The managed credential store: `~/.blazecoder/config.json`. This REPLACES the old
+ * hand-edited `.env` files. Onboarding (the TUI gate and `blazecoder --setup`) and
  * `install.sh` write it; `loadConfig` reads it. The user never edits it by hand.
  *
  * Shape (versioned for forward migrations):

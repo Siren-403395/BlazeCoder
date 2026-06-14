@@ -2,7 +2,7 @@
  * Structured line-diff types — the contract a `file_change` event carries so a host
  * (the TUI today, anything else tomorrow) can render a git-style diff WITHOUT the bulky
  * before/after content ever re-entering the transcript. The diff is computed once, at the
- * tool, by `computeFileDiff` in @zephyrcode/core; consumers only render these shapes.
+ * tool, by `computeFileDiff` in @blazecoder/core; consumers only render these shapes.
  */
 
 /** A single rendered diff line. `context` lines are unchanged padding around a change. */

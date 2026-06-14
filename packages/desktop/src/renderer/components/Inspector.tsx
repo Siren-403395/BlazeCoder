@@ -1,5 +1,5 @@
 import { Check, ListChecks, SquareDashed } from "lucide-react";
-import type { TodoItem } from "@zephyrcode/shared";
+import type { TodoItem } from "@blazecoder/shared";
 import type { ToolItem } from "../app/types";
 import { DiffViewer } from "./DiffViewer";
 import { stringifyInput } from "../app/format";

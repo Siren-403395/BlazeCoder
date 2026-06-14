@@ -1,9 +1,9 @@
 {
-  "name": "@zephyrcode/desktop",
+  "name": "@blazecoder/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "zephyrcode desktop — an Electron GUI host over the shared @zephyrcode/host runtime. A sibling adapter to the Ink TUI; never depends on it.",
+  "description": "blazecoder desktop — an Electron GUI host over the shared @blazecoder/host runtime. A sibling adapter to the Ink TUI; never depends on it.",
   "main": "./dist/main/main.cjs",
   "scripts": {
     "dev": "concurrently -k -n renderer,electron \"pnpm dev:renderer\" \"pnpm dev:electron\"",
@@ -16,12 +16,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
-    "lint": "echo \"(no linter configured for @zephyrcode/desktop)\""
+    "lint": "echo \"(no linter configured for @blazecoder/desktop)\""
   },
   "dependencies": {
-    "@zephyrcode/core": "workspace:*",
-    "@zephyrcode/host": "workspace:*",
-    "@zephyrcode/shared": "workspace:*",
+    "@blazecoder/core": "workspace:*",
+    "@blazecoder/host": "workspace:*",
+    "@blazecoder/shared": "workspace:*",
     "lucide-react": "^0.468.0",
     "react": "^18",
     "react-dom": "^18"

@@ -10,7 +10,7 @@
  * transcript.
  */
 
-import { inferLanguage, isSecretPath, looksLikeSecret } from "@zephyrcode/shared";
+import { inferLanguage, isSecretPath, looksLikeSecret } from "@blazecoder/shared";
 import { computeFileDiff } from "../../diff";
 import { WorkspaceBoundaryError } from "../../workspace/boundary";
 import type { Tool, ToolContext, ToolResult } from "../registry";

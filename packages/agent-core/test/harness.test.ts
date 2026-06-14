@@ -49,7 +49,7 @@ describe("terminalToSubtype", () => {
     const registry = new ToolRegistry().registerAll(builtinTools());
     const cfg = { maxTurns: 7, maxBudgetUsd: 2, contextTokens: 65536, effort: "ultra" as const, temperature: 0.2 };
     const snap = buildLoopConfig(cfg, registry, "/work");
-    expect(snap.system).toContain("You are zephyrcode");
+    expect(snap.system).toContain("You are blazecoder");
     expect(snap.tools.map((t) => t.name)).toEqual(registry.names());
     expect(snap.thinking).toBe(true); // ultra → thinking on
     expect(snap.thinkingBudget).toBe("max"); // ultra → Think Max

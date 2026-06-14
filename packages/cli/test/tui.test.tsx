@@ -7,9 +7,9 @@ import {
   InMemorySessionStore,
   InMemoryWorkspace,
   silentLogger,
-} from "@zephyrcode/core";
-import type { ModelGateway, ModelRequest, ModelResponse } from "@zephyrcode/core";
-import type { FileDiff } from "@zephyrcode/shared";
+} from "@blazecoder/core";
+import type { ModelGateway, ModelRequest, ModelResponse } from "@blazecoder/core";
+import type { FileDiff } from "@blazecoder/shared";
 import { App } from "../src/index";
 import { InputBox, InputLine, ItemView, PermissionPrompt } from "../src/tui/view";
 

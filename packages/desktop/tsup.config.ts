@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 
 /**
  * Bundle the Electron MAIN process and the PRELOAD script (and the workspace packages
- * they import as TS source — @zephyrcode/host/core/shared) into self-contained CJS.
+ * they import as TS source — @blazecoder/host/core/shared) into self-contained CJS.
  * Electron loads CJS for main/preload; the renderer is built separately by Vite.
  *
  * Explicit entry NAMES (`main`, `preload`) keep the artifact paths stable and
@@ -22,7 +22,7 @@ export default defineConfig({
   target: "node20",
   external: ["electron"],
   // Bundle the workspace packages (they ship as TS source, not built artifacts).
-  noExternal: [/^@zephyrcode\//],
+  noExternal: [/^@blazecoder\//],
   sourcemap: true,
   clean: true,
   dts: false,

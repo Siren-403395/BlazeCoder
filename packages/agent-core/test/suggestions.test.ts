@@ -13,7 +13,7 @@ import {
   silentLogger,
 } from "../src/index";
 import { reply, ScriptedGateway, call } from "./fakes";
-import type { AgentEvent } from "@zephyrcode/shared";
+import type { AgentEvent } from "@blazecoder/shared";
 
 describe("getSuggestions", () => {
   it("suggests a reusable 2-word prefix for an ordinary command", () => {

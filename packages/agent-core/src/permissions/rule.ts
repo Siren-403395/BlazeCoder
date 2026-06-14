@@ -10,7 +10,7 @@
  * A whole-tool rule (no content) matches any input to that tool.
  */
 
-import type { PermissionRuleValue, RuleBehavior } from "@zephyrcode/shared";
+import type { PermissionRuleValue, RuleBehavior } from "@blazecoder/shared";
 import { TOOL_NAMES } from "../tools/toolNames";
 import { bashCommandMatchesRule } from "./bashRuleMatch";
 import { pathMatchesRule } from "./pathRuleMatch";

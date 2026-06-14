@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig } from "../src/config";
+import { loadConfig, migrateRenamedHome } from "../src/config";
 import { authConfigPath, loadAuthConfig, saveAuthConfig } from "../src/authStore";
 
 // Every env var loadConfig consults — cleared before each test so we control inputs.
 const RELEVANT = [
-  "ZEPHYRCODE_HOME",
-  "ZEPHYRCODE_PROVIDER",
-  "ZEPHYRCODE_MODEL",
+  "BLAZECODER_HOME",
+  "BLAZECODER_PROVIDER",
+  "BLAZECODER_MODEL",
   "DEEPSEEK_API_KEY",
   "DEEPSEEK_BASE_URL",
   "AGENT_MAX_TURNS",
@@ -31,7 +31,7 @@ beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "zc-cfg-cwd-"));
   savedEnv = { ...process.env };
   for (const k of RELEVANT) delete process.env[k];
-  process.env.ZEPHYRCODE_HOME = home;
+  process.env.BLAZECODER_HOME = home;
 });
 
 afterEach(() => {
@@ -92,7 +92,7 @@ describe("loadConfig", () => {
     expect(loadConfig(cwd).maxTurns).toBeUndefined();
   });
 
-  it("one-time migrates an old global ~/.zephyrcode/.env key into the managed config", () => {
+  it("one-time migrates an old global ~/.blazecoder/.env key into the managed config", () => {
     writeFileSync(join(home, ".env"), "DEEPSEEK_API_KEY=sk-legacy-global\nDEEPSEEK_MODEL=deepseek-v4-pro\n");
     expect(existsSync(authConfigPath(home))).toBe(false);
     const c = loadConfig(cwd);
@@ -127,5 +127,41 @@ describe("loadConfig", () => {
     saveAuthConfig(home, { version: 1, providers: { deepseek: { apiKey: "sk-stored" } } });
     process.env.DEEPSEEK_API_KEY = "";
     expect(loadConfig(cwd).apiKey).toBe("sk-stored");
+  });
+});
+
+describe("migrateRenamedHome (zephyrcode → blazecoder upgrade)", () => {
+  it("copies the previous state dir to the new default home when the new one is absent", () => {
+    delete process.env.BLAZECODER_HOME;
+    const base = mkdtempSync(join(tmpdir(), "zc-mig-"));
+    const previous = join(base, ".zephyrcode");
+    const next = join(base, ".blazecoder");
+    mkdirSync(previous, { recursive: true });
+    writeFileSync(join(previous, "config.json"), '{"version":1,"providers":{}}');
+    migrateRenamedHome(next, previous);
+    expect(existsSync(join(next, "config.json"))).toBe(true); // key/sessions/memory carried over
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  it("never overwrites an existing new home, and skips when BLAZECODER_HOME is explicit", () => {
+    const base = mkdtempSync(join(tmpdir(), "zc-mig-"));
+    const previous = join(base, ".zephyrcode");
+    mkdirSync(previous, { recursive: true });
+    writeFileSync(join(previous, "config.json"), "{}");
+
+    // (a) new home already exists → leave it untouched
+    delete process.env.BLAZECODER_HOME;
+    const existing = join(base, ".blazecoder");
+    mkdirSync(existing, { recursive: true });
+    migrateRenamedHome(existing, previous);
+    expect(existsSync(join(existing, "config.json"))).toBe(false);
+
+    // (b) explicit custom home → never auto-import the old default
+    const custom = join(base, "custom");
+    process.env.BLAZECODER_HOME = custom;
+    migrateRenamedHome(custom, previous);
+    expect(existsSync(custom)).toBe(false);
+
+    rmSync(base, { recursive: true, force: true });
   });
 });

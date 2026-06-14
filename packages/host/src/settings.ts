@@ -5,7 +5,7 @@
  * half of the same files — the `hooks` section, which runs arbitrary shell. That
  * is an RCE vector if a cloned repo ships a malicious settings.json, so PROJECT-
  * scope hooks load ONLY for a trusted workspace (a trust marker under the project's
- * state dir). The user (home) scope is implicitly trusted; ZEPHYRCODE_DISABLE_HOOKS
+ * state dir). The user (home) scope is implicitly trusted; BLAZECODER_DISABLE_HOOKS
  * is a global kill switch.
  */
 
@@ -89,5 +89,5 @@ export function trustWorkspace(projectStateDir: string): void {
 
 /** Global kill switch for all settings-driven hooks. */
 export function hooksDisabled(): boolean {
-  return process.env.ZEPHYRCODE_DISABLE_HOOKS === "1" || process.env.ZEPHYRCODE_DISABLE_HOOKS === "true";
+  return process.env.BLAZECODER_DISABLE_HOOKS === "1" || process.env.BLAZECODER_DISABLE_HOOKS === "true";
 }

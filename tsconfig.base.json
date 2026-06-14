@@ -25,9 +25,9 @@
     "noEmit": true,
 
     "paths": {
-      "@zephyrcode/shared": ["./packages/shared/src/index.ts"],
-      "@zephyrcode/core": ["./packages/agent-core/src/index.ts"],
-      "@zephyrcode/host": ["./packages/host/src/index.ts"]
+      "@blazecoder/shared": ["./packages/shared/src/index.ts"],
+      "@blazecoder/core": ["./packages/agent-core/src/index.ts"],
+      "@blazecoder/host": ["./packages/host/src/index.ts"]
     }
   }
 }

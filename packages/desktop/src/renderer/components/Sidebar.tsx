@@ -1,5 +1,5 @@
 import { FileDiff, History, RefreshCw } from "lucide-react";
-import type { SessionSummary } from "@zephyrcode/shared";
+import type { SessionSummary } from "@blazecoder/shared";
 import type { ToolItem } from "../app/types";
 import { shortPath } from "../app/format";
 

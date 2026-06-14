@@ -17,7 +17,7 @@ importers:
 
   packages/agent-core:
     dependencies:
-      '@zephyrcode/shared':
+      '@blazecoder/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -33,13 +33,13 @@ importers:
 
   packages/cli:
     dependencies:
-      '@zephyrcode/core':
+      '@blazecoder/core':
         specifier: workspace:*
         version: link:../agent-core
-      '@zephyrcode/host':
+      '@blazecoder/host':
         specifier: workspace:*
         version: link:../host
-      '@zephyrcode/shared':
+      '@blazecoder/shared':
         specifier: workspace:*
         version: link:../shared
       ink:
@@ -88,13 +88,13 @@ importers:
 
   packages/desktop:
     dependencies:
-      '@zephyrcode/core':
+      '@blazecoder/core':
         specifier: workspace:*
         version: link:../agent-core
-      '@zephyrcode/host':
+      '@blazecoder/host':
         specifier: workspace:*
         version: link:../host
-      '@zephyrcode/shared':
+      '@blazecoder/shared':
         specifier: workspace:*
         version: link:../shared
       lucide-react:
@@ -146,10 +146,10 @@ importers:
 
   packages/host:
     dependencies:
-      '@zephyrcode/core':
+      '@blazecoder/core':
         specifier: workspace:*
         version: link:../agent-core
-      '@zephyrcode/shared':
+      '@blazecoder/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:

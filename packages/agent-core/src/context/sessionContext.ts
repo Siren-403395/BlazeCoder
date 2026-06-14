@@ -7,7 +7,7 @@
  * prompt" pattern.
  */
 
-import type { ContextBlock } from "@zephyrcode/shared";
+import type { ContextBlock } from "@blazecoder/shared";
 import type { ModelRequest, ToolSchema, TranscriptMessage } from "../ports";
 
 /**

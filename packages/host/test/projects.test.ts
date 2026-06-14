@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FileSessionStore, systemClock } from "@zephyrcode/core";
+import { FileSessionStore, systemClock } from "@blazecoder/core";
 import { migrateLegacySessions, projectKey, projectStateDir } from "../src/projects";
 
 const tmpDirs: string[] = [];

@@ -1,6 +1,6 @@
 /** Shared test doubles for agent-core. */
 
-import type { AgentEvent, ProjectFile, ToolCall } from "@zephyrcode/shared";
+import type { AgentEvent, ProjectFile, ToolCall } from "@blazecoder/shared";
 import {
   InMemoryMemoryStore,
   InMemoryWorkspace,

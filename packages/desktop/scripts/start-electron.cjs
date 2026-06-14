@@ -7,7 +7,7 @@ const electron = require("electron");
 const packageDir = resolve(__dirname, "..");
 const env = {
   ...process.env,
-  ZEPHYRCODE_DESKTOP_DEV_SERVER: "http://127.0.0.1:5173",
+  BLAZECODER_DESKTOP_DEV_SERVER: "http://127.0.0.1:5173",
 };
 // Electron sets this when re-spawning itself as a node process; clearing it makes the
 // binary boot as the GUI shell instead of a plain node interpreter.

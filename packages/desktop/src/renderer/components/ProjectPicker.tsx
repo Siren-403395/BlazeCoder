@@ -18,7 +18,7 @@ export function ProjectPicker({
         </div>
         <h1 className="picker__title">Open a workspace</h1>
         <p className="picker__sub">
-          Point zephyrcode at a project directory. It runs the same agent the terminal does, with visible tools,
+          Point blazecoder at a project directory. It runs the same agent the terminal does, with visible tools,
           diffs, and approvals.
         </p>
         <div className="picker__row">

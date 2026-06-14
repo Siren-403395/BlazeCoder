@@ -4,7 +4,7 @@
  * Every tool's `name` field AND every reference to a tool in the system prompt /
  * tool descriptions / agent definitions MUST go through this constant. The
  * reference clone keeps a per-tool name constant for exactly this reason: prose
- * and registration can never drift. (zephyrcode previously hard-coded snake_case
+ * and registration can never drift. (blazecoder previously hard-coded snake_case
  * names — read_file/write_file/list_files — in the prompt while registering
  * Read/Write/…, telling the model to call tools that do not resolve.)
  *

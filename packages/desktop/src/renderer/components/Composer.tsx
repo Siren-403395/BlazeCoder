@@ -35,7 +35,7 @@ export function Composer({
             send();
           }
         }}
-        placeholder={ready ? "Ask zephyrcode to inspect, change, test, or explain…  (⌘/Ctrl+Enter to send)" : "Open a workspace to begin"}
+        placeholder={ready ? "Ask blazecoder to inspect, change, test, or explain…  (⌘/Ctrl+Enter to send)" : "Open a workspace to begin"}
         disabled={!ready}
         rows={1}
       />

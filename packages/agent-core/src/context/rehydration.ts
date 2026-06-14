@@ -14,7 +14,7 @@ import type { ReadLedger } from "../workspace/ledger";
 export const SUMMARY_INSTRUCTIONS = [
   "CRITICAL: Respond with TEXT ONLY. Do NOT call any tools — you already have all the needed context above; tool calls will be rejected and waste your only turn.",
   "",
-  "You are compacting a zephyrcode conversation to fit the context window.",
+  "You are compacting a blazecoder conversation to fit the context window.",
   "First, think in an <analysis>...</analysis> block (it will be stripped): note what's been done, what's load-bearing, and what's left.",
   "Then produce a dense summary that preserves everything needed to continue the work, organized under these headings:",
   "1. User intent — what the user ultimately wants.",

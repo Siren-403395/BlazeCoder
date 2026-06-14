@@ -20,9 +20,9 @@ import {
   silentLogger,
   systemClock,
   webTools,
-} from "@zephyrcode/core";
+} from "@blazecoder/core";
 import { HttpWebClient } from "./adapters/webClient";
-import type { AgentRuntime, Logger, PermissionMode, RuleSource } from "@zephyrcode/core";
+import type { AgentRuntime, Logger, PermissionMode, RuleSource } from "@blazecoder/core";
 import { StubGateway } from "./adapters/stubGateway";
 import { LocalProcessSandbox } from "./adapters/sandbox";
 import { resolveProvider } from "./providers";
@@ -72,7 +72,7 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
 
   // Settings-driven command hooks run arbitrary shell, so PROJECT/LOCAL hooks load
   // ONLY for a trusted workspace; the user (home) scope is implicitly trusted. The
-  // ZEPHYRCODE_DISABLE_HOOKS env var is a global kill switch.
+  // BLAZECODER_DISABLE_HOOKS env var is a global kill switch.
   const trusted = isWorkspaceTrusted(projectDir);
   const hookConfigs = hooksDisabled()
     ? []
@@ -81,11 +81,11 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
   const extraPostToolUseHooks = hookConfigs.flatMap(postToolUseHooksFrom);
 
   // Custom sub-agents: user-scope always; project-scope only for a trusted workspace.
-  const agentDirs = [join(config.home, "agents"), ...(trusted ? [join(root, ".zephyrcode", "agents")] : [])];
+  const agentDirs = [join(config.home, "agents"), ...(trusted ? [join(root, ".blazecoder", "agents")] : [])];
   const { definitions: agents } = loadAgentDefinitions(agentDirs, builtinTools().map((t) => t.name));
 
   // Skills (same trust gate). When any exist, expose the model-callable Skill tool.
-  const skillDirs = [join(config.home, "skills"), ...(trusted ? [join(root, ".zephyrcode", "skills")] : [])];
+  const skillDirs = [join(config.home, "skills"), ...(trusted ? [join(root, ".blazecoder", "skills")] : [])];
   const skills = loadSkills(skillDirs);
   const extraTools = [
     ...(skills.length ? [makeSkillTool(skills)] : []),
@@ -94,7 +94,7 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
 
   // Output styles (same trust gate): the runtime owns the active style so /output-style
   // can switch it at runtime. config.outputStyle selects the one active at startup.
-  const styleDirs = [join(config.home, "output-styles"), ...(trusted ? [join(root, ".zephyrcode", "output-styles")] : [])];
+  const styleDirs = [join(config.home, "output-styles"), ...(trusted ? [join(root, ".blazecoder", "output-styles")] : [])];
   const styles = loadOutputStyles(styleDirs);
 
   return createAgentRuntime({
@@ -109,7 +109,7 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     sourceRootDir,
     settingsFiles: { user: paths.user, project: paths.project, local: paths.local },
     // Spill oversized tool output inside the workspace so the agent can Read it back.
-    spillDir: join(root, ".zephyrcode", "tool-results"),
+    spillDir: join(root, ".blazecoder", "tool-results"),
     extraPreToolUseHooks,
     extraPostToolUseHooks,
     extraTools,

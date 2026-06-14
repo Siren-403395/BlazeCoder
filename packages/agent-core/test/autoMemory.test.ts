@@ -63,9 +63,9 @@ describe("passive auto-memory injection (end-to-end)", () => {
   }
 
   it("injects the memory index into the per-turn projectRules", async () => {
-    const rules = await projectRulesFor("- recall me: zephyrcode is the product name");
+    const rules = await projectRulesFor("- recall me: blazecoder is the product name");
     expect(rules).toContain("## Memory (recalled from past sessions)");
-    expect(rules).toContain("recall me: zephyrcode is the product name");
+    expect(rules).toContain("recall me: blazecoder is the product name");
   });
 
   it("omits the Memory section entirely when there is no index", async () => {

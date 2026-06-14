@@ -1,6 +1,6 @@
 /**
  * Pure presentational helpers for the renderer. Zero imports by design — the renderer
- * never reaches across packages for VALUES (the @zephyrcode/host barrel pulls node:fs /
+ * never reaches across packages for VALUES (the @blazecoder/host barrel pulls node:fs /
  * child_process and would break Vite), so the GUI carries its own tiny copy of the tool
  * label helpers. The guard test enforces this isolation.
  */

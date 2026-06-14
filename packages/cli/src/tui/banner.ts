@@ -1,23 +1,23 @@
 /**
  * The welcome wordmark, hand-set as a 5-row pixel font (no figlet dependency). Each
  * glyph is 4 cells wide; letters are joined with a single-space gutter. We render the
- * full product name "ZEPHYRCODE" big, framed, on the welcome + a compact chip fallback
+ * full product name "BLAZECODER" big, framed, on the welcome + a compact chip fallback
  * for narrow terminals (see view.tsx).
  */
 
 const GLYPHS: Record<string, string[]> = {
+  B: ["███ ", "█  █", "███ ", "█  █", "███ "],
+  L: ["█   ", "█   ", "█   ", "█   ", "████"],
+  A: [" ██ ", "█  █", "████", "█  █", "█  █"],
   Z: ["████", "  ██", " ██ ", "██  ", "████"],
   E: ["████", "█   ", "███ ", "█   ", "████"],
-  P: ["███ ", "█  █", "███ ", "█   ", "█   "],
-  H: ["█  █", "█  █", "████", "█  █", "█  █"],
-  Y: ["█  █", "█  █", " ██ ", " █  ", " █  "],
-  R: ["███ ", "█  █", "███ ", "█ █ ", "█  █"],
   C: [" ███", "█   ", "█   ", "█   ", " ███"],
   O: [" ██ ", "█  █", "█  █", "█  █", " ██ "],
   D: ["███ ", "█  █", "█  █", "█  █", "███ "],
+  R: ["███ ", "█  █", "███ ", "█ █ ", "█  █"],
 };
 
-const NAME = "ZEPHYRCODE";
+const NAME = "BLAZECODER";
 
 /** The wordmark as 5 rows of block art (one row per scan-line, letters space-joined). */
 export const WORDMARK_ROWS: string[] = [0, 1, 2, 3, 4].map((r) =>

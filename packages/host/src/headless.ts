@@ -7,8 +7,8 @@
  * runtime was built in bypass mode (--yolo), since nobody can answer them.
  */
 
-import type { AgentEvent } from "@zephyrcode/shared";
-import type { AgentRuntime, Effort } from "@zephyrcode/core";
+import type { AgentEvent } from "@blazecoder/shared";
+import type { AgentRuntime, Effort } from "@blazecoder/core";
 import { toolDetail } from "./format";
 
 export type OutputFormat = "text" | "json" | "stream-json";

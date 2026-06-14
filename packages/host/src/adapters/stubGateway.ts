@@ -5,7 +5,7 @@
  * end-to-end tests live in the test suite, not here.
  */
 
-import type { ModelGateway, ModelRequest, ModelResponse } from "@zephyrcode/core";
+import type { ModelGateway, ModelRequest, ModelResponse } from "@blazecoder/core";
 
 export class StubGateway implements ModelGateway {
   readonly model = "stub-model";

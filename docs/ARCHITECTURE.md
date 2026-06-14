@@ -6,7 +6,7 @@
 
 ## 0. Form factor: a local CLI/TUI agent (read this first)
 
-This repo ships as a **command-line agent** (`zephyrcode`), not a browser app. The
+This repo ships as a **command-line agent** (`blazecoder`), not a browser app. The
 kernel rationale in §§1–3 is model/form-agnostic and still holds. **§§4–7 below are
 the ORIGINAL pre-CLI blueprint** (a browser app with an `apps/server` Fastify+SSE
 backend, an `apps/web` React client, and an esbuild `build_preview` tool) — they are

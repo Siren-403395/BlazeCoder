@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TranscriptMessage } from "@zephyrcode/shared";
+import type { TranscriptMessage } from "@blazecoder/shared";
 import { transcriptToTimeline } from "../src/renderer/app/transcript";
 import type { AssistantItem, BoundaryItem, ToolItem } from "../src/renderer/app/types";
 

@@ -9,7 +9,7 @@ import {
   silentLogger,
 } from "../src/index";
 import type { ModelGateway, ModelResponse, SessionState } from "../src/index";
-import type { AgentEvent } from "@zephyrcode/shared";
+import type { AgentEvent } from "@blazecoder/shared";
 import { reply, ScriptedGateway } from "./fakes";
 
 const signal = new AbortController().signal;

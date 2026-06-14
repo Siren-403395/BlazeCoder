@@ -4,7 +4,7 @@
  * reducer would for an equivalent event stream. Pure: types-only imports, unit-tested.
  */
 
-import type { ToolCall, TranscriptMessage } from "@zephyrcode/shared";
+import type { ToolCall, TranscriptMessage } from "@blazecoder/shared";
 import type { TimelineItem, ToolItem } from "./types";
 
 export function transcriptToTimeline(messages: TranscriptMessage[]): TimelineItem[] {

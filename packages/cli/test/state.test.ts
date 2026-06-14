@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyEvent, initialState, isFinalItem, reduce, splitItems } from "../src/tui/state";
 import type { Item } from "../src/tui/state";
-import type { FileDiff, SessionState } from "@zephyrcode/shared";
+import type { FileDiff, SessionState } from "@blazecoder/shared";
 
 describe("TUI state reducer", () => {
   it("records the prompt and enters running", () => {

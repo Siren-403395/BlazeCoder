@@ -7,9 +7,9 @@ const render = (over: Partial<Parameters<typeof buildSystemPrompt>[0]> = {}) =>
 
 describe("system prompt identity", () => {
   it("uses the product name as the first, swappable section", () => {
-    expect(PRODUCT_NAME).toBe("zephyrcode");
+    expect(PRODUCT_NAME).toBe("blazecoder");
     const sections = buildSystemPrompt({ toolNames: realToolNames() });
-    expect(sections[0]).toContain("You are zephyrcode");
+    expect(sections[0]).toContain("You are blazecoder");
     expect(sections[0]).toContain("## Identity");
   });
 
@@ -99,7 +99,7 @@ describe("override and subagent variants", () => {
 
   it("subagent variant keeps identity but uses the sub-agent contract", () => {
     const p = buildSubagentPrompt({ toolNames: realToolNames() }).join("\n\n");
-    expect(p).toContain("You are zephyrcode");
+    expect(p).toContain("You are blazecoder");
     expect(p).toContain("# You are a sub-agent");
     expect(p).toContain("absolute file paths");
     expect(p).not.toContain("# Doing tasks");

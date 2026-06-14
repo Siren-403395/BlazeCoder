@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const bundle = join(pkgRoot, "dist", "zephyrcode.js");
+const bundle = join(pkgRoot, "dist", "blazecoder.js");
 const tsupBin = join(pkgRoot, "node_modules", ".bin", "tsup");
 
 beforeAll(() => {
@@ -27,7 +27,7 @@ function runCa(args: string[]): { status: number | null; stdout: string; stderr:
   const cwd = mkdtempSync(join(tmpdir(), "zc-e2e-cwd-"));
   try {
     const res = spawnSync("node", [bundle, ...args, "--cwd", cwd], {
-      env: { ...process.env, ZEPHYRCODE_HOME: home, AGENT_FAKE_MODEL: "1" },
+      env: { ...process.env, BLAZECODER_HOME: home, AGENT_FAKE_MODEL: "1" },
       encoding: "utf8",
       timeout: 20_000,
     });

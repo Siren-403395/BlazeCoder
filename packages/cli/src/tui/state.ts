@@ -9,7 +9,7 @@
  * region can show a growing token counter while it thinks.
  */
 
-import type { AgentEvent, ContextReport, FileDiff, SessionState, TodoItem, TranscriptMessage } from "@zephyrcode/shared";
+import type { AgentEvent, ContextReport, FileDiff, SessionState, TodoItem, TranscriptMessage } from "@blazecoder/shared";
 
 export type ToolStatus = "running" | "ok" | "error";
 

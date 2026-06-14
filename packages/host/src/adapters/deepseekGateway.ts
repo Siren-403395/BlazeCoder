@@ -5,15 +5,15 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { StopReason, ToolCall } from "@zephyrcode/shared";
+import type { StopReason, ToolCall } from "@blazecoder/shared";
 import type {
   ModelGateway,
   ModelRequest,
   ModelResponse,
   ModelStreamHandlers,
   TranscriptMessage,
-} from "@zephyrcode/core";
-import { ContextOverflowError } from "@zephyrcode/core";
+} from "@blazecoder/core";
+import { ContextOverflowError } from "@blazecoder/core";
 import { HttpError, NonRetryableError, parseRetryAfter, withRetry } from "./withRetry";
 
 const CONTEXT_OVERFLOW_RE = /context length|maximum context|context_length_exceeded|too long|exceeds the maximum/i;

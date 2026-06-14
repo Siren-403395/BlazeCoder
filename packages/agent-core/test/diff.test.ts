@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeFileDiff } from "../src/index";
-import type { DiffLine } from "@zephyrcode/shared";
+import type { DiffLine } from "@blazecoder/shared";
 
 /** Flatten all hunk lines for easy assertions. */
 function lines(before: string, after: string, op: Parameters<typeof computeFileDiff>[2] = "edit", opts = {}) {

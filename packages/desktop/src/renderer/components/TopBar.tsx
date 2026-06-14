@@ -32,7 +32,7 @@ export function TopBar({
         <span className="topbar__logo" aria-hidden>
           ✶
         </span>
-        <span className="topbar__name">zephyrcode</span>
+        <span className="topbar__name">blazecoder</span>
       </div>
 
       <div className="topbar__project" title={cwd}>

@@ -5,7 +5,7 @@
  * contract (the GUI additionally surfaces the reasoning trace and delegated sub-agents).
  */
 
-import type { FileDiff, TodoItem } from "@zephyrcode/shared";
+import type { FileDiff, TodoItem } from "@blazecoder/shared";
 
 export type RunStatus = "idle" | "running" | "awaiting_permission";
 

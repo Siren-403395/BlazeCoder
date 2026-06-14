@@ -1,7 +1,7 @@
 /**
  * The single React binding between the renderer and the main process: a useReducer over the
  * pure reducer, an onAgentEvent subscription that dispatches the event stream, and bound
- * action creators that call the whitelisted window.zephyrcode IPC surface. Components never
+ * action creators that call the whitelisted window.blazecoder IPC surface. Components never
  * touch IPC directly — they receive state slices and these callbacks.
  */
 
@@ -10,7 +10,7 @@ import { reduce } from "./reducer";
 import { initialUiState } from "./types";
 import type { Effort } from "../../shared/ipc";
 import type { DesktopProject } from "../../shared/ipc";
-import type { RuleSource, SessionSummary } from "@zephyrcode/shared";
+import type { RuleSource, SessionSummary } from "@blazecoder/shared";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -25,20 +25,20 @@ export function useAgentStore() {
 
   const refreshSessions = useCallback(async () => {
     try {
-      setSessions(await window.zephyrcode.listSessions());
+      setSessions(await window.blazecoder.listSessions());
     } catch {
       setSessions([]);
     }
   }, []);
 
   useEffect(() => {
-    void window.zephyrcode.getProject().then((p) => {
+    void window.blazecoder.getProject().then((p) => {
       if (p) {
         setProject(p);
         void refreshSessions();
       }
     });
-    const unsubscribe = window.zephyrcode.onAgentEvent((event) => dispatch(event));
+    const unsubscribe = window.blazecoder.onAgentEvent((event) => dispatch(event));
     return unsubscribe;
   }, [refreshSessions]);
 
@@ -58,9 +58,9 @@ export function useAgentStore() {
     [refreshSessions],
   );
 
-  const openProjectDialog = useCallback(() => attach(() => window.zephyrcode.openProjectDialog()), [attach]);
+  const openProjectDialog = useCallback(() => attach(() => window.blazecoder.openProjectDialog()), [attach]);
   const openProjectPath = useCallback(
-    (cwd: string) => attach(() => window.zephyrcode.openProjectPath(cwd)),
+    (cwd: string) => attach(() => window.blazecoder.openProjectPath(cwd)),
     [attach],
   );
 
@@ -72,7 +72,7 @@ export function useAgentStore() {
       dispatch({ type: "user_prompt", text });
       let failed = false;
       try {
-        await window.zephyrcode.runAgent({ prompt: text, sessionId: state.sessionId, effort });
+        await window.blazecoder.runAgent({ prompt: text, sessionId: state.sessionId, effort });
         await refreshSessions();
       } catch (e) {
         failed = true;
@@ -87,7 +87,7 @@ export function useAgentStore() {
   );
 
   const abort = useCallback(async () => {
-    await window.zephyrcode.abortAgent();
+    await window.blazecoder.abortAgent();
     dispatch({ type: "run_settled", error: true });
   }, []);
 
@@ -97,7 +97,7 @@ export function useAgentStore() {
       if (!requestId) return;
       dispatch({ type: "permission_resolved" }); // clear the modal optimistically
       try {
-        await window.zephyrcode.resolvePermission({ requestId, behavior, persist });
+        await window.blazecoder.resolvePermission({ requestId, behavior, persist });
       } catch (e) {
         setError(message(e));
       }
@@ -112,7 +112,7 @@ export function useAgentStore() {
       if (state.status !== "idle") return;
       setError(undefined);
       try {
-        const session = await window.zephyrcode.getSession(id);
+        const session = await window.blazecoder.getSession(id);
         if (session) dispatch({ type: "hydrate", session });
       } catch (e) {
         setError(message(e));
@@ -125,7 +125,7 @@ export function useAgentStore() {
     if (!project || state.status !== "idle") return;
     setError(undefined);
     try {
-      await window.zephyrcode.compactSession(state.sessionId);
+      await window.blazecoder.compactSession(state.sessionId);
     } catch (e) {
       setError(message(e));
     }
@@ -134,7 +134,7 @@ export function useAgentStore() {
   const selectTool = useCallback((toolUseId: string) => dispatch({ type: "select_tool", toolUseId }), []);
 
   const openExternal = useCallback((url: string) => {
-    void window.zephyrcode.openExternal(url);
+    void window.blazecoder.openExternal(url);
   }, []);
 
   return {

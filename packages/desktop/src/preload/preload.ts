@@ -1,5 +1,5 @@
 /**
- * Preload: expose ONLY the whitelisted DesktopApi on window.zephyrcode via contextBridge.
+ * Preload: expose ONLY the whitelisted DesktopApi on window.blazecoder via contextBridge.
  * No fs/child_process/ipcRenderer leaks into the renderer global. Uses only Electron's
  * contextBridge + ipcRenderer and a bundled type-only IPC const map, so the window can run
  * with sandbox:true.
@@ -7,7 +7,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc";
-import type { AgentEvent } from "@zephyrcode/shared";
+import type { AgentEvent } from "@blazecoder/shared";
 import type { DesktopApi, DesktopRunRequest, PermissionDecisionRequest } from "../shared/ipc";
 
 const api: DesktopApi = {
@@ -28,4 +28,4 @@ const api: DesktopApi = {
   },
 };
 
-contextBridge.exposeInMainWorld("zephyrcode", api);
+contextBridge.exposeInMainWorld("blazecoder", api);

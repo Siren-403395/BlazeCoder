@@ -1,4 +1,4 @@
-# zephyrcode ⇽ claude-code-best integration — progress tracker
+# blazecoder ⇽ claude-code-best integration — progress tracker
 
 Blueprint: `docs/INTEGRATION_SPEC.md`. Detailed per-task design+testPlan: `docs/_research_tasks.json` (gitignored scratch).
 Rule: every task = implement → unit+integration/e2e tests green → commit. No backward-compat shims; legacy retired in place.
@@ -28,7 +28,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (committed)
 - [x] P1-harness-4 recover from output truncation (max_tokens) instead of terminating   (deps: harness-2)
 - [x] P1-orch-3    per-agent tool-pool filtering, no-nest depth, subagent AgentEvent arm   (deps: orch-2)
 - [x] P1-orch-1    fix stale tool names in DEFAULT_AGENTS + agent-tools regression test   (deps: tools-1)
-- [x] P1-orch-4    .zephyrcode/agents markdown loader (built-in/user/project merge)   (deps: orch-1, ext-3)
+- [x] P1-orch-4    .blazecoder/agents markdown loader (built-in/user/project merge)   (deps: orch-1, ext-3)
 - [x] P1-ext-2 (model-callable skill tool done; /skill palette = thin TUI follow-up)     markdown SKILL loader + model-callable skill tool + /skill palette   (deps: orch-2, ext-3)
 - [x] P1-ext-3     settings.json hooks reader + command-hook subprocess executor (trust gate)   (deps: perm-3, ext-1)
 - [x] P1-ext-4     plan-mode allowedPrompts (pre-approved categories on plan exit)   (deps: perm-2)

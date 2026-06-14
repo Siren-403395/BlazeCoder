@@ -1,17 +1,17 @@
 {
-  "name": "zephyrcode",
+  "name": "blazecoder",
   "version": "0.1.0",
   "private": true,
-  "description": "zephyrcode: a Claude-Code-style command-line coding agent. An agentic harness (loop + tools + context engineering) that edits real files and runs real commands in a local terminal (TUI).",
+  "description": "blazecoder: a Claude-Code-style command-line coding agent. An agentic harness (loop + tools + context engineering) that edits real files and runs real commands in a local terminal (TUI).",
   "type": "module",
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "zephyrcode": "pnpm --filter @zephyrcode/cli zephyrcode",
-    "desktop": "pnpm --filter @zephyrcode/desktop dev",
-    "desktop:build": "pnpm --filter @zephyrcode/desktop build",
+    "blazecoder": "pnpm --filter @blazecoder/cli blazecoder",
+    "desktop": "pnpm --filter @blazecoder/desktop dev",
+    "desktop:build": "pnpm --filter @blazecoder/desktop build",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

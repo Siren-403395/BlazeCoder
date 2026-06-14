@@ -27,9 +27,9 @@ import {
   type SessionState,
   type SessionSummary,
   type Skill,
-} from "@zephyrcode/core";
+} from "@blazecoder/core";
 import { applyEvent, initialState, splitItems } from "./state";
-import { gitChanges } from "@zephyrcode/host";
+import { gitChanges } from "@blazecoder/host";
 import { modeById, modeForPermission, nextModeId } from "./modes";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
 import { ChoicePicker, CommandPalette, FileCompletion, formatTokens, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
@@ -49,7 +49,7 @@ type Picker =
   | { kind: "style"; items: OutputStyle[]; index: number };
 
 /** Sentinel style row that reverts to the base prompt (selected → setOutputStyle(undefined)). */
-const NO_STYLE: OutputStyle = { name: "(default)", description: "no style · base zephyrcode prompt", prompt: "" };
+const NO_STYLE: OutputStyle = { name: "(default)", description: "no style · base blazecoder prompt", prompt: "" };
 
 function formatElapsed(sec: number): string {
   return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
@@ -281,7 +281,7 @@ export function App({
             dispatch({
               type: "notice",
               level: "warn",
-              message: "No skills found. Add one under .zephyrcode/skills/<name>/SKILL.md (or ~/.zephyrcode/skills).",
+              message: "No skills found. Add one under .blazecoder/skills/<name>/SKILL.md (or ~/.blazecoder/skills).",
             });
           } else {
             setPicker({ kind: "skill", items: runtime.skills, index: 0 });
@@ -292,7 +292,7 @@ export function App({
             dispatch({
               type: "notice",
               level: "warn",
-              message: "No output styles found. Add one under .zephyrcode/output-styles/<name>.md (or ~/.zephyrcode/output-styles).",
+              message: "No output styles found. Add one under .blazecoder/output-styles/<name>.md (or ~/.blazecoder/output-styles).",
             });
             return;
           }

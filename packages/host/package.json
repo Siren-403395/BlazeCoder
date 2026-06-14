@@ -1,9 +1,9 @@
 {
-  "name": "@zephyrcode/host",
+  "name": "@blazecoder/host",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Node/OS host wiring shared by every zephyrcode UI host (TUI, GUI): model gateway + sandbox + file stores + config/settings loaders + buildRuntime, behind the portable agent-core kernel. Contains no UI code.",
+  "description": "Node/OS host wiring shared by every blazecoder UI host (TUI, GUI): model gateway + sandbox + file stores + config/settings loaders + buildRuntime, behind the portable agent-core kernel. Contains no UI code.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -15,11 +15,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
-    "lint": "echo \"(no linter configured for @zephyrcode/host)\""
+    "lint": "echo \"(no linter configured for @blazecoder/host)\""
   },
   "dependencies": {
-    "@zephyrcode/core": "workspace:*",
-    "@zephyrcode/shared": "workspace:*"
+    "@blazecoder/core": "workspace:*",
+    "@blazecoder/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

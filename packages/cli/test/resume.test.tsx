@@ -16,8 +16,8 @@ import {
   InMemorySessionStore,
   InMemoryWorkspace,
   silentLogger,
-} from "@zephyrcode/core";
-import type { ModelGateway, ModelResponse, SessionState } from "@zephyrcode/core";
+} from "@blazecoder/core";
+import type { ModelGateway, ModelResponse, SessionState } from "@blazecoder/core";
 import { App } from "../src/index";
 
 class StubGW implements ModelGateway {

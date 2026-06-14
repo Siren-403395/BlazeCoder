@@ -4,7 +4,7 @@
  * executor in App. Adding a command is one row here.
  */
 
-import { EFFORTS } from "@zephyrcode/core";
+import { EFFORTS } from "@blazecoder/core";
 
 export interface SlashCommand {
   name: string;
@@ -27,7 +27,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: "compact", description: "Compact the conversation now to free up context" },
   { name: "clear", description: "Start a new session with empty context; the previous one stays on disk (resume with /resume)", aliases: ["reset"] },
   { name: "help", description: "Show available commands and keys" },
-  { name: "exit", description: "Quit zephyrcode", aliases: ["quit"] },
+  { name: "exit", description: "Quit blazecoder", aliases: ["quit"] },
 ];
 
 export interface PaletteState {

@@ -6,8 +6,8 @@ import {
   InMemorySessionStore,
   InMemoryWorkspace,
   silentLogger,
-} from "@zephyrcode/core";
-import type { ModelGateway, ModelResponse } from "@zephyrcode/core";
+} from "@blazecoder/core";
+import type { ModelGateway, ModelResponse } from "@blazecoder/core";
 import { runHeadless } from "../src/index";
 
 class ScriptedGateway implements ModelGateway {

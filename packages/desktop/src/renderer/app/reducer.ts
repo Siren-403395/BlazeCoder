@@ -11,7 +11,7 @@
  * tool_args_delta (raw arg JSON, no toolUseId) is dropped entirely.
  */
 
-import type { AgentEvent, SessionState, ToolCall } from "@zephyrcode/shared";
+import type { AgentEvent, SessionState, ToolCall } from "@blazecoder/shared";
 import { transcriptToTimeline } from "./transcript";
 import { initialUiState } from "./types";
 import type { AssistantItem, ToolItem, UiState } from "./types";

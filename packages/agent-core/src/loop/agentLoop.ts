@@ -5,7 +5,7 @@
  * compaction, and persistence are sibling modules it calls into.
  */
 
-import type { ResultSubtype, StopReason, TokenUsage } from "@zephyrcode/shared";
+import type { ResultSubtype, StopReason, TokenUsage } from "@blazecoder/shared";
 import type {
   Clock,
   EventSink,

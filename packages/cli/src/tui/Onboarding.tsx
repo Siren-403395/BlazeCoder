@@ -1,7 +1,7 @@
 /**
  * First-run onboarding, rendered in the TUI before the chat screen. Walks the user
  * through provider → model → API key (the key is masked, pasted, never echoed), then
- * writes the managed config (~/.zephyrcode/config.json) and hands control back via
+ * writes the managed config (~/.blazecoder/config.json) and hands control back via
  * onDone. Steps with a single choice auto-skip, so today (one provider, one model)
  * the user lands straight on the key step. Reusable: a future in-session /login can
  * mount the same component.
@@ -9,7 +9,7 @@
 
 import { useCallback, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
-import { setActiveProvider, defaultModel, type ModelOption, type Provider } from "@zephyrcode/host";
+import { setActiveProvider, defaultModel, type ModelOption, type Provider } from "@blazecoder/host";
 import { theme } from "./theme";
 import { Wordmark } from "./view";
 

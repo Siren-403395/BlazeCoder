@@ -24,7 +24,7 @@ export function Timeline({
       <div className="timeline timeline--empty">
         <div className="hint">
           <p className="hint__lead">Ready when you are.</p>
-          <p className="hint__sub">Ask zephyrcode to explore, change, test, or explain this workspace.</p>
+          <p className="hint__sub">Ask blazecoder to explore, change, test, or explain this workspace.</p>
         </div>
       </div>
     );

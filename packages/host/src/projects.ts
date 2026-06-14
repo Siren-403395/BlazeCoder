@@ -1,5 +1,5 @@
 /**
- * Per-project state isolation. zephyrcode keeps ONE home dir (~/.zephyrcode) for
+ * Per-project state isolation. blazecoder keeps ONE home dir (~/.blazecoder) for
  * user-global config (the API key in config.json), but everything that belongs to a
  * specific working directory — its sessions and the agent's cross-session memory
  * — must live under that project's own subdirectory. Isolation is therefore
@@ -7,7 +7,7 @@
  * future code path could forget to apply.
  *
  * Layout:
- *   ~/.zephyrcode/
+ *   ~/.blazecoder/
  *     config.json                       # user-global config (provider + key + model)
  *     projects/
  *       <project-key>/
@@ -26,7 +26,7 @@ import { dirname, join } from "node:path";
  * A storage key for a project, derived from its absolute (canonical) cwd:
  * `<readable-basename>-<8-hex-of-sha256(cwd)>`. The hash guarantees uniqueness
  * and bounded length (deep paths won't blow the 255-byte filename limit); the
- * basename keeps it human-greppable in ~/.zephyrcode/projects.
+ * basename keeps it human-greppable in ~/.blazecoder/projects.
  */
 export function projectKey(cwd: string): string {
   const base = (cwd.split("/").filter(Boolean).pop() ?? "root").replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 40) || "root";
@@ -54,8 +54,8 @@ export interface SettingsPaths {
 export function settingsPaths(home: string, cwd: string): SettingsPaths {
   return {
     user: join(home, "settings.json"),
-    project: join(cwd, ".zephyrcode", "settings.json"),
-    local: join(cwd, ".zephyrcode", "settings.local.json"),
+    project: join(cwd, ".blazecoder", "settings.json"),
+    local: join(cwd, ".blazecoder", "settings.local.json"),
   };
 }
 

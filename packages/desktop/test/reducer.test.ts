@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { FileDiff } from "@zephyrcode/shared";
+import type { FileDiff } from "@blazecoder/shared";
 import { reduce, reduceAll } from "../src/renderer/app/reducer";
 import { initialUiState } from "../src/renderer/app/types";
 import type { AssistantItem, SubagentItem, ToolItem } from "../src/renderer/app/types";

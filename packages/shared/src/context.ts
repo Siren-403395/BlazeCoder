@@ -7,7 +7,7 @@
  * server's authoritative total, and the renderer labels them honestly.
  *
  * Produced by `computeContextBreakdown` / `AgentRuntime.contextReport` in
- * @zephyrcode/core; consumed by the TUI (and anything else) for display only.
+ * @blazecoder/core; consumed by the TUI (and anything else) for display only.
  */
 
 /** The distinct slices of a model request, in assembly order. */

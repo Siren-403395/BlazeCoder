@@ -7,13 +7,13 @@ import { defineConfig } from "tsup";
  * package.json dependencies, the standard npm-package shape.
  */
 export default defineConfig({
-  entry: { zephyrcode: "src/main.tsx" },
+  entry: { blazecoder: "src/main.tsx" },
   format: ["esm"],
   platform: "node",
   target: "node20",
   banner: { js: "#!/usr/bin/env node" },
   // Bundle the workspace packages (they ship as TS source, not built artifacts).
-  noExternal: [/^@zephyrcode\//],
+  noExternal: [/^@blazecoder\//],
   clean: true,
   shims: false,
   dts: false,

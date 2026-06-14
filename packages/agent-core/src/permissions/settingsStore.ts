@@ -1,8 +1,8 @@
 /**
  * Layered permission-settings files. Three editable scopes, lowest authority first:
  *   - user    `<home>/settings.json`                (global, all projects)
- *   - project `<cwd>/.zephyrcode/settings.json`       (committable, travels with the repo)
- *   - local   `<cwd>/.zephyrcode/settings.local.json` (gitignored, machine-specific)
+ *   - project `<cwd>/.blazecoder/settings.json`       (committable, travels with the repo)
+ *   - local   `<cwd>/.blazecoder/settings.local.json` (gitignored, machine-specific)
  *
  * Settings live in the WORKING DIRECTORY, not in projectStateDir (where sessions and
  * memory live) — permission rules must travel with the repo, sessions must not. This
@@ -11,7 +11,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { PermissionMode, PermissionRule, PermissionSettings, RuleBehavior, RuleSource } from "@zephyrcode/shared";
+import type { PermissionMode, PermissionRule, PermissionSettings, RuleBehavior, RuleSource } from "@blazecoder/shared";
 import { ruleValueFromString } from "./rule";
 
 const MODES = new Set<PermissionMode>(["default", "acceptEdits", "auto", "plan", "bypassPermissions"]);

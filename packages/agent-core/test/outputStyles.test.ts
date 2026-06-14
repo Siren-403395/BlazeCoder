@@ -61,7 +61,7 @@ describe("an output style reshapes the assembled system prompt", () => {
   it("appends extraInstructions as an Additional instructions section", async () => {
     const sys = await systemFor({ extraInstructions: "STYLE_MARKER: be terse" });
     expect(sys).toContain("## Additional instructions\nSTYLE_MARKER: be terse");
-    expect(sys).toContain("You are zephyrcode"); // base prompt still present
+    expect(sys).toContain("You are blazecoder"); // base prompt still present
   });
 
   it("a system override replaces the base prompt", async () => {
@@ -104,7 +104,7 @@ describe("runtime output-style switching (takes effect next run)", () => {
 
   it("switching to an override style replaces the base prompt on the next run", async () => {
     const { rt, systemAfterRun } = makeRuntimeWithStyles();
-    expect(await systemAfterRun()).toContain("You are zephyrcode"); // no style yet
+    expect(await systemAfterRun()).toContain("You are blazecoder"); // no style yet
     rt.setOutputStyle(POET);
     expect(rt.outputStyle).toBe("poet");
     const sys = await systemAfterRun();
@@ -117,7 +117,7 @@ describe("runtime output-style switching (takes effect next run)", () => {
     rt.setOutputStyle(undefined);
     expect(rt.outputStyle).toBeUndefined();
     const sys = await systemAfterRun();
-    expect(sys).toContain("You are zephyrcode");
+    expect(sys).toContain("You are blazecoder");
     expect(sys).not.toContain("STYLE_TERSE");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRequest } from "@zephyrcode/core";
+import type { ModelRequest } from "@blazecoder/core";
 import { StubGateway } from "../src/index";
 
 function request(prompt: string): ModelRequest {

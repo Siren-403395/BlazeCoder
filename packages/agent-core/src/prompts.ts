@@ -9,7 +9,7 @@
  * user message (see memory/projectRules.ts).
  *
  * Two non-negotiables shape every section:
- *   1. Product identity — this agent is `zephyrcode`; it never claims to be Claude/
+ *   1. Product identity — this agent is `blazecoder`; it never claims to be Claude/
  *      DeepSeek/etc. Identity is the FIRST, swappable section so it can't be diluted.
  *   2. Tool names go through TOOL_NAMES (the single source of truth) so the prose
  *      can never again reference a tool the registry doesn't expose.
@@ -23,7 +23,7 @@
 import type { Effort } from "./effort";
 import { TOOL_NAMES } from "./tools/toolNames";
 
-export const PRODUCT_NAME = "zephyrcode";
+export const PRODUCT_NAME = "blazecoder";
 
 export interface PromptContext {
   /** The tool names actually registered this run (gates the using-tools section). */

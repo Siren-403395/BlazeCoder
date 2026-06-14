@@ -5,7 +5,7 @@
  */
 
 import { relative } from "node:path";
-import { isSecretPath, looksLikeSecret } from "@zephyrcode/shared";
+import { isSecretPath, looksLikeSecret } from "@blazecoder/shared";
 import type {
   Clock,
   EventSink,
@@ -35,14 +35,14 @@ import { HookBus } from "./permissions/hooks";
 import type { PostToolUseHook, PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
 import type { BrokerDecision, PermissionMode } from "./permissions/engine";
-import type { PermissionRule, RuleSource } from "@zephyrcode/shared";
+import type { PermissionRule, RuleSource } from "@blazecoder/shared";
 import { ruleValueFromString } from "./permissions/rule";
 import { persistPermissionUpdate, supportsPersistence } from "./permissions/update";
 import type { PermissionUpdate } from "./permissions/update";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig, ManualCompactResult } from "./context/compaction";
 import { computeBudget, computeContextBreakdown } from "./context/sessionContext";
-import type { ContextReport } from "@zephyrcode/shared";
+import type { ContextReport } from "@blazecoder/shared";
 import { buildLoopConfig } from "./loop/config";
 import { loadMemoryIndex } from "./memory/autoMemory";
 import { MODEL_MAX_OUTPUT_TOKENS } from "./effort";

@@ -10,7 +10,7 @@
  */
 
 import { spawn } from "node:child_process";
-import type { PostToolUseHook, PreToolUseDecision, PreToolUseHook } from "@zephyrcode/core";
+import type { PostToolUseHook, PreToolUseDecision, PreToolUseHook } from "@blazecoder/core";
 import type { CommandHookSpec, HooksConfig } from "../settings";
 import { matchesPattern } from "../settings";
 

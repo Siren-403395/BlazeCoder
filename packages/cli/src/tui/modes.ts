@@ -5,7 +5,7 @@
  * cycle order; App reads/advances it and applies `permission` to the runtime.
  */
 
-import type { PermissionMode } from "@zephyrcode/core";
+import type { PermissionMode } from "@blazecoder/core";
 
 export interface UiMode {
   /** Stable id tracked in TUI state. */

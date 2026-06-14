@@ -6,8 +6,8 @@
 import { homedir } from "node:os";
 import { Box, Text, useStdout } from "ink";
 import Spinner from "ink-spinner";
-import type { SessionSummary } from "@zephyrcode/core";
-import type { ContextBlockKind, ContextReport, FileDiff, TodoItem } from "@zephyrcode/shared";
+import type { SessionSummary } from "@blazecoder/core";
+import type { ContextBlockKind, ContextReport, FileDiff, TodoItem } from "@blazecoder/shared";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { TAGLINE, WORDMARK_ROWS, WORDMARK_WIDTH } from "./banner";
@@ -28,19 +28,19 @@ const ON_ACCENT = "#15110a";
 const WORDMARK_RAMP = ["#f3c06a", "#ecac52", "#e8a64d", "#d99644", "#c4863c"];
 
 /**
- * The product lockup: a solid amber "chip" reading ✶ zephyrcode. A filled color block
+ * The product lockup: a solid amber "chip" reading ✶ blazecoder. A filled color block
  * (not bare letters) so the mark reads as a deliberate badge. Used on onboarding and as
  * the welcome screen's fallback on terminals too narrow for the big block wordmark.
  */
 export function Wordmark() {
   return (
     <Text backgroundColor={theme.accent} color={ON_ACCENT} bold>
-      {"  ✶ zephyrcode  "}
+      {"  ✶ blazecoder  "}
     </Text>
   );
 }
 
-/** The big 5-row pixel wordmark (ZEPHYRCODE), each scan-line shaded by the top-lit ramp. */
+/** The big 5-row pixel wordmark (BLAZECODER), each scan-line shaded by the top-lit ramp. */
 export function BigWordmark() {
   return (
     <Box flexDirection="column">
