@@ -51,6 +51,7 @@ function posixRel(root: string, abs: string): string {
 export const globTool: Tool = {
   name: TOOL_NAMES.glob,
   readOnly: true,
+  compactable: true, // a path list is cheap to regenerate
   description: `Find files by name with a glob pattern (supports *, ?, and ** across directories), e.g. **/*.ts or src/**/*.tsx. Returns up to 100 absolute paths, most-recently-modified first. Skips .git and node_modules.
 
 - To scope to a subdirectory, pass an absolute \`path\`. IMPORTANT: to search from the workspace root, OMIT \`path\` entirely — do NOT pass the strings "undefined" or "null".
@@ -101,6 +102,7 @@ export const globTool: Tool = {
 export const grepTool: Tool = {
   name: TOOL_NAMES.grep,
   readOnly: true,
+  compactable: true, // a search can be re-run
   description: `Search file contents with a regular expression. ALWAYS use this tool to search code; NEVER invoke \`grep\` or \`rg\` through ${TOOL_NAMES.bash}.
 
 - output_mode: 'files_with_matches' (default) lists matching files; 'content' shows matching lines as 'path:line: text'; 'count' shows per-file match counts.

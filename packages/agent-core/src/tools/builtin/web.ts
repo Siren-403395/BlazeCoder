@@ -31,6 +31,7 @@ export function makeWebSearchTool(client: WebClient, now: Date = new Date()): To
   return {
     name: "WebSearch",
     readOnly: true,
+    compactable: true, // search results can be re-fetched; bulky and regenerable
     description: `Search the web and use the results to inform your response. Useful for current events and information past your knowledge cutoff.
 
 - Account for the current date when interpreting recency — the current month is ${currentMonth(now)}; use the correct year in date-sensitive queries.
@@ -58,6 +59,7 @@ export function makeWebFetchTool(client: WebClient): Tool {
   return {
     name: "WebFetch",
     readOnly: true,
+    compactable: true, // a fetched page can be re-fetched; often a large extraction
     description: `Fetch a URL and extract information from it according to a prompt. Read-only.
 
 - For GitHub URLs, prefer the gh CLI via ${TOOL_NAMES.bash} (e.g. \`gh issue view\`) — it's faster and more reliable than scraping.

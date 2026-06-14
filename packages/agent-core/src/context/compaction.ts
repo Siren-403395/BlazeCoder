@@ -27,6 +27,13 @@ export interface CompactionConfig {
   /** Consecutive low-yield summarizations before giving up. */
   maxThrash: number;
   /**
+   * Tool names whose results are bulky AND regenerable, so Stage 1 may clear them in
+   * place. The runtime derives this from each tool's `compactable` flag, so a new bulky
+   * read-only tool (e.g. WebFetch) participates automatically instead of being silently
+   * uncleanable. Unset ⇒ the built-in COMPACTABLE fallback (read/bash/grep/glob).
+   */
+  compactableTools?: ReadonlySet<string>;
+  /**
    * Token-floored keep-window for summarization. When set (the real runtime), the
    * kept tail expands back from the end until it holds at least summaryKeepMinTokens
    * AND summaryKeepMinMessages non-tool messages, capped at summaryKeepMaxTokens.
@@ -84,8 +91,10 @@ export class ContextOverflowError extends Error {
 }
 
 /**
- * Tool results safe to clear: bulky, regenerable read/search/shell output. Edit/Write
- * confirmations are NOT cleared — they're cheap and a useful record of what changed.
+ * Default set of tool results safe to clear: bulky, regenerable read/search/shell output.
+ * Edit/Write confirmations are NOT cleared — they're cheap and a useful record of what
+ * changed. The runtime overrides this with a registry-derived set (CompactionConfig
+ * .compactableTools); this fallback keeps direct embedders + tests behaving as before.
  */
 const COMPACTABLE = new Set<string>([TOOL_NAMES.read, TOOL_NAMES.bash, TOOL_NAMES.grep, TOOL_NAMES.glob]);
 
@@ -377,6 +386,11 @@ export class ContextManager {
     return { status, tokensBefore: before, tokensAfter: after, clearedCount: clearedIds.length, summarized };
   }
 
+  /** The set of tool names whose results may be cleared (runtime-supplied, else the default). */
+  private compactableTools(): ReadonlySet<string> {
+    return this.config.compactableTools ?? COMPACTABLE;
+  }
+
   /** Clear old, regenerable tool results in place. Returns the toolUseIds cleared. */
   private clearOldToolResults(session: SessionState): string[] {
     const toolMsgIndexes = session.messages
@@ -385,12 +399,13 @@ export class ContextManager {
     // Always keep the most-recent tool message(s) verbatim — floor at 1.
     const keepRecent = Math.max(1, this.config.keepRecentToolResults);
     const cutoff = toolMsgIndexes.slice(0, Math.max(0, toolMsgIndexes.length - keepRecent));
+    const compactable = this.compactableTools();
     const cleared: string[] = [];
     for (const idx of cutoff) {
       const msg = session.messages[idx];
       if (msg && msg.role === "tool") {
         for (const result of msg.results) {
-          if (!COMPACTABLE.has(result.toolName)) continue; // keep Edit/Write confirmations
+          if (!compactable.has(result.toolName)) continue; // keep Edit/Write confirmations
           if (isClearedMarker(result.content)) continue; // skip already-cleared
           result.content = `[${result.toolName} result cleared to save context]`;
           cleared.push(result.toolUseId);

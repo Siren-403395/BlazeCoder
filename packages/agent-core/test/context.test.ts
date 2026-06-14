@@ -16,6 +16,7 @@ import type { AgentEvent } from "@zephyrcode/shared";
 import type { ModelGateway, ModelResponse } from "../src/index";
 import { truncateHeadForSummary } from "../src/index";
 import { reply, ScriptedGateway } from "./fakes";
+import { builtinTools, makeWebFetchTool, makeWebSearchTool } from "../src/index";
 
 /** A summarizer gateway that throws on the first `failTimes` calls, then returns text. */
 class FlakySummarizer implements ModelGateway {
@@ -175,6 +176,71 @@ describe("ContextManager compaction", () => {
     expect(tool(3).results[0]!.content).toBe("B".repeat(40)); // most-recent kept verbatim
     const boundary = events.find((e): e is Extract<AgentEvent, { type: "compact_boundary" }> => e.type === "compact_boundary");
     expect(boundary?.clearedToolUseIds).toEqual(["r1"]);
+  });
+
+  it("honors a runtime-supplied compactableTools set: clears WebFetch, still keeps Edit", async () => {
+    const cm = new ContextManager(
+      {
+        contextTokens: 100,
+        outputReserveCap: 0,
+        clearThreshold: 0.2,
+        bufferTokens: 1,
+        keepRecentToolResults: 1,
+        keepRecentMessages: 1,
+        maxThrash: 5,
+        compactableTools: new Set(["WebFetch"]),
+      },
+      new FixedClock(),
+      silentLogger,
+    );
+    const s = session([
+      { role: "user", content: "hi" },
+      { role: "tool", results: [{ toolUseId: "w1", toolName: "WebFetch", content: "P".repeat(400), isError: false }] },
+      { role: "tool", results: [{ toolUseId: "e1", toolName: "Edit", content: "Edited /a.ts.", isError: false }] },
+      { role: "tool", results: [{ toolUseId: "w2", toolName: "WebFetch", content: "Q".repeat(40), isError: false }] },
+    ]);
+    const events: AgentEvent[] = [];
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+    const tool = (i: number) => s.messages[i] as Extract<TranscriptMessage, { role: "tool" }>;
+    expect(tool(1).results[0]!.content).toMatch(/WebFetch result cleared/); // now clearable
+    expect(tool(2).results[0]!.content).toBe("Edited /a.ts."); // not in the set → kept
+    expect(tool(3).results[0]!.content).toBe("Q".repeat(40)); // most-recent kept
+  });
+
+  it("the built-in tools declare a sane compactable policy (bulky+regenerable yes; Edit/Write/Todo/memory no)", () => {
+    const noop = { search: async () => [], fetch: async () => "" };
+    const byName = new Map(
+      [...builtinTools(), makeWebSearchTool(noop), makeWebFetchTool(noop)].map((t) => [t.name, !!t.compactable]),
+    );
+    // Bulky, regenerable output → clearable.
+    for (const n of ["Read", "Bash", "Grep", "Glob", "WebSearch", "WebFetch"]) expect(byName.get(n)).toBe(true);
+    // Cheap confirmations / audit records / control → kept.
+    for (const n of ["Write", "Edit", "TodoWrite", "memory"]) expect(byName.get(n)).toBe(false);
+  });
+
+  it("with a custom set, a Read result is NOT cleared (proves the set, not a hardcoded name, is the policy)", async () => {
+    const cm = new ContextManager(
+      {
+        contextTokens: 100,
+        outputReserveCap: 0,
+        clearThreshold: 0.2,
+        bufferTokens: 1,
+        keepRecentToolResults: 1,
+        keepRecentMessages: 1,
+        maxThrash: 5,
+        compactableTools: new Set(["WebFetch"]), // deliberately excludes Read
+      },
+      new FixedClock(),
+      silentLogger,
+    );
+    const s = session([
+      { role: "user", content: "hi" },
+      { role: "tool", results: [{ toolUseId: "r1", toolName: "Read", content: "A".repeat(400), isError: false }] },
+      { role: "tool", results: [{ toolUseId: "r2", toolName: "Read", content: "B".repeat(40), isError: false }] },
+    ]);
+    await cm.maybeCompact(s, { system: "", projectRules: "", tools: [] }, () => {}, signal);
+    const tool = (i: number) => s.messages[i] as Extract<TranscriptMessage, { role: "tool" }>;
+    expect(tool(1).results[0]!.content).toBe("A".repeat(400)); // Read not in set → kept verbatim
   });
 
   it("after summarization inserts a restored-files message and clears the ledger", async () => {

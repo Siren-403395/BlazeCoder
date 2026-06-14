@@ -53,6 +53,14 @@ export interface Tool {
   inputSchema: JSONSchema;
   /** Read-only tools may run concurrently; mutating tools run sequentially. */
   readOnly: boolean;
+  /**
+   * Whether this tool's results are bulky AND regenerable, so compaction may clear old
+   * ones in place to reclaim context (the agent can just re-run the tool). True for
+   * read/search/shell/web dumps; false (default) for Edit/Write confirmations, which are
+   * cheap and a useful audit record. Co-locating the policy here lets a new bulky tool
+   * opt in without editing the compaction module.
+   */
+  compactable?: boolean;
   /** Spill threshold: results larger than this go to disk + a preview (default in the executor). */
   maxResultSizeChars?: number;
   /** Keyword hints for a future deferred-tool search (not yet active). */

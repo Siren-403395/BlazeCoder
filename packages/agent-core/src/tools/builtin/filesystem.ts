@@ -58,6 +58,7 @@ function resolvePath(
 export const readFileTool: Tool = {
   name: TOOL_NAMES.read,
   readOnly: true,
+  compactable: true, // the file can be re-read (and is re-injected fresh after compaction)
   description: `Read a file from the filesystem.
 
 - file_path must be an ABSOLUTE path, not relative.

@@ -276,8 +276,17 @@ export class AgentRuntime {
     this.executor = new ToolExecutor(this.registry, this.engine, this.hooks, this.clock);
 
     const contextTokens = opts.contextTokens ?? DEFAULT_COMPACTION.contextTokens;
+    // Derive the clearable-results set from each tool's `compactable` flag, so a new bulky
+    // read-only tool participates without editing the compaction module. Empty ⇒ leave unset
+    // so ContextManager keeps its built-in fallback (never clear nothing by accident).
+    const compactableTools = new Set(this.registry.list().filter((t) => t.compactable).map((t) => t.name));
     this.contextManager = new ContextManager(
-      { ...DEFAULT_COMPACTION, contextTokens, ...opts.compaction },
+      {
+        ...DEFAULT_COMPACTION,
+        contextTokens,
+        ...(compactableTools.size > 0 ? { compactableTools } : {}),
+        ...opts.compaction,
+      },
       this.clock,
       this.logger,
       this.gateway,
