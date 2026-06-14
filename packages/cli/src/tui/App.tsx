@@ -81,6 +81,8 @@ export function App({
   const [cursor, setCursor] = useState(0);
   const [compIndex, setCompIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  // True while a user-initiated /compact is running (no active turn, but still "working").
+  const [compacting, setCompacting] = useState(false);
   // One picker slot, one priority position in useInput; the kind drives Enter's action.
   const [picker, setPicker] = useState<Picker | null>(null);
   const { exit } = useApp();
@@ -104,14 +106,16 @@ export function App({
   const tipIndex = useRef(Math.floor(Math.random() * 1000));
 
   const busy = state.status === "running" || state.status === "awaiting_permission";
+  // "Working" covers both a running turn and a manual /compact (which has no turn status).
+  const working = busy || compacting;
 
-  // Tick a one-second clock while running, for the elapsed time + verb rotation.
+  // Tick a one-second clock while working, for the elapsed time + verb rotation.
   useEffect(() => {
-    if (!busy) return;
+    if (!working) return;
     setElapsed(0);
     const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(timer);
-  }, [busy]);
+  }, [working]);
 
   // Load the workspace file list for @-completion (on mount, and after each run).
   const loadFiles = useCallback(async () => {
@@ -215,6 +219,40 @@ export function App({
           });
           return;
         }
+        case "compact": {
+          if (!sessionId.current) {
+            dispatch({ type: "notice", level: "info", message: "Nothing to compact yet — start a conversation first." });
+            return;
+          }
+          setCompacting(true);
+          setElapsed(0);
+          const ac = new AbortController();
+          abort.current = ac;
+          try {
+            const outcome = await runtime.compact(sessionId.current, (e) => dispatch(e), ac.signal);
+            if (outcome.status === "empty") {
+              dispatch({ type: "notice", level: "info", message: "Nothing to compact yet — start a conversation first." });
+            } else if (outcome.status === "noop") {
+              dispatch({ type: "notice", level: "info", message: "Already compact — the conversation is short enough that there's nothing to free." });
+            } else {
+              dispatch({
+                type: "notice",
+                level: "info",
+                message: `Compacted: ${formatTokens(outcome.tokensBefore)} → ${formatTokens(outcome.tokensAfter)} tokens.`,
+              });
+            }
+          } catch (err) {
+            dispatch({
+              type: "notice",
+              level: ac.signal.aborted ? "info" : "error",
+              message: ac.signal.aborted ? "Compaction interrupted." : err instanceof Error ? err.message : String(err),
+            });
+          } finally {
+            abort.current = null;
+            setCompacting(false);
+          }
+          return;
+        }
         case "resume":
           await openResume();
           return;
@@ -253,7 +291,7 @@ export function App({
             type: "notice",
             level: "info",
             message:
-              "/resume · /effort <low|high|ultra> · /skill · /output-style · /usage · /context · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
+              "/resume · /effort <low|high|ultra> · /skill · /output-style · /usage · /context · /compact · /clear · /help · /exit. Type @ to reference a file, Tab to complete, ↑ for history. Say 'ultrathink' to push a turn to max effort. Esc interrupts; Ctrl+C quits.",
           });
           return;
         default:
@@ -380,9 +418,10 @@ export function App({
       return;
     }
 
-    // 3) Running: Esc interrupts, Ctrl+C quits, Enter queues a steering message;
-    //    other keys fall through so the user can type that message.
-    if (busy) {
+    // 3) Working: Esc interrupts, Ctrl+C quits. A running turn lets Enter queue a
+    //    steering message and other keys fall through to type it; a manual /compact
+    //    swallows all other keys (there is no turn to steer).
+    if (working) {
       if (key.escape && abort.current) {
         abort.current.abort();
         return;
@@ -391,6 +430,7 @@ export function App({
         exit();
         return;
       }
+      if (compacting) return; // no steering/editing while compacting
       if (key.return) {
         const text = draft.trim();
         if (text) {
@@ -453,12 +493,15 @@ export function App({
   // locked-to-bottom problem of rendering the entire transcript dynamically every frame.
   const { committed, live } = splitItems(state.items);
 
-  // Live "working…" line content.
-  const word = loadingWord(wordSeed.current, Math.floor(elapsed / 3));
+  // Live "working…" line content. A manual /compact has its own steady label (no
+  // streaming tokens, no per-tool phase) so it doesn't borrow the turn verbs.
   const tokens = Math.round(state.turnChars / 4);
   const runningTool = [...state.items].reverse().find((i) => i.kind === "tool" && i.status === "running");
   const phase = runningTool && runningTool.kind === "tool" ? `running ${runningTool.name}` : "thinking";
-  const meta = `${formatElapsed(elapsed)} · ↓ ${formatTokens(tokens)} tokens · ${phase} at ${state.effort} effort`;
+  const word = compacting ? "compacting" : loadingWord(wordSeed.current, Math.floor(elapsed / 3));
+  const meta = compacting
+    ? `${formatElapsed(elapsed)} · summarizing the conversation to free up context`
+    : `${formatElapsed(elapsed)} · ↓ ${formatTokens(tokens)} tokens · ${phase} at ${state.effort} effort`;
   const tip = tipAt(tipIndex.current);
 
   return (
@@ -477,7 +520,7 @@ export function App({
 
       {!picker && !state.permission ? <TodoPanel todos={state.todos} /> : null}
 
-      {busy && !state.permission && !picker ? <LoadingLine word={word} meta={meta} /> : null}
+      {working && !state.permission && !picker ? <LoadingLine word={word} meta={meta} /> : null}
 
       {picker?.kind === "session" ? (
         <SessionPicker sessions={picker.items} index={picker.index} />
@@ -493,7 +536,13 @@ export function App({
             value={draft}
             cursor={cursor}
             ghost={ghost}
-            placeholder={busy ? "working… (type + enter to steer · esc to interrupt)" : "Ask, or / for commands, @ for files"}
+            placeholder={
+              compacting
+                ? "compacting… (esc to interrupt)"
+                : busy
+                  ? "working… (type + enter to steer · esc to interrupt)"
+                  : "Ask, or / for commands, @ for files"
+            }
             effort={state.effort}
             outputStyle={state.outputStyle}
             width={width}

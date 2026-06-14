@@ -85,6 +85,46 @@ describe("welcome banner", () => {
   });
 });
 
+describe("manual /compact command", () => {
+  it("compacts the conversation on demand and shows the boundary", async () => {
+    const clock = new FixedClock(1);
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([
+        step("Creating a notes file.", [{ id: "w", name: "Write", input: { file_path: "/notes.md", content: "# Notes\n" } }]),
+        step("Done — created /notes.md."),
+      ]),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+      // Keep just the last message so a short transcript still has a head to summarize.
+      compaction: { summaryKeepMinMessages: 1, summaryKeepMinTokens: 0, summaryKeepMaxTokens: 1_000_000 },
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} effort="low" />);
+
+    // Run one turn so there is a session + transcript to compact.
+    await new Promise((r) => setTimeout(r, 80));
+    stdin.write("make notes");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await waitFor(() => (lastFrame() ?? "").includes("done"));
+
+    // Now invoke /compact.
+    stdin.write("/compact");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+
+    await waitFor(() => (lastFrame() ?? "").includes("Compacted:"));
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("context compacted"); // the ⟳ boundary chip rendered
+    expect(frame).toContain("Compacted:"); // the precise token-delta notice
+
+    unmount();
+  });
+});
+
 describe("App end-to-end (scripted runtime)", () => {
   it("submits a prompt, runs a tool, and shows the result", async () => {
     const ws = new InMemoryWorkspace();

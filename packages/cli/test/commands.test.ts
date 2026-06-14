@@ -33,6 +33,11 @@ describe("slash-command palette", () => {
     expect(all).toContain("output-style");
     expect(palette("/output").matches.map((c) => c.name)).toEqual(["output-style"]);
   });
+
+  it("lists the /compact command", () => {
+    expect(palette("/").matches.map((c) => c.name)).toContain("compact");
+    expect(palette("/comp").matches.map((c) => c.name)).toEqual(["compact"]);
+  });
 });
 
 describe("findCommand", () => {
@@ -41,6 +46,7 @@ describe("findCommand", () => {
     expect(findCommand("reset")?.name).toBe("clear");
     expect(findCommand("skill")?.name).toBe("skill");
     expect(findCommand("output-style")?.name).toBe("output-style");
+    expect(findCommand("compact")?.name).toBe("compact");
     expect(findCommand("nope")).toBeUndefined();
   });
 });

@@ -23,6 +23,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: "output-style", description: "Switch the output style (applies next turn)" },
   { name: "usage", description: "Show token usage and session cost" },
   { name: "context", description: "Show how full the context window is" },
+  { name: "compact", description: "Compact the conversation now to free up context" },
   { name: "clear", description: "Start a new session with empty context; the previous one stays on disk (resume with /resume)", aliases: ["reset"] },
   { name: "help", description: "Show available commands and keys" },
   { name: "exit", description: "Quit zephyrcode", aliases: ["quit"] },

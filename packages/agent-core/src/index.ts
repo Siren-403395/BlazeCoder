@@ -40,7 +40,9 @@ import { ruleValueFromString } from "./permissions/rule";
 import { persistPermissionUpdate, supportsPersistence } from "./permissions/update";
 import type { PermissionUpdate } from "./permissions/update";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
-import type { CompactionConfig } from "./context/compaction";
+import type { CompactionConfig, ManualCompactResult } from "./context/compaction";
+import { computeBudget } from "./context/sessionContext";
+import { buildLoopConfig } from "./loop/config";
 import { loadMemoryIndex } from "./memory/autoMemory";
 import { MODEL_MAX_OUTPUT_TOKENS } from "./effort";
 import type { Effort } from "./effort";
@@ -421,6 +423,49 @@ export class AgentRuntime {
       await this.store.save(session);
       await this.safeLifecycle("SessionEnd", () => this.hooks.runSessionEnd({ sessionId: session!.id }), emit, undefined);
     }
+  }
+
+  /**
+   * User-initiated compaction (the TUI's /compact). Compacts the given session NOW,
+   * ignoring the size thresholds the passive path waits for: clears old tool results
+   * and LLM-summarizes the history, then persists. Emits a compact_boundary (the ⟳
+   * chip) + a refreshed budget so the context gauge updates, and returns what changed
+   * (status "empty" when there's no session yet, "noop" when nothing could be freed).
+   */
+  async compact(sessionId: string | undefined, emit: EventSink, signal: AbortSignal): Promise<ManualCompactResult> {
+    const empty: ManualCompactResult = { status: "empty", tokensBefore: 0, tokensAfter: 0, clearedCount: 0, summarized: false };
+    if (!sessionId) return empty;
+    const session = await this.store.get(sessionId);
+    if (!session || session.messages.length === 0) return empty;
+
+    // Rebuild the same prompt/rules/tools snapshot the loop uses (incl. the passive memory
+    // index), so the token estimate — and thus what counts as "freed" — matches a real turn.
+    const memorySection = await loadMemoryIndex(this.memory).catch(() => "");
+    const loop = buildLoopConfig(
+      { ...this.loopConfig, effort: this.defaultEffort, memorySection: memorySection || undefined },
+      this.registry,
+      this.workspace.root,
+    );
+
+    // PreCompact lifecycle hook (manual trigger), best-effort.
+    await this.safeLifecycle("PreCompact", () => this.hooks.runPreCompact({ sessionId: session.id, trigger: "manual" }), emit, undefined);
+
+    const result = await this.contextManager.compactManually(
+      session,
+      { system: loop.system, projectRules: loop.projectRules, tools: loop.tools, ledger: this.ledger, workspace: this.workspace },
+      emit,
+      signal,
+    );
+
+    // The transcript changed: the previous turn's authoritative input count no longer
+    // applies (clearing it stops the next turn from re-compacting on a stale estimate),
+    // and we persist so a later /resume sees the compacted history.
+    session.lastRealInputTokens = undefined;
+    await this.store.save(session);
+
+    // Refresh the context gauge with the post-compaction estimate.
+    emit({ type: "budget", ...computeBudget(loop.contextTokens, result.tokensAfter) });
+    return result;
   }
 
   resolvePermission(requestId: string, decision: BrokerDecision): boolean {

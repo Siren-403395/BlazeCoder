@@ -228,6 +228,40 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(events.some((e) => e.type === "notice" && /change approach/.test(e.message))).toBe(true);
   });
 
+  it("compact() is a no-op with no session id, and reports empty", async () => {
+    const rt = makeRuntime([reply("done", [])]);
+    const { emit, events } = sink();
+    const outcome = await rt.compact(undefined, emit, signal());
+    expect(outcome.status).toBe("empty");
+    expect(events).toHaveLength(0); // nothing emitted when there's no session
+  });
+
+  it("compact() summarizes a live session on demand, marks it manual, and persists", async () => {
+    // A compaction window that keeps just the last message, so a short transcript still
+    // has a head to summarize (the real defaults wait for ~1M tokens).
+    const rt = makeRuntime([reply("Creating files.", writeFullProjectCalls()), reply("All done.", [])], {
+      compaction: { summaryKeepMinMessages: 1, summaryKeepMinTokens: 0, summaryKeepMaxTokens: 1_000_000 },
+    });
+    const run = await rt.run({ prompt: "make a hello app" }, sink().emit, signal());
+
+    const { emit, events } = sink();
+    const outcome = await rt.compact(run.session.id, emit, signal());
+
+    expect(outcome.status).toBe("compacted");
+    expect(outcome.summarized).toBe(true);
+    // The ⟳ chip + a refreshed context gauge were emitted.
+    const boundary = events.find((e) => e.type === "compact_boundary");
+    expect(boundary && boundary.type === "compact_boundary" && /manual compaction/.test(boundary.reason)).toBe(true);
+    expect(events.some((e) => e.type === "budget")).toBe(true);
+    // The persisted transcript now leads with a manual summary block.
+    const reloaded = await rt.getSession(run.session.id);
+    const head = reloaded!.messages[0]!;
+    expect(head.role).toBe("summary");
+    expect(head.role === "summary" && head.boundary?.compactType).toBe("manual");
+    // The stale authoritative count is cleared so the next turn doesn't re-compact.
+    expect(reloaded!.lastRealInputTokens).toBeUndefined();
+  });
+
   it("resumes an existing session", async () => {
     const rt = makeRuntime([
       reply("one", [call("m", "memory", { command: "view" })]),

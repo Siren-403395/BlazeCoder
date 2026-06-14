@@ -341,6 +341,92 @@ describe("ContextManager compaction", () => {
     expect(s.messages[0]!.role).toBe("summary");
   });
 
+  it("compactManually summarizes on demand and marks the boundary compactType:manual", async () => {
+    const gw = new ScriptedGateway("m", [reply("MANUAL SUMMARY")]);
+    const cm = new ContextManager(
+      {
+        contextTokens: 1_000_000,
+        outputReserveCap: 0,
+        clearThreshold: 0.9,
+        bufferTokens: 1,
+        keepRecentToolResults: 1,
+        keepRecentMessages: 1,
+        maxThrash: 5,
+        summaryKeepMinTokens: 1,
+        summaryKeepMinMessages: 1,
+        summaryKeepMaxTokens: 10_000,
+      },
+      new FixedClock(),
+      silentLogger,
+      gw,
+    );
+    const s = session([
+      { role: "user", content: "X".repeat(40) },
+      { role: "assistant", content: "Y".repeat(40), toolCalls: [] },
+      { role: "user", content: "Z".repeat(40) },
+      { role: "assistant", content: "W".repeat(40), toolCalls: [] },
+    ]);
+    const events: AgentEvent[] = [];
+    // Far under any threshold — maybeCompact would no-op, but /compact forces it.
+    const r = await cm.compactManually(s, { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+
+    expect(r.status).toBe("compacted");
+    expect(r.summarized).toBe(true);
+    expect(s.messages[0]!.role).toBe("summary");
+    const summary = s.messages[0] as Extract<TranscriptMessage, { role: "summary" }>;
+    expect(summary.boundary?.compactType).toBe("manual");
+    const boundary = events.find((e) => e.type === "compact_boundary");
+    expect(boundary && boundary.type === "compact_boundary" && /manual compaction/.test(boundary.reason)).toBe(true);
+  });
+
+  it("compactManually clears old tool results with no gateway (clear-only)", async () => {
+    const cm = new ContextManager(
+      { contextTokens: 1_000_000, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },
+      new FixedClock(),
+      silentLogger,
+      // No gateway → only the deterministic tool-result clear runs.
+    );
+    const s = session([
+      { role: "user", content: "go" },
+      { role: "assistant", content: "", toolCalls: [{ id: "a1", name: "Read", input: {} }] },
+      { role: "tool", results: [{ toolUseId: "a1", toolName: "Read", content: "BIG".repeat(200), isError: false }] },
+      { role: "assistant", content: "", toolCalls: [{ id: "a2", name: "Read", input: {} }] },
+      { role: "tool", results: [{ toolUseId: "a2", toolName: "Read", content: "BIG".repeat(200), isError: false }] },
+      { role: "assistant", content: "", toolCalls: [{ id: "a3", name: "Read", input: {} }] },
+      { role: "tool", results: [{ toolUseId: "a3", toolName: "Read", content: "keep me", isError: false }] },
+    ]);
+    const events: AgentEvent[] = [];
+    const r = await cm.compactManually(s, { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+
+    expect(r.status).toBe("compacted");
+    expect(r.summarized).toBe(false);
+    expect(r.clearedCount).toBe(2); // the two oldest Read results; the most-recent one is kept
+    expect(s.messages[0]!.role).toBe("user"); // no summary block — head untouched
+    expect(events.some((e) => e.type === "compact_boundary")).toBe(true);
+  });
+
+  it("compactManually is a no-op when there is nothing to free", async () => {
+    const gw = new ScriptedGateway("m", [reply("UNUSED")]);
+    const cm = new ContextManager(
+      { contextTokens: 1_000_000, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 4, keepRecentMessages: 10, maxThrash: 5 },
+      new FixedClock(),
+      silentLogger,
+      gw,
+    );
+    const s = session([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello", toolCalls: [] },
+    ]);
+    const events: AgentEvent[] = [];
+    const r = await cm.compactManually(s, { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+
+    expect(r.status).toBe("noop");
+    expect(r.summarized).toBe(false);
+    expect(r.clearedCount).toBe(0);
+    expect(gw.calls).toBe(0); // nothing to summarize → the gateway is never called
+    expect(events.some((e) => e.type === "compact_boundary")).toBe(false);
+  });
+
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {
     const cm = new ContextManager(
       { contextTokens: 100, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },

@@ -54,6 +54,20 @@ export const DEFAULT_COMPACTION: CompactionConfig = {
   summaryKeepMaxTokens: 96_000,
 };
 
+/** Outcome of a user-initiated /compact, so the caller can report precisely what changed. */
+export interface ManualCompactResult {
+  /** "empty": no session/messages to compact · "noop": nothing freed · "compacted": history/tools reduced. */
+  status: "empty" | "noop" | "compacted";
+  /** Estimated request tokens before compaction. */
+  tokensBefore: number;
+  /** Estimated request tokens after compaction. */
+  tokensAfter: number;
+  /** Number of old tool-result blocks cleared in place. */
+  clearedCount: number;
+  /** Whether the history head was summarized into a summary block. */
+  summarized: boolean;
+}
+
 export class CompactionThrashError extends Error {
   constructor(message: string) {
     super(message);
@@ -300,6 +314,65 @@ export class ContextManager {
     });
   }
 
+  /**
+   * User-initiated compaction (the /compact command): compact NOW, ignoring the
+   * size thresholds the passive path waits for. Clears old tool results, then
+   * LLM-summarizes the history head (same machinery as the passive path, but the
+   * boundary is marked compactType:"manual"). Best-effort — a summarize failure
+   * leaves the cleared-but-unsummarized transcript and emits a notice. Returns what
+   * changed so the caller can tell the user precisely. Emits a compact_boundary (the
+   * ⟳ chip) only when something was actually freed.
+   */
+  async compactManually(
+    session: SessionState,
+    params: { system: string; projectRules: string; tools: ToolSchema[]; ledger?: ReadLedger; workspace?: Workspace; notes?: string },
+    emit: EventSink,
+    signal: AbortSignal,
+  ): Promise<ManualCompactResult> {
+    const before = this.estimate(session, params);
+    const clearedIds = this.clearOldToolResults(session);
+
+    // Summarize the head (manual = always attempt; ignore thresholds). Live notes, when
+    // populated, are a zero-cost summary source; otherwise we call the gateway.
+    let summarized = false;
+    const hasNotes = !!params.notes && isSubstantialNotes(params.notes);
+    if ((this.gateway || hasNotes) && this.consecutiveFailures < MAX_SUMMARIZE_FAILURES) {
+      try {
+        summarized = await this.summarize(session, signal, {
+          preTokens: before,
+          clearedToolUseIds: clearedIds,
+          notes: params.notes,
+          compactType: "manual",
+        });
+        this.consecutiveFailures = 0;
+      } catch (err) {
+        this.consecutiveFailures += 1;
+        const message = err instanceof Error ? err.message : String(err);
+        emit({ type: "notice", level: "warn", message: `Summarization failed: ${message}. Kept the cleared context.` });
+      }
+    }
+    if (summarized) await this.rehydrateFiles(session, params.ledger, params.workspace);
+
+    const after = this.estimate(session, params);
+    const status: ManualCompactResult["status"] = summarized || clearedIds.length > 0 ? "compacted" : "noop";
+
+    if (status === "compacted") {
+      const parts: string[] = [];
+      if (summarized) parts.push("summarized history");
+      if (clearedIds.length) parts.push(`cleared ${clearedIds.length} tool result${clearedIds.length === 1 ? "" : "s"}`);
+      emit({
+        type: "compact_boundary",
+        reason: `manual compaction (${parts.join(", ")})`,
+        tokensBefore: before,
+        tokensAfter: after,
+        clearedToolUseIds: clearedIds.length ? clearedIds : undefined,
+      });
+      this.logger.info("compaction_done", { stage: "manual", tokensBefore: before, tokensAfter: after, cleared: clearedIds.length, summarized });
+    }
+
+    return { status, tokensBefore: before, tokensAfter: after, clearedCount: clearedIds.length, summarized };
+  }
+
   /** Clear old, regenerable tool results in place. Returns the toolUseIds cleared. */
   private clearOldToolResults(session: SessionState): string[] {
     const toolMsgIndexes = session.messages
@@ -363,10 +436,10 @@ export class ContextManager {
   private async summarize(
     session: SessionState,
     signal: AbortSignal,
-    meta: { preTokens: number; clearedToolUseIds: string[]; notes?: string },
-  ): Promise<void> {
+    meta: { preTokens: number; clearedToolUseIds: string[]; notes?: string; compactType?: "auto" | "manual" },
+  ): Promise<boolean> {
     const split = this.computeSplit(session.messages);
-    if (split <= 0 || split >= session.messages.length) return;
+    if (split <= 0 || split >= session.messages.length) return false;
 
     const tail = session.messages.slice(split);
     let head = session.messages.slice(0, split);
@@ -399,12 +472,13 @@ export class ContextManager {
         role: "summary",
         content,
         boundary: {
-          compactType: "auto",
+          compactType: meta.compactType ?? "auto",
           preTokens: meta.preTokens,
           clearedToolUseIds: meta.clearedToolUseIds.length ? meta.clearedToolUseIds : undefined,
         },
       },
       ...tail,
     ];
+    return true;
   }
 }
