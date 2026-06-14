@@ -552,6 +552,12 @@ export function PermissionPrompt({ p }: { p: PendingPermission }) {
       <Text color={theme.muted}>
         {p.toolName} {toolDetail(p.toolName, p.input)}
       </Text>
+      {p.risk ? (
+        <Text color={p.risk.level === "destructive" ? theme.error : p.risk.level === "network" ? theme.warn : theme.faint}>
+          {p.risk.level === "destructive" ? "⚠ " : ""}
+          risk: {p.risk.level} · {p.risk.reason}
+        </Text>
+      ) : null}
       {p.suggestions?.length ? <Text color={theme.muted}>always-allow rule: {p.suggestions[0]}</Text> : null}
       <Text color={theme.faint}>
         {p.suggestions?.length

@@ -119,6 +119,12 @@ export type AgentEvent =
       reason: string;
       /** "Always allow" rule strings the user can persist (e.g. ["Bash(git commit:*)"]). */
       suggestions?: string[];
+      /**
+       * Risk assessment for a Bash command, surfaced on the prompt so the human knows what
+       * they're approving. Advisory only; absent for non-Bash tools. `level: "destructive"`
+       * with a catastrophic command is also what forces this prompt past a broad allow rule.
+       */
+      risk?: { level: "read" | "write" | "network" | "destructive"; category: string; reason: string };
     }
   /** Out-of-band notice (warnings, info). */
   | { type: "notice"; level: "info" | "warn" | "error"; message: string }

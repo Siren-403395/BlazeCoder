@@ -22,6 +22,7 @@ import type { PermissionMode, PermissionRule, RuleBehavior, RuleSource } from "@
 import type { EventSink } from "../ports";
 import type { Tool } from "../tools/registry";
 import { TOOL_NAMES } from "../tools/toolNames";
+import { classifyCommand } from "./commandRisk";
 import { HookBus } from "./hooks";
 import { isProtectedPath } from "./protectedPaths";
 import { matchesRule, ruleValueFromString, ruleValueToString } from "./rule";
@@ -187,6 +188,13 @@ export class PermissionEngine {
       askDecisionReason = { type: "hook", detail: hook.reason };
     }
 
+    // Risk classification for a Bash command — advisory for the prompt, and the source of
+    // the catastrophic tripwire below.
+    const risk =
+      tool.name === TOOL_NAMES.bash && typeof input.command === "string"
+        ? classifyCommand(input.command)
+        : undefined;
+
     // 2) Protected paths.
     const targetPath =
       typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : undefined;
@@ -204,7 +212,20 @@ export class PermissionEngine {
       };
     }
 
-    // 4) Allow rules (skip when a hook forced ask).
+    // 3.5) Catastrophic-command tripwire: irreversible, machine/data-destroying commands
+    // (rm -rf ~, a fork bomb, dd/mkfs to a device, …) force a human confirmation even under
+    // a broad "always allow" rule — allowing `Bash(git:*)` is not consent to `rm -rf ~`.
+    // Scoped to the working modes where an allow rule would otherwise auto-run it: plan mode
+    // already denies mutating tools (stricter — don't weaken it to a prompt) and
+    // bypassPermissions (--yolo) is the explicit escape hatch. An explicit deny still wins
+    // (it ran above).
+    if (risk?.catastrophic && (this.mode === "default" || this.mode === "acceptEdits")) {
+      forceAsk = true;
+      askReason = `This command is irreversibly destructive (${risk.reason}). Confirm to proceed.`;
+      askDecisionReason = { type: "other", detail: `catastrophic: ${risk.reason}` };
+    }
+
+    // 4) Allow rules (skip when a hook forced ask, or a catastrophic command must confirm).
     if (!forceAsk) {
       const allowRule = this.firstMatch("allow", tool.name, input);
       if (allowRule) return { behavior: "allow", input, decisionReason: { type: "rule", rule: allowRule } };
@@ -228,7 +249,15 @@ export class PermissionEngine {
     // 7) Ask the human. Register BEFORE emitting so a fast client can't race the awaiting promise.
     const requestId = this.idGen();
     const pending = this.broker.request(requestId, run.signal);
-    run.emit({ type: "permission_request", requestId, toolName: tool.name, input, reason: askReason, suggestions: getSuggestions(tool.name, input) });
+    run.emit({
+      type: "permission_request",
+      requestId,
+      toolName: tool.name,
+      input,
+      reason: askReason,
+      suggestions: getSuggestions(tool.name, input),
+      risk: risk ? { level: risk.risk, category: risk.category, reason: risk.reason } : undefined,
+    });
     const decision = await pending;
     if (decision.behavior === "allow") {
       return { behavior: "allow", input: decision.updatedInput ?? input, decisionReason: askDecisionReason };

@@ -11,7 +11,7 @@ import {
 import type { ModelGateway, ModelRequest, ModelResponse } from "@zephyrcode/core";
 import type { FileDiff } from "@zephyrcode/shared";
 import { App } from "../src/index";
-import { InputLine, ItemView } from "../src/tui/view";
+import { InputLine, ItemView, PermissionPrompt } from "../src/tui/view";
 
 class ScriptedGateway implements ModelGateway {
   readonly model = "scripted";
@@ -87,6 +87,33 @@ describe("ItemView", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("8.5k / 1048.6k tokens (estimated)"); // estimate headline, flagged
     expect(frame).toContain("history was compacted"); // summarized footer variant
+    unmount();
+  });
+
+  it("PermissionPrompt surfaces a Bash command's risk (⚠ for destructive)", () => {
+    const { lastFrame, unmount } = render(
+      <PermissionPrompt
+        p={{
+          requestId: "r1",
+          toolName: "Bash",
+          input: { command: "rm -rf ~" },
+          reason: "This command is irreversibly destructive (recursive force-delete of a root/home/glob path). Confirm to proceed.",
+          risk: { level: "destructive", category: "filesystem", reason: "recursive force-delete of a root/home/glob path" },
+        }}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Permission required");
+    expect(frame).toContain("risk: destructive");
+    expect(frame).toContain("⚠"); // destructive carries the warning glyph
+    unmount();
+  });
+
+  it("PermissionPrompt omits the risk line when there is none (non-Bash tools)", () => {
+    const { lastFrame, unmount } = render(
+      <PermissionPrompt p={{ requestId: "r2", toolName: "Write", input: { file_path: "/a.ts" }, reason: "Allow Write?" }} />,
+    );
+    expect(lastFrame() ?? "").not.toContain("risk:");
     unmount();
   });
 

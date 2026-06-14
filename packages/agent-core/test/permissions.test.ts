@@ -72,6 +72,88 @@ describe("PermissionEngine", () => {
     expect(run.behavior).toBe("deny");
   });
 
+  it("catastrophic-command tripwire: forces a prompt even under a broad allow rule", async () => {
+    const { engine, broker } = makeEngine({ mode: "default", allow: ["Bash(rm:*)"] });
+
+    // A scoped delete the user opted into auto-runs with no prompt.
+    let asked = false;
+    const safe = await engine.check(tool("Bash", false), { command: "rm -rf node_modules" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") asked = true;
+      },
+      signal,
+    });
+    expect(safe.behavior).toBe("allow");
+    expect(asked).toBe(false);
+
+    // But `rm -rf ~` is catastrophic: the same allow rule does NOT cover it — it asks.
+    let risk: unknown;
+    const danger = await engine.check(tool("Bash", false), { command: "rm -rf ~" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          risk = e.risk;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(danger.behavior).toBe("deny");
+    expect(risk).toMatchObject({ level: "destructive" });
+  });
+
+  it("plan mode still DENIES a catastrophic Bash command (the tripwire never weakens deny to ask)", async () => {
+    const { engine } = makeEngine({ mode: "plan" });
+    let asked = false;
+    const run = await engine.check(tool("Bash", false), { command: "rm -rf /" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") asked = true;
+      },
+      signal,
+    });
+    expect(run.behavior).toBe("deny");
+    expect(asked).toBe(false); // denied outright, not turned into a prompt
+  });
+
+  it("bypassPermissions is the explicit escape hatch — even catastrophic commands run", async () => {
+    const { engine } = makeEngine({ mode: "bypassPermissions" });
+    let asked = false;
+    const run = await engine.check(tool("Bash", false), { command: "rm -rf /" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") asked = true;
+      },
+      signal,
+    });
+    expect(run.behavior).toBe("allow");
+    expect(asked).toBe(false);
+  });
+
+  it("attaches advisory risk to a Bash permission_request, and nothing to other tools", async () => {
+    const { engine, broker } = makeEngine({ mode: "default" });
+    let bashRisk: unknown;
+    await engine.check(tool("Bash", false), { command: "npm install" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          bashRisk = e.risk;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(bashRisk).toMatchObject({ level: "network", category: "install" });
+
+    let otherRisk: unknown = "unset";
+    await engine.check(tool("write_file", false), { path: "/a" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          otherRisk = e.risk;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(otherRisk).toBeUndefined();
+  });
+
   it("plan mode denies mutating tools and allows read-only", async () => {
     const { engine } = makeEngine({ mode: "plan" });
     expect((await engine.check(tool("write_file", false), {}, { emit: () => {}, signal })).behavior).toBe("deny");

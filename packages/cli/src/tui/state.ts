@@ -29,6 +29,8 @@ export interface PendingPermission {
   reason: string;
   /** "Always allow" rule strings the user can persist (local/project). */
   suggestions?: string[];
+  /** Risk assessment for a Bash command (advisory display). */
+  risk?: { level: "read" | "write" | "network" | "destructive"; category: string; reason: string };
 }
 
 export type RunStatus = "idle" | "running" | "awaiting_permission" | "done" | "error";
@@ -295,6 +297,7 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
           input: action.input,
           reason: action.reason,
           suggestions: action.suggestions,
+          risk: action.risk,
         },
       };
 

@@ -181,6 +181,18 @@ describe("TUI state reducer", () => {
     expect(s.permission).toBeUndefined();
   });
 
+  it("carries a Bash command's risk into the pending permission", () => {
+    const s = applyEvent(initialState(), {
+      type: "permission_request",
+      requestId: "r1",
+      toolName: "Bash",
+      input: { command: "rm -rf ~" },
+      reason: "Confirm to proceed.",
+      risk: { level: "destructive", category: "filesystem", reason: "recursive force-delete of a root/home/glob path" },
+    });
+    expect(s.permission?.risk).toMatchObject({ level: "destructive", category: "filesystem" });
+  });
+
   it("updates the token gauge from budget events", () => {
     const s = reduce([{ type: "budget", totalTokens: 1000, usedTokens: 250, remainingTokens: 750 }]);
     expect(s.tokensUsed).toBe(250);
