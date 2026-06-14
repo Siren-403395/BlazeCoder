@@ -216,9 +216,10 @@ export class ContextManager {
       emit({ type: "notice", level: "warn", message: "Context is large but no summarizer is configured." });
       return;
     }
-    // Failure circuit breaker: if summarization keeps throwing, stop trying (the
-    // cleared tool results above still freed some space) and tell the user.
-    if (this.consecutiveFailures >= MAX_SUMMARIZE_FAILURES) {
+    // Failure circuit breaker: if gateway summarization keeps throwing, stop trying (the
+    // cleared tool results above still freed some space) and tell the user. Notes are a
+    // zero-cost summary source, so they bypass this breaker.
+    if (!hasNotes && this.consecutiveFailures >= MAX_SUMMARIZE_FAILURES) {
       emit({
         type: "notice",
         level: "warn",
@@ -336,7 +337,9 @@ export class ContextManager {
     // populated, are a zero-cost summary source; otherwise we call the gateway.
     let summarized = false;
     const hasNotes = !!params.notes && isSubstantialNotes(params.notes);
-    if ((this.gateway || hasNotes) && this.consecutiveFailures < MAX_SUMMARIZE_FAILURES) {
+    // Notes are a zero-cost summary (no gateway call), so they bypass the gateway
+    // failure circuit-breaker; a real gateway summarization still respects it.
+    if (hasNotes || (this.gateway && this.consecutiveFailures < MAX_SUMMARIZE_FAILURES)) {
       try {
         summarized = await this.summarize(session, signal, {
           preTokens: before,
@@ -346,6 +349,7 @@ export class ContextManager {
         });
         this.consecutiveFailures = 0;
       } catch (err) {
+        if (signal.aborted) throw err; // user interrupted — propagate, don't count it as a summarizer failure
         this.consecutiveFailures += 1;
         const message = err instanceof Error ? err.message : String(err);
         emit({ type: "notice", level: "warn", message: `Summarization failed: ${message}. Kept the cleared context.` });

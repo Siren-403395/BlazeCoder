@@ -91,6 +91,10 @@ export function App({
 
   const sessionId = useRef<string | undefined>(initialSession?.id);
   const abort = useRef<AbortController | null>(null);
+  // Synchronous mirror of `compacting`: set the instant /compact starts (before the
+  // await), so useInput blocks editing/steering immediately — the `compacting` state
+  // only reaches the handler on the next render, which would leave a race window.
+  const compactingRef = useRef(false);
   // Between-turns steering: Enter-while-running enqueues here; the loop drains it.
   const steerQueue = useRef<string[]>([]);
   const stateRef = useRef(state);
@@ -224,6 +228,7 @@ export function App({
             dispatch({ type: "notice", level: "info", message: "Nothing to compact yet — start a conversation first." });
             return;
           }
+          compactingRef.current = true; // block input synchronously, before the await
           setCompacting(true);
           setElapsed(0);
           const ac = new AbortController();
@@ -249,6 +254,7 @@ export function App({
             });
           } finally {
             abort.current = null;
+            compactingRef.current = false;
             setCompacting(false);
           }
           return;
@@ -420,8 +426,10 @@ export function App({
 
     // 3) Working: Esc interrupts, Ctrl+C quits. A running turn lets Enter queue a
     //    steering message and other keys fall through to type it; a manual /compact
-    //    swallows all other keys (there is no turn to steer).
-    if (working) {
+    //    swallows all other keys (there is no turn to steer). compactingRef is the
+    //    synchronous truth — it's set before the await, so there is no stale-state
+    //    window in which a prompt could submit and clobber the in-flight compaction.
+    if (busy || compactingRef.current) {
       if (key.escape && abort.current) {
         abort.current.abort();
         return;
@@ -430,7 +438,7 @@ export function App({
         exit();
         return;
       }
-      if (compacting) return; // no steering/editing while compacting
+      if (compactingRef.current) return; // no steering/editing while compacting
       if (key.return) {
         const text = draft.trim();
         if (text) {

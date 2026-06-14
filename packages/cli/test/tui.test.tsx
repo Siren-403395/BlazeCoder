@@ -123,6 +123,34 @@ describe("manual /compact command", () => {
 
     unmount();
   });
+
+  it("reports 'Already compact' when there is nothing to free", async () => {
+    const clock = new FixedClock(1);
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([step("Hi there.")]),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+      // Default compaction window keeps the whole short transcript → nothing to summarize.
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} effort="low" />);
+    await new Promise((r) => setTimeout(r, 80));
+    stdin.write("hello");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await waitFor(() => (lastFrame() ?? "").includes("done"));
+
+    stdin.write("/compact");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await waitFor(() => (lastFrame() ?? "").includes("Already compact"));
+    expect(lastFrame() ?? "").toContain("Already compact");
+
+    unmount();
+  });
 });
 
 describe("App end-to-end (scripted runtime)", () => {

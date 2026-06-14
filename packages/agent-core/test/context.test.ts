@@ -427,6 +427,55 @@ describe("ContextManager compaction", () => {
     expect(events.some((e) => e.type === "compact_boundary")).toBe(false);
   });
 
+  it("compactManually emits a warn notice and stays a no-op when summarize throws (nothing cleared)", async () => {
+    const cm = new ContextManager(
+      { contextTokens: 1_000_000, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5, summaryKeepMinTokens: 1, summaryKeepMinMessages: 1, summaryKeepMaxTokens: 10_000 },
+      new FixedClock(),
+      silentLogger,
+      new FlakySummarizer(99), // always throws
+    );
+    const events: AgentEvent[] = [];
+    const r = await cm.compactManually(summarizableSession(), { system: "", projectRules: "", tools: [] }, (e) => events.push(e), signal);
+
+    expect(r.status).toBe("noop"); // nothing summarized, nothing clearable
+    expect(events.some((e) => e.type === "notice" && e.level === "warn" && /Summarization failed/.test((e as { message: string }).message))).toBe(true);
+    expect(events.some((e) => e.type === "compact_boundary")).toBe(false);
+  });
+
+  it("compactManually respects the gateway failure circuit-breaker (stops calling after 3 failures)", async () => {
+    const gw = new FlakySummarizer(99); // always throws
+    const cm = new ContextManager(
+      { contextTokens: 1_000_000, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5, summaryKeepMinTokens: 1, summaryKeepMinMessages: 1, summaryKeepMaxTokens: 10_000 },
+      new FixedClock(),
+      silentLogger,
+      gw,
+    );
+    for (let i = 0; i < 4; i++) {
+      await cm.compactManually(summarizableSession(), { system: "", projectRules: "", tools: [] }, () => {}, signal);
+    }
+    // The first 3 calls each attempted (and failed) summarization; the 4th skipped it.
+    expect(gw.calls).toBe(3);
+  });
+
+  it("compactManually uses live notes as a zero-cost summary (no gateway) and marks it manual", async () => {
+    const cm = new ContextManager(
+      { contextTokens: 1_000_000, outputReserveCap: 0, clearThreshold: 0.9, bufferTokens: 1, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5, summaryKeepMinTokens: 1, summaryKeepMinMessages: 1, summaryKeepMaxTokens: 10_000 },
+      new FixedClock(),
+      silentLogger,
+      // No gateway — notes must drive the summary.
+    );
+    const s = summarizableSession();
+    const notes = "Captured context: the user is building a CLI agent and we just wired the compaction path end to end.";
+    const r = await cm.compactManually(s, { system: "", projectRules: "", tools: [], notes }, () => {}, signal);
+
+    expect(r.status).toBe("compacted");
+    expect(r.summarized).toBe(true);
+    const summary = s.messages[0] as Extract<TranscriptMessage, { role: "summary" }>;
+    expect(summary.role).toBe("summary");
+    expect(summary.boundary?.compactType).toBe("manual");
+    expect(summary.content).toContain("Captured context"); // the notes ARE the summary
+  });
+
   it("prefers the authoritative real input-token count over the char-heuristic", async () => {
     const cm = new ContextManager(
       { contextTokens: 100, outputReserveCap: 0, clearThreshold: 0.5, bufferTokens: 5, keepRecentToolResults: 1, keepRecentMessages: 1, maxThrash: 5 },

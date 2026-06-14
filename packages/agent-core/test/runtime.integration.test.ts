@@ -262,6 +262,32 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(reloaded!.lastRealInputTokens).toBeUndefined();
   });
 
+  it("compact() propagates an abort during summarization (so the UI can show 'interrupted')", async () => {
+    // A gateway that fails fast once the signal is aborted (like the real fetch adapter).
+    const gateway: ModelGateway = {
+      model: "m",
+      async complete(_req, sig) {
+        if (sig?.aborted) throw new Error("aborted");
+        return reply("ok", []);
+      },
+    };
+    const clock = new FixedClock(1);
+    const rt = createAgentRuntime({
+      gateway,
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+      compaction: { summaryKeepMinMessages: 1, summaryKeepMinTokens: 0, summaryKeepMaxTokens: 1_000_000 },
+    });
+    const run = await rt.run({ prompt: "hi" }, sink().emit, signal());
+
+    const ac = new AbortController();
+    ac.abort(); // user pressed Esc before the summarize call returns
+    await expect(rt.compact(run.session.id, sink().emit, ac.signal)).rejects.toThrow();
+  });
+
   it("resumes an existing session", async () => {
     const rt = makeRuntime([
       reply("one", [call("m", "memory", { command: "view" })]),
