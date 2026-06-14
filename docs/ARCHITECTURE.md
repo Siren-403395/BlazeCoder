@@ -6,9 +6,13 @@
 
 ## 0. Form factor: a local CLI/TUI agent (read this first)
 
-This repo shipped as a **command-line agent** (`ca`), not a browser app. The kernel
-rationale in the sections below is model/form-agnostic and still holds, but the
-substrate and frontend changed — where older text says "GeneratedProject graph",
+This repo ships as a **command-line agent** (`zephyrcode`), not a browser app. The
+kernel rationale in §§1–3 is model/form-agnostic and still holds. **§§4–7 below are
+the ORIGINAL pre-CLI blueprint** (a browser app with an `apps/server` Fastify+SSE
+backend, an `apps/web` React client, and an esbuild `build_preview` tool) — they are
+**superseded** and kept only as design rationale. The real layout is
+`packages/{shared, agent-core, cli}`, wired **in-process** (no HTTP server, no
+`apps/`, no preview builder). Where older text says "GeneratedProject graph",
 "preview", "frontend/web", or "Fastify server", read it as:
 
 - **Real filesystem, not a virtual project graph.** The `Workspace` port is now an
@@ -17,9 +21,11 @@ substrate and frontend changed — where older text says "GeneratedProject graph
   bounded `walk()`, and a **read-before-edit ledger** (Read stamps a file; Write/Edit
   refuse to touch an unread, deleted, or externally-changed file). `GeneratedProject`
   is gone; a session stores its `cwd` + transcript.
-- **Tools at Claude-Code parity:** `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`,
-  `memory` (the SPA-only `build_preview` was removed; `Bash` is how the agent
-  verifies). A secrets deny-list blocks reading/writing/searching credential files.
+- **Tools:** `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `TodoWrite`, `memory`
+  (built-in), plus the model-callable `Task` sub-agent and `Skill` tools, plus gated
+  `WebSearch`/`WebFetch` (`AGENT_WEB=1`). The SPA-only `build_preview` was removed;
+  `Bash` is how the agent verifies. A secrets deny-list blocks reading/writing/searching
+  credential files.
 - **Frontend = an Ink TUI, in-process.** `packages/cli` imports the `AgentRuntime`
   directly and consumes its `EventSink` — there is no HTTP server or SSE. A headless
   `--print` mode (text/json/stream-json) serves scripting and CI. `apps/web` and
@@ -27,8 +33,8 @@ substrate and frontend changed — where older text says "GeneratedProject graph
 - **Real command execution.** `LocalProcessSandbox` runs `Bash` as child processes
   (timeout, process-group kill, abort, output cap), gated by the permission engine.
 - **Deep-thinking → `/effort`.** The old thinking boolean became an effort ladder
-  (`low|medium|high|ultra`, mapped to thinking-on/off + output budget) plus a
-  per-turn "ultrathink" keyword escalation and a `/reasoning` display knob.
+  (`low|high|ultra`, mapped to thinking on/off + output budget) plus a per-turn
+  "ultrathink" keyword escalation.
 
 Package layout: `packages/{shared, agent-core, cli}` (no `apps/`).
 
@@ -115,6 +121,13 @@ Termination is model-decided (stop when no tool calls; `stop_reason` ∈ `end_tu
 ---
 
 ## 4. INFRA blueprint
+
+> ⚠️ **Superseded (original browser blueprint).** §§4–7 describe the first design — a
+> Fastify+SSE `apps/server`, a React `apps/web`, a `PreviewBuilder` port, and a
+> `build_preview` tool. **None of that ships.** The actual layout is
+> `packages/{shared, agent-core, cli}`; the CLI imports `AgentRuntime` **in-process**
+> (no HTTP, no SSE, no `apps/`, no preview). The ports principle below is real — only
+> the transport/frontend differ. See §0 and the README's Architecture section.
 
 **Hard frontend/backend boundary.** The frontend NEVER executes tools, reads files, or assembles context — it sends `intent + lightweight references` and renders a normalized event stream. The backend `agent-core` owns the loop, registry, executor, sessions, permissions, context, and sub-agent orchestration. `agent-core` is **framework-agnostic and unit-testable**: it depends only on injected ports (`ModelGateway`, `Workspace`, `SessionStore`, `PreviewBuilder`, `Sandbox`, `Clock`) — no Fastify, no React, no DeepSeek import inside the loop. The HTTP server is a thin adapter that exposes `agent-core` over SSE.
 
