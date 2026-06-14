@@ -8,6 +8,11 @@ describe("classifyCommand — catastrophic tripwire (must force confirmation)", 
     "rm -rf ~",
     "rm -rf ~/",
     "rm -rf $HOME",
+    'rm -rf "$HOME"',
+    "rm -rf '$HOME'",
+    "rm -rf ${HOME}",
+    "rm -rf -- /",
+    "rm -rf / --no-preserve-root",
     "rm -rf *",
     "rm -fr /usr",
     "sudo rm -rf /",
@@ -18,7 +23,21 @@ describe("classifyCommand — catastrophic tripwire (must force confirmation)", 
     "chmod -R 777 /",
     "chown -R root ~",
     "echo boom > /dev/sda",
+    "echo x>/dev/sda", // attached redirect (no space) still caught
     ":(){ :|:& };:",
+    "rm -rf /opt", // FHS system dir
+    "find / -delete", // filesystem wipe via find
+    "find / -exec rm {} ;",
+    // Evasions the classifier must see through:
+    "\\rm -rf /", // alias-bypass backslash
+    "/bin/rm -rf /", // absolute path
+    "./rm -rf /", // relative path
+    "busybox rm -rf /", // wrapper binary
+    "xargs rm -rf /", // wrapper binary
+    "bash -c 'rm -rf /'", // shell -c
+    'sh -c "rm -rf ~"',
+    "eval rm -rf /", // eval
+    "sudo bash -c 'rm -rf /'", // sudo + shell -c
   ];
   for (const cmd of catastrophic) {
     it(`flags catastrophic: ${cmd}`, () => {
@@ -37,6 +56,26 @@ describe("classifyCommand — catastrophic tripwire (must force confirmation)", 
   });
 });
 
+describe("classifyCommand — NOT catastrophic (false-positive guards)", () => {
+  // Scratch/relative/scoped deletes that must NOT force a confirmation under an allow rule.
+  const notCatastrophic = [
+    "rm -rf /tmp/*", // scratch root, not a system dir
+    "rm -rf /tmp",
+    "rm -rf /var/tmp/*", // (the old single-level regex created a /tmp-vs-/var/tmp asymmetry)
+    "rm -rf /data", // a custom mount, not FHS
+    "rm -rf node_modules",
+    "rm -rf ./dist",
+    "rm -rf ~/Documents", // a home SUBTREE is scoped, not the whole home
+    "find . -delete", // common scoped cleanup
+    "chmod -R 755 ./public",
+  ];
+  for (const cmd of notCatastrophic) {
+    it(`does NOT flag catastrophic: ${cmd}`, () => {
+      expect(classifyCommand(cmd).catastrophic).toBe(false);
+    });
+  }
+});
+
 describe("classifyCommand — destructive but NOT catastrophic (advisory only)", () => {
   const cases: [string, string][] = [
     ["rm -rf node_modules", "filesystem"],
@@ -45,6 +84,8 @@ describe("classifyCommand — destructive but NOT catastrophic (advisory only)",
     ["git push -f origin main", "git"],
     ["git reset --hard HEAD~1", "git"],
     ["git clean -fd", "git"],
+    ["rm -rf /tmp/*", "filesystem"], // destructive scratch cleanup, not catastrophic
+    ["find . -delete", "filesystem"],
   ];
   for (const [cmd, category] of cases) {
     it(`${cmd} → destructive, not catastrophic`, () => {
@@ -70,6 +111,8 @@ describe("classifyCommand — graded advisory risk", () => {
     ["mkdir build", "write", "filesystem"],
     ["npm run build", "write", "process"],
     ["sed -i s/a/b/ f.txt", "write", "filesystem"],
+    ["chmod -R 755 ./public", "write", "filesystem"], // recognized now (was 'unknown')
+    ["chown user file.txt", "write", "filesystem"],
     ["git push origin main", "network", "git"],
     ["npm install", "network", "install"],
     ["pnpm add zod", "network", "install"],

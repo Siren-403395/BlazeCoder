@@ -278,14 +278,17 @@ export class AgentRuntime {
 
     const contextTokens = opts.contextTokens ?? DEFAULT_COMPACTION.contextTokens;
     // Derive the clearable-results set from each tool's `compactable` flag, so a new bulky
-    // read-only tool participates without editing the compaction module. Empty ⇒ leave unset
-    // so ContextManager keeps its built-in fallback (never clear nothing by accident).
+    // read-only tool participates without editing the compaction module — and a tool that
+    // sets compactable:false is honored (its results are preserved). We always pass the
+    // derived set: the COMPACTABLE fallback inside ContextManager is for direct embedders /
+    // tests that never set the key, not for the runtime (whose registry always has the
+    // built-in compactable tools, so the set is non-empty in practice).
     const compactableTools = new Set(this.registry.list().filter((t) => t.compactable).map((t) => t.name));
     this.contextManager = new ContextManager(
       {
         ...DEFAULT_COMPACTION,
         contextTokens,
-        ...(compactableTools.size > 0 ? { compactableTools } : {}),
+        compactableTools,
         ...opts.compaction,
       },
       this.clock,

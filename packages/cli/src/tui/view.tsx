@@ -14,8 +14,9 @@ import { TAGLINE, WORDMARK_ROWS, WORDMARK_WIDTH } from "./banner";
 import type { SlashCommand } from "./commands";
 import type { Item, PendingPermission } from "./state";
 
-/** Compact token count: 1234 → "1.2k". Shared by the live gauge and the /context panel. */
+/** Compact token count: 1234 → "1.2k", 1_048_576 → "1.0m". Shared by the live gauge and /context. */
 export function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}m`;
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 

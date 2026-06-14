@@ -8,13 +8,18 @@
  *    knows what they're approving (a read vs a network call vs a destructive delete). It
  *    never changes the decision on its own.
  *  - `catastrophic`: a TRIPWIRE. True only for the small, unambiguous set of commands that
- *    destroy the machine/data with no undo (rm -rf of a root/home/glob target, a fork
- *    bomb, dd/mkfs/redirect to a block device, chmod/chown -R on / or ~). The engine uses
- *    this to FORCE a human confirmation even under a broad "always allow" rule — because a
- *    user who allowed `Bash(git:*)` did not thereby consent to `rm -rf ~`. It is
- *    deliberately conservative: `rm -rf node_modules` is destructive but NOT catastrophic.
+ *    destroy the machine/data with no undo (rm -rf of a root/home/system-dir target, a
+ *    fork bomb, dd/mkfs/redirect to a block device, recursive chmod/chown on / or ~,
+ *    `find <root> -delete`). The engine uses it to FORCE a confirmation even under a broad
+ *    "always allow" rule — a user who allowed `Bash(git:*)` did not consent to `rm -rf ~`.
+ *    Deliberately conservative: `rm -rf node_modules` / `rm -rf /tmp/*` are destructive but
+ *    NOT catastrophic.
  *
- * Heuristic by design (it does not run a real shell parser); it errs toward warning.
+ * BEST-EFFORT, NOT A SANDBOX. This is a heuristic pattern matcher, not a shell. It unwraps
+ * sudo / path-qualified binaries (`/bin/rm`) / alias-bypass (`\rm`) / xargs|busybox / a
+ * single `sh -c`/`eval` layer, but a sufficiently obfuscated command (deep indirection,
+ * `$(...)` substitution, runtime-computed paths) can still slip the catastrophic flag. It
+ * is defense-in-depth on top of the normal permission prompt, and it errs toward warning.
  */
 
 import { normalizeCommand, splitCommand } from "./bashRuleMatch";
@@ -56,29 +61,49 @@ const NETWORK_CMDS = new Set(["curl", "wget", "ssh", "scp", "rsync", "nc", "ncat
 const TEST_CMDS = new Set(["vitest", "jest", "mocha", "pytest", "phpunit", "rspec", "go", "cargo"]);
 /** Package managers (subcommand decides install vs publish vs run). */
 const PKG_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "pip", "pip3", "brew", "apt", "apt-get", "gem", "cargo", "go"]);
+/** Leading commands that just run another command — strip so we judge the REAL one. */
+const COMMAND_WRAPPERS = new Set(["sudo", "doas", "xargs", "busybox"]);
+/** Catastrophic system roots (deleting any of these wipes the OS). Curated FHS + macOS dirs —
+ *  deliberately NOT including scratch mounts (/tmp, /mnt, /media, /Volumes, /data). */
+const SYSTEM_DIR = /^\/(bin|boot|dev|etc|lib|lib32|lib64|proc|root|run|sbin|srv|sys|usr|var|opt|home|System|Library|Applications|Users|private)(\/\*?)?$/;
 
 function tokens(segment: string): string[] {
   return segment.split(/\s+/).filter(Boolean);
 }
 
-/** Does this rm/chmod/chown segment target a root, home, or glob path? */
-function hasDangerousFsTarget(args: string[]): boolean {
-  return args.some((a) => {
-    if (/^-/.test(a)) return false; // a flag, not a target
-    return (
-      a === "/" ||
-      a === "/*" ||
-      a === "*" ||
-      a === "." ||
-      a === "./" ||
-      a === "~" ||
-      a === "~/" ||
-      a === "~/*" ||
-      a === "$HOME" ||
-      a === "${HOME}" ||
-      /^\$\{?HOME\}?\/?\*?$/.test(a) ||
-      /^\/[^/]*\/?\*?$/.test(a) // a single top-level dir: /usr, /etc, /var/, /System/*
-    );
+/** Resolve a command head to its bare name: drop a leading alias-bypass backslash and any
+ *  directory prefix, so `\rm`, `/bin/rm`, and `./rm` all judge as `rm`. */
+function realHead(token: string): string {
+  return token.replace(/^\\/, "").replace(/^.*\//, "");
+}
+
+/** Strip one layer of matching surrounding quotes so `"$HOME"` compares as `$HOME`. */
+function unquote(s: string): string {
+  return /^(["']).*\1$/.test(s) ? s.slice(1, -1) : s;
+}
+
+/** A root / home / system-dir target — the genuinely irreversible deletion targets. */
+function isRootHomeOrSystem(a: string): boolean {
+  return (
+    a === "/" ||
+    a === "/*" ||
+    a === "~" ||
+    a === "~/" ||
+    a === "~/*" ||
+    /^\$\{?HOME\}?\/?\*?$/.test(a) || // $HOME, ${HOME}, $HOME/, $HOME/*
+    SYSTEM_DIR.test(a)
+  );
+}
+
+/**
+ * Does this segment target a catastrophic path? `includeCwdGlob` also counts the blunt
+ * cwd/glob targets (`*`, `.`, `./`) — true for rm/chmod (a bare `rm -rf *` is dangerous
+ * enough to confirm), false for `find` (`find . -delete` is a common scoped cleanup).
+ */
+function hasDangerousFsTarget(rawArgs: string[], includeCwdGlob = true): boolean {
+  return rawArgs.map(unquote).some((a) => {
+    if (/^-/.test(a)) return false; // a flag, not a target (also skips the `--` end-of-options marker)
+    return isRootHomeOrSystem(a) || (includeCwdGlob && (a === "*" || a === "." || a === "./"));
   });
 }
 
@@ -94,25 +119,45 @@ function isCatastrophicWhole(raw: string): boolean {
   const c = raw.replace(/\s+/g, " ");
   if (/:\s*\(\s*\)\s*\{[^}]*\|[^}]*&[^}]*\}\s*;?\s*:/.test(c)) return true; // fork bomb :(){ :|:& };:
   if (/:\|:\s*&/.test(c.replace(/\s+/g, ""))) return true; // compact fork bomb :|:&
-  if (/(^|[\s|;&])(>|>>)\s*\/dev\/(sd|disk|nvme|hd|mmcblk|vd)/.test(c)) return true; // redirect to a block device
+  // Redirect to a raw block device (any context — `echo x>/dev/sda` has no space before `>`).
+  if (/(>|>>)\s*\/dev\/(sd|disk|nvme|hd|mmcblk|vd)/.test(c)) return true;
   return false;
+}
+
+/**
+ * If the command is a single `sh -c '...'` / `eval ...` wrapper (optionally behind sudo),
+ * return the inner command so the caller can classify what ACTUALLY runs. Returns null when
+ * it isn't such a wrapper.
+ */
+function unwrapShellCommand(raw: string): string | null {
+  const s = raw.replace(/^(?:sudo|doas)\s+(?:-\S+\s+)*/, "");
+  const shc = s.match(/^\\?(?:\/\S+\/)?(?:bash|sh|zsh|dash|ash|ksh)\s+(?:-[A-Za-z]+\s+)*-c\s+(.+)$/);
+  if (shc) return stripWrappingQuotes(shc[1]!.trim());
+  const ev = s.match(/^eval\s+(.+)$/);
+  if (ev) return stripWrappingQuotes(ev[1]!.trim());
+  return null;
+}
+
+function stripWrappingQuotes(s: string): string {
+  const m = s.match(/^(['"])([\s\S]*)\1$/);
+  return m ? m[2]! : s;
 }
 
 /** Classify one already-normalized segment. */
 function classifySegment(segment: string): CommandClassification {
   let t = tokens(segment);
-  // Strip a leading privilege escalator (sudo/doas) + its options, so we judge the REAL
-  // command — `sudo rm -rf /` is rm's risk, only worse.
-  while (t[0] === "sudo" || t[0] === "doas") {
+  // Strip leading wrappers (sudo/doas/xargs/busybox) + their options, so we judge the REAL
+  // command — `sudo rm -rf /` and `busybox rm -rf /` are rm's risk, only worse.
+  while (t.length > 0 && COMMAND_WRAPPERS.has(realHead(t[0]!))) {
     t = t.slice(1);
-    while (t.length > 1 && /^-/.test(t[0]!)) t = /^-[ugpC]$/.test(t[0]!) ? t.slice(2) : t.slice(1);
+    while (t.length > 1 && /^-/.test(t[0]!)) t = /^-[a-zA-Z]$/.test(t[0]!) ? t.slice(2) : t.slice(1);
   }
-  const head = t[0] ?? "";
+  const head = realHead(t[0] ?? "");
   const args = t.slice(1);
 
   // ── Catastrophic, irreversible ──
   if (head === "rm" && hasRecursiveForce(args) && hasDangerousFsTarget(args)) {
-    return { category: "filesystem", risk: "destructive", reason: "recursive force-delete of a root/home/glob path", catastrophic: true };
+    return { category: "filesystem", risk: "destructive", reason: "recursive force-delete of a root/home path", catastrophic: true };
   }
   if (head === "dd" && args.some((a) => /^of=\/dev\//.test(a))) {
     return { category: "filesystem", risk: "destructive", reason: "dd writing directly to a device", catastrophic: true };
@@ -127,6 +172,9 @@ function classifySegment(segment: string): CommandClassification {
   ) {
     return { category: "filesystem", risk: "destructive", reason: `recursive ${head} on a root/home path`, catastrophic: true };
   }
+  if (head === "find" && args.some((a) => a === "-delete" || a === "-exec") && hasDangerousFsTarget(args, false)) {
+    return { category: "filesystem", risk: "destructive", reason: "find -delete/-exec on a root/home path", catastrophic: true };
+  }
 
   // ── Destructive but not catastrophic (reversible-ish or scoped) ──
   if (head === "rm" && (hasRecursiveForce(args) || args.some((a) => /^-[^-]*r/i.test(a)))) {
@@ -134,6 +182,9 @@ function classifySegment(segment: string): CommandClassification {
   }
   if (head === "shred" || head === "truncate") {
     return { category: "filesystem", risk: "destructive", reason: "destroys file contents", catastrophic: false };
+  }
+  if (head === "chmod" || head === "chown") {
+    return { category: "filesystem", risk: "write", reason: `${head} changes file ${head === "chmod" ? "permissions" : "ownership"}`, catastrophic: false };
   }
   if (head === "git") {
     const sub = args.find((a) => !/^-/.test(a)) ?? "";
@@ -177,12 +228,19 @@ function classifySegment(segment: string): CommandClassification {
 /**
  * Classify a (possibly compound) shell command. Aggregates across sub-commands: the
  * overall risk is the riskiest segment, catastrophic if ANY segment is, and the reason
- * describes that worst segment. Output redirects to a block device are caught on the
- * whole command (operators are part of the signature).
+ * describes that worst segment. A leading `sh -c`/`eval` wrapper is peeled (bounded
+ * recursion) so the inner command is judged; device redirects are caught on the whole
+ * command (operators are part of the signature).
  */
-export function classifyCommand(command: string): CommandClassification {
+export function classifyCommand(command: string, depth = 0): CommandClassification {
   const raw = command.trim();
   if (!raw) return { category: "unknown", risk: "read", reason: "empty command", catastrophic: false };
+
+  // Peel a `sh -c '...'` / `eval ...` wrapper and judge what actually runs.
+  if (depth < 3) {
+    const inner = unwrapShellCommand(raw);
+    if (inner && inner !== raw) return classifyCommand(inner, depth + 1);
+  }
 
   if (isCatastrophicWhole(raw)) {
     return { category: "filesystem", risk: "destructive", reason: "irreversible system/device operation", catastrophic: true };

@@ -101,17 +101,65 @@ describe("PermissionEngine", () => {
     expect(risk).toMatchObject({ level: "destructive" });
   });
 
-  it("plan mode still DENIES a catastrophic Bash command (the tripwire never weakens deny to ask)", async () => {
-    const { engine } = makeEngine({ mode: "plan" });
+  it("the tripwire fires under acceptEdits too (the runtime's default mode)", async () => {
+    const { engine, broker } = makeEngine({ mode: "acceptEdits", allow: ["Bash(rm:*)"] });
     let asked = false;
-    const run = await engine.check(tool("Bash", false), { command: "rm -rf /" }, {
+    const run = await engine.check(tool("Bash", false), { command: "rm -rf ~" }, {
       emit: (e) => {
-        if (e.type === "permission_request") asked = true;
+        if (e.type === "permission_request") {
+          asked = true;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
       },
       signal,
     });
+    expect(asked).toBe(true);
     expect(run.behavior).toBe("deny");
-    expect(asked).toBe(false); // denied outright, not turned into a prompt
+  });
+
+  it("plan mode: no allow rule DENIES outright; a matching allow rule is escalated to ASK (not auto-run)", async () => {
+    // (a) No rule: plan denies mutating tools at the mode gate — the tripwire never weakens that.
+    const noRule = makeEngine({ mode: "plan" });
+    let askedA = false;
+    const denied = await noRule.engine.check(tool("Bash", false), { command: "rm -rf /" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") askedA = true;
+      },
+      signal,
+    });
+    expect(denied.behavior).toBe("deny");
+    expect(askedA).toBe(false);
+
+    // (b) With a broad allow rule, gate 4 would auto-allow even in plan mode (allow beats the
+    // mode gate). The tripwire intercepts that, escalating the catastrophic command to a prompt.
+    const withRule = makeEngine({ mode: "plan", allow: ["Bash(rm:*)"] });
+    let askedB = false;
+    const escalated = await withRule.engine.check(tool("Bash", false), { command: "rm -rf ~" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          askedB = true;
+          withRule.broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(askedB).toBe(true); // NOT auto-allowed by the rule
+    expect(escalated.behavior).toBe("deny");
+  });
+
+  it("an ask rule does not clobber the catastrophic warning message", async () => {
+    const { engine, broker } = makeEngine({ mode: "default", ask: ["Bash(rm:*)"] });
+    let reason = "";
+    await engine.check(tool("Bash", false), { command: "rm -rf ~" }, {
+      emit: (e) => {
+        if (e.type === "permission_request") {
+          reason = e.reason;
+          broker.resolve(e.requestId, { behavior: "deny" });
+        }
+      },
+      signal,
+    });
+    expect(reason).toMatch(/irreversibly destructive/); // catastrophic text wins over the ask-rule text
   });
 
   it("bypassPermissions is the explicit escape hatch — even catastrophic commands run", async () => {

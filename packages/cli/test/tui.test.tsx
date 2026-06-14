@@ -67,7 +67,7 @@ describe("ItemView", () => {
     const { lastFrame, unmount } = render(<ItemView item={{ kind: "context", id: "ctx", report }} />);
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Context"); // headline
-    expect(frame).toContain("72.4k / 1048.6k tokens"); // authoritative real total, not the estimate
+    expect(frame).toContain("72.4k / 1.0m tokens"); // authoritative real total, not the estimate
     expect(frame).toContain("system prompt");
     expect(frame).toContain("tool results");
     expect(frame).not.toContain("memory index"); // zero-token block is hidden
@@ -85,7 +85,7 @@ describe("ItemView", () => {
     };
     const { lastFrame, unmount } = render(<ItemView item={{ kind: "context", id: "ctx2", report }} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("8.5k / 1048.6k tokens (estimated)"); // estimate headline, flagged
+    expect(frame).toContain("8.5k / 1.0m tokens (estimated)"); // estimate headline, flagged
     expect(frame).toContain("history was compacted"); // summarized footer variant
     unmount();
   });
@@ -265,6 +265,53 @@ describe("manual /compact command", () => {
     expect(frame).toContain("context compacted"); // the ⟳ boundary chip rendered
     expect(frame).toContain("Compacted:"); // the precise token-delta notice
 
+    unmount();
+  });
+
+  it("/context renders the per-block panel after a turn (App→runtime→reducer wiring)", async () => {
+    const clock = new FixedClock(1);
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([step("Hello there, all done.")]),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+    });
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} effort="low" />);
+    await new Promise((r) => setTimeout(r, 80));
+    stdin.write("hi");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await waitFor(() => (lastFrame() ?? "").includes("done"));
+
+    stdin.write("/context");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await waitFor(() => (lastFrame() ?? "").includes("Context"));
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("system prompt"); // a per-block row, not just the old ratio line
+    expect(frame).toContain("tool schemas");
+    unmount();
+  });
+
+  it("/context with no conversation yet shows the fallback notice", async () => {
+    const clock = new FixedClock(1);
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([step("hi")]),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+    });
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} effort="low" />);
+    await new Promise((r) => setTimeout(r, 80));
+    stdin.write("/context");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await waitFor(() => (lastFrame() ?? "").includes("Context usage will appear"));
+    expect(lastFrame() ?? "").toContain("Context usage will appear after the first turn.");
     unmount();
   });
 

@@ -95,7 +95,7 @@ export function initialState(effort = "high"): TuiState {
 export function isFinalItem(item: Item): boolean {
   if (item.kind === "assistant") return !item.streaming;
   if (item.kind === "tool") return item.status !== "running";
-  return true; // user · notice · compact · result are final the moment they appear
+  return true; // user · notice · compact · context · result are final the moment they appear
 }
 
 /**

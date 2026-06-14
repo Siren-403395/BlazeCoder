@@ -195,6 +195,16 @@ export class PermissionEngine {
         ? classifyCommand(input.command)
         : undefined;
 
+    // Catastrophic-command MESSAGE prep: when an irreversible command (rm -rf ~, fork bomb,
+    // find / -delete, …) reaches a prompt, the headline should say so. We set the reason here
+    // (NOT forceAsk) so any later ask — whether via the allow-rule tripwire below or the
+    // normal mode disposition — shows the warning, while plan mode's deny is left untouched.
+    // bypassPermissions (--yolo) is the explicit escape hatch and shows nothing special.
+    if (risk?.catastrophic && this.mode !== "bypassPermissions") {
+      askReason = `This command is irreversibly destructive (${risk.reason}). Confirm to proceed.`;
+      askDecisionReason = { type: "other", detail: `catastrophic: ${risk.reason}` };
+    }
+
     // 2) Protected paths.
     const targetPath =
       typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : undefined;
@@ -212,28 +222,27 @@ export class PermissionEngine {
       };
     }
 
-    // 3.5) Catastrophic-command tripwire: irreversible, machine/data-destroying commands
-    // (rm -rf ~, a fork bomb, dd/mkfs to a device, …) force a human confirmation even under
-    // a broad "always allow" rule — allowing `Bash(git:*)` is not consent to `rm -rf ~`.
-    // Scoped to the working modes where an allow rule would otherwise auto-run it: plan mode
-    // already denies mutating tools (stricter — don't weaken it to a prompt) and
-    // bypassPermissions (--yolo) is the explicit escape hatch. An explicit deny still wins
-    // (it ran above).
-    if (risk?.catastrophic && (this.mode === "default" || this.mode === "acceptEdits")) {
-      forceAsk = true;
-      askReason = `This command is irreversibly destructive (${risk.reason}). Confirm to proceed.`;
-      askDecisionReason = { type: "other", detail: `catastrophic: ${risk.reason}` };
-    }
-
-    // 4) Allow rules (skip when a hook forced ask, or a catastrophic command must confirm).
+    // 4) Allow rules (skip when a hook forced ask).
     if (!forceAsk) {
       const allowRule = this.firstMatch("allow", tool.name, input);
-      if (allowRule) return { behavior: "allow", input, decisionReason: { type: "rule", rule: allowRule } };
+      if (allowRule) {
+        // Catastrophic-command tripwire: a broad "always allow" rule does NOT cover an
+        // irreversible command — escalate it to a human confirmation instead of auto-running.
+        // Doing this AT the allow gate means it only ever turns an auto-ALLOW into an ASK: it
+        // never weakens an explicit deny (gate 3) or plan mode's deny (gate 6, reached only
+        // when no allow rule matched). bypass was already excluded from `askDecisionReason`.
+        if (risk?.catastrophic && askDecisionReason.type === "other") {
+          forceAsk = true;
+        } else {
+          return { behavior: "allow", input, decisionReason: { type: "rule", rule: allowRule } };
+        }
+      }
     }
 
-    // 5) Ask rules.
+    // 5) Ask rules. Don't clobber a catastrophic warning ({type:"other"}) with the generic
+    // ask-rule text — the catastrophic message is the more important one to show.
     const askRule = this.firstMatch("ask", tool.name, input);
-    if (askRule) {
+    if (askRule && askDecisionReason.type !== "other") {
       forceAsk = true;
       askReason = `Allow ${tool.name}? (matched ask rule ${ruleValueToString(askRule.value)})`;
       askDecisionReason = { type: "rule", rule: askRule };
