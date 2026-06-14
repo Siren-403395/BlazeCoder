@@ -53,6 +53,26 @@ describe("PermissionEngine", () => {
     expect(denied.behavior).toBe("deny");
   });
 
+  it("denies (never hangs) at the ask gate when the run was already aborted", async () => {
+    // Regression: the broker arms cancellation via signal.addEventListener("abort"), which does
+    // NOT fire for an already-aborted signal. If a second mutating tool reaches the ask gate after
+    // the user aborted during the first tool's prompt, awaiting the broker would hang the loop. The
+    // gate must short-circuit to deny and must NOT open a prompt. (If this regressed, this test
+    // would hang to the vitest timeout rather than fail fast.)
+    const { engine } = makeEngine({ mode: "default" });
+    const ac = new AbortController();
+    ac.abort();
+    let prompted = false;
+    const decision = await engine.check(tool("write_file", false), { path: "/a" }, {
+      emit: () => {
+        prompted = true;
+      },
+      signal: ac.signal,
+    });
+    expect(decision.behavior).toBe("deny");
+    expect(prompted).toBe(false);
+  });
+
   it("acceptEdits allows edit tools but asks for Bash", async () => {
     const { engine, broker } = makeEngine({ mode: "acceptEdits" });
     const edit = await engine.check(tool("Write", false), { file_path: "/a" }, { emit: () => {}, signal });

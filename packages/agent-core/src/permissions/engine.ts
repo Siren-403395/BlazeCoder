@@ -273,7 +273,15 @@ export class PermissionEngine {
       return { behavior: "deny", message: `Tool "${tool.name}" is not permitted in ${this.mode} mode.`, decisionReason: { type: "mode", mode: this.mode } };
     }
 
-    // 7) Ask the human. Register BEFORE emitting so a fast client can't race the awaiting promise.
+    // 7) Ask the human. If the run was ALREADY cancelled (e.g. the user aborted while an
+    // earlier tool in this same turn was being prompted), do not open a fresh prompt: the
+    // broker arms cancellation via signal.addEventListener("abort"), which never fires for an
+    // already-aborted signal, so `await pending` would hang the loop forever. Deny instead so
+    // the loop unwinds on its next abort check — and so the cancelled tool never executes.
+    if (run.signal.aborted) {
+      return { behavior: "deny", message: "Run cancelled.", decisionReason: askDecisionReason };
+    }
+    // Register BEFORE emitting so a fast client can't race the awaiting promise.
     const requestId = this.idGen();
     const pending = this.broker.request(requestId, run.signal);
     run.emit({

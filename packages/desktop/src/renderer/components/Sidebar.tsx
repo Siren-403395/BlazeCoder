@@ -11,6 +11,7 @@ export function Sidebar({
   changedTools,
   selectedToolId,
   onSelectTool,
+  busy = false,
 }: {
   sessions: SessionSummary[];
   activeSessionId?: string;
@@ -19,6 +20,8 @@ export function Sidebar({
   changedTools: ToolItem[];
   selectedToolId?: string;
   onSelectTool: (id: string) => void;
+  /** A run/compaction is active: loading a session is gated, so disable the affordances. */
+  busy?: boolean;
 }) {
   const added = changedTools.reduce((n, t) => n + (t.diff?.added ?? 0), 0);
   const removed = changedTools.reduce((n, t) => n + (t.diff?.removed ?? 0), 0);
@@ -65,7 +68,7 @@ export function Sidebar({
             <History size={14} strokeWidth={1.75} />
             Sessions
           </span>
-          <button className="iconbtn" onClick={onRefresh} title="Refresh sessions" aria-label="Refresh sessions">
+          <button className="iconbtn" onClick={onRefresh} title="Refresh sessions" aria-label="Refresh sessions" disabled={busy}>
             <RefreshCw size={13} strokeWidth={1.75} />
           </button>
         </div>
@@ -78,6 +81,7 @@ export function Sidebar({
                 key={s.id}
                 className={`sessionlist__item ${s.id === activeSessionId ? "is-active" : ""}`}
                 onClick={() => onLoadSession(s.id)}
+                disabled={busy}
               >
                 <span className="sessionlist__title">{s.title}</span>
                 <span className="sessionlist__meta">{s.turns} turns</span>

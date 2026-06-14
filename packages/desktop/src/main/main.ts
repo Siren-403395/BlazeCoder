@@ -64,6 +64,15 @@ function createWindow(): void {
     return { action: "deny" };
   });
 
+  // Block top-level navigation away from the app (location.href, anchors, form posts) — only
+  // the Vite dev server's own reloads are allowed. setWindowOpenHandler covers window.open but
+  // not same-frame navigation, so model-injected navigation could otherwise replace the app.
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    const dev = process.env.ZEPHYRCODE_DESKTOP_DEV_SERVER;
+    if (dev && url.startsWith(dev)) return;
+    event.preventDefault();
+  });
+
   const devServer = process.env.ZEPHYRCODE_DESKTOP_DEV_SERVER;
   if (devServer) {
     void mainWindow.loadURL(devServer);

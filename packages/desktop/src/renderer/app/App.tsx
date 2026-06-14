@@ -50,6 +50,7 @@ export function App() {
           changedTools={changedTools}
           selectedToolId={state.selectedToolId}
           onSelectTool={actions.selectTool}
+          busy={state.status !== "idle"}
         />
         <main className="center">
           {error ? (

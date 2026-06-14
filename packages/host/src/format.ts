@@ -1,32 +1,9 @@
 /**
- * Pure, UI-agnostic label helpers for a tool call — used by the headless renderer
- * (and available to any host that wants a one-line summary of a tool invocation).
- * These import nothing, so they are safe to pull into any environment. The TUI keeps
- * its own copy of these alongside its color theme (cli/src/tui/theme.ts); a host
- * package carries no terminal colors.
+ * Pure, UI-agnostic label helper for a tool call — used by the headless renderer to print a
+ * one-line summary of a tool invocation. Imports nothing, so it is safe in any environment.
+ * The TUI keeps its own copy alongside its color theme (cli/src/tui/theme.ts); a host package
+ * carries no terminal presentation beyond this.
  */
-
-/** A short glyph per tool, used in an activity line. */
-export function toolGlyph(name: string): string {
-  switch (name) {
-    case "Read":
-      return "○";
-    case "Write":
-      return "✎";
-    case "Edit":
-      return "✎";
-    case "Bash":
-      return "$";
-    case "Glob":
-      return "⌕";
-    case "Grep":
-      return "⌕";
-    case "memory":
-      return "✱";
-    default:
-      return "•";
-  }
-}
 
 /** A compact one-line label for a tool call's salient argument. */
 export function toolDetail(name: string, input: Record<string, unknown>): string {

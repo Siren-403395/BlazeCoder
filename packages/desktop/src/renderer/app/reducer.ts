@@ -151,7 +151,11 @@ export function reduce(state: UiState, action: UiAction): UiState {
     }
 
     case "result": {
-      const settled = settle(state, false);
+      // An error/cap subtype (max_turns, max_budget, error_during_execution, …) means tool rows
+      // may have been streamed but never executed — interrupt them rather than spin forever.
+      // success ends with zero pending rows; cancelled already settled with error via abort.
+      const errored = action.subtype !== "success" && action.subtype !== "cancelled";
+      const settled = settle(state, errored);
       const seq = settled.seq + 1;
       const text = action.summary ? `${action.subtype} · ${action.summary}` : action.subtype;
       return {
@@ -236,27 +240,33 @@ function patchTool(state: UiState, toolUseId: string, patch: (t: ToolItem) => To
 }
 
 function reduceSubagent(state: UiState, action: Extract<AgentEvent, { type: "subagent" }>): UiState {
-  const key = `sub-${action.agentType}-${action.description}`;
   if (action.phase === "start") {
-    if (state.timeline.some((i) => i.kind === "subagent" && i.id === key && i.running)) return state;
+    // Each start is a distinct sub-agent. Use a unique seq id (NOT agentType+description, which
+    // the model can repeat) so two similarly-labeled Task calls never collide on a React key.
+    const seq = state.seq + 1;
     return {
       ...state,
-      timeline: [...state.timeline, { id: key, kind: "subagent", agentType: action.agentType, description: action.description, running: true }],
+      seq,
+      timeline: [...state.timeline, { id: `sub${seq}`, kind: "subagent", agentType: action.agentType, description: action.description, running: true }],
     };
   }
-  let patched = false;
-  const timeline = state.timeline.map((i) => {
-    if (!patched && i.kind === "subagent" && i.id === key && i.running) {
-      patched = true;
-      return { ...i, running: false, summary: action.summary };
-    }
-    return i;
+  // end: mark the LAST still-running sub-agent with the same type+description complete.
+  let lastIdx = -1;
+  state.timeline.forEach((i, idx) => {
+    if (i.kind === "subagent" && i.running && i.agentType === action.agentType && i.description === action.description) lastIdx = idx;
   });
-  if (patched) return { ...state, timeline };
+  if (lastIdx >= 0) {
+    const timeline = state.timeline.map((i, idx) =>
+      idx === lastIdx && i.kind === "subagent" ? { ...i, running: false, summary: action.summary } : i,
+    );
+    return { ...state, timeline };
+  }
   // An `end` with no matching `start` (e.g. resumed mid-flight): record a finished row.
+  const seq = state.seq + 1;
   return {
     ...state,
-    timeline: [...timeline, { id: `${key}-end`, kind: "subagent", agentType: action.agentType, description: action.description, running: false, summary: action.summary }],
+    seq,
+    timeline: [...state.timeline, { id: `sub${seq}`, kind: "subagent", agentType: action.agentType, description: action.description, running: false, summary: action.summary }],
   };
 }
 

@@ -61,16 +61,37 @@ describe("renderer reducer — AgentEvent contract fidelity", () => {
     expect(t?.filePath).toBe("a.ts");
   });
 
-  it("upserts a subagent row: running on start, complete on end, duplicate start ignored", () => {
+  it("gives each subagent start its own row (unique id), and end marks the last running match done", () => {
     let s = reduce(initialUiState, { type: "subagent", phase: "start", agentType: "Explore", description: "scan" });
-    expect((find(s, "subagent") as SubagentItem).running).toBe(true);
     s = reduce(s, { type: "subagent", phase: "start", agentType: "Explore", description: "scan" });
-    expect(s.timeline.filter((i) => i.kind === "subagent")).toHaveLength(1);
+    const subs = s.timeline.filter((i): i is SubagentItem => i.kind === "subagent");
+    expect(subs).toHaveLength(2);
+    expect(new Set(subs.map((i) => i.id)).size).toBe(2); // unique React keys — no collision
     s = reduce(s, { type: "subagent", phase: "end", agentType: "Explore", description: "scan", turns: 3, summary: "done" });
-    const sub = find(s, "subagent") as SubagentItem;
-    expect(sub.running).toBe(false);
-    expect(sub.summary).toBe("done");
-    expect(s.timeline.filter((i) => i.kind === "subagent")).toHaveLength(1);
+    const after = s.timeline.filter((i): i is SubagentItem => i.kind === "subagent");
+    expect(after.filter((x) => x.running)).toHaveLength(1);
+    expect(after.filter((x) => !x.running)).toHaveLength(1);
+    expect(after.find((x) => !x.running)?.summary).toBe("done");
+  });
+
+  it("a result with an error/cap subtype interrupts streamed-but-unexecuted tool rows", () => {
+    const s = reduceAll([
+      { type: "tool_call", id: "t1", name: "Bash", input: { command: "x" } },
+      {
+        type: "result",
+        subtype: "error_max_turns",
+        numTurns: 24,
+        sessionId: "s",
+        stopReason: null,
+        totalCostUsd: 0,
+        usage: { inputTokens: 0, outputTokens: 0 },
+        summary: "hit cap",
+      },
+    ]);
+    const t = find(s, "tool") as ToolItem;
+    expect(t.isError).toBe(true);
+    expect(t.output).toBe("(interrupted)");
+    expect(s.status).toBe("idle");
   });
 
   it("sets awaiting_permission on permission_request, then returns to idle on result", () => {

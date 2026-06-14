@@ -70,13 +70,17 @@ export function useAgentStore() {
       if (!text || !project || state.status !== "idle") return;
       setError(undefined);
       dispatch({ type: "user_prompt", text });
+      let failed = false;
       try {
         await window.zephyrcode.runAgent({ prompt: text, sessionId: state.sessionId, effort });
         await refreshSessions();
       } catch (e) {
+        failed = true;
         setError(message(e));
       } finally {
-        dispatch({ type: "run_settled", error: false });
+        // On a thrown run, settle with error so any streamed-but-unexecuted tool row is marked
+        // interrupted rather than spinning forever.
+        dispatch({ type: "run_settled", error: failed });
       }
     },
     [project, state.status, state.sessionId, effort, refreshSessions],
@@ -101,15 +105,21 @@ export function useAgentStore() {
     [state.permission],
   );
 
-  const loadSession = useCallback(async (id: string) => {
-    setError(undefined);
-    try {
-      const session = await window.zephyrcode.getSession(id);
-      if (session) dispatch({ type: "hydrate", session });
-    } catch (e) {
-      setError(message(e));
-    }
-  }, []);
+  const loadSession = useCallback(
+    async (id: string) => {
+      // Never hydrate over a live run: it would fold the running session's events into the wrong
+      // timeline and, if a permission were parked, strand the UI (modal cleared, no abort affordance).
+      if (state.status !== "idle") return;
+      setError(undefined);
+      try {
+        const session = await window.zephyrcode.getSession(id);
+        if (session) dispatch({ type: "hydrate", session });
+      } catch (e) {
+        setError(message(e));
+      }
+    },
+    [state.status],
+  );
 
   const compact = useCallback(async () => {
     if (!project || state.status !== "idle") return;

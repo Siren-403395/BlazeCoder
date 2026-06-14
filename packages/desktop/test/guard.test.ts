@@ -24,8 +24,15 @@ function walk(dir: string): string[] {
   return out;
 }
 
-// import (type)? ... from "<spec>"
-const IMPORT_RE = /import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["']/g;
+// Match EVERY module-reference form so the guard can't be sidestepped:
+//   import (type)? ... from "x"   |   export (type)? ... from "x"   (re-exports DO run side effects)
+//   import "x" (bare)             |   import("x") / require("x") (dynamic)
+const FROM_RE = /\b(import|export)\s+(type\s+)?[^;{]*?\bfrom\s+["']([^"']+)["']/g;
+const BARE_IMPORT_RE = /\bimport\s+["']([^"']+)["']/g;
+const DYNAMIC_RE = /\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g;
+
+const forbidden = (spec: string) => spec === "@zephyrcode/cli" || spec === "ink" || spec.startsWith("ink/");
+const isHost = (spec: string) => spec === "@zephyrcode/host" || spec.startsWith("@zephyrcode/host/");
 
 describe("renderer isolation guard", () => {
   const files = walk(RENDERER);
@@ -34,19 +41,28 @@ describe("renderer isolation guard", () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it("never imports @zephyrcode/cli or ink, and only TYPE-imports @zephyrcode/host", () => {
+  it("never reaches @zephyrcode/cli or ink, and only TYPE-imports @zephyrcode/host (no value/re-export/dynamic)", () => {
     const violations: string[] = [];
     for (const file of files) {
       const src = readFileSync(file, "utf8");
-      for (const match of src.matchAll(IMPORT_RE)) {
-        const isTypeOnly = Boolean(match[1]);
-        const spec = match[2] ?? "";
-        if (spec === "@zephyrcode/cli" || spec === "ink" || spec.startsWith("ink/")) {
-          violations.push(`${file}: forbidden import of "${spec}"`);
+
+      for (const m of src.matchAll(FROM_RE)) {
+        const isTypeOnly = Boolean(m[2]);
+        const spec = m[3] ?? "";
+        if (forbidden(spec)) violations.push(`${file}: forbidden ${m[1]} of "${spec}"`);
+        // A `export ... from "host"` re-export executes the module (side effects) even with the
+        // `type` keyword stripped at build, so a value re-export of host is forbidden too.
+        if (isHost(spec) && !(m[1] === "import" && isTypeOnly)) {
+          violations.push(`${file}: non-type ${m[1]} of "${spec}" — the renderer may only type-import host`);
         }
-        if ((spec === "@zephyrcode/host" || spec.startsWith("@zephyrcode/host/")) && !isTypeOnly) {
-          violations.push(`${file}: VALUE import of "${spec}" — the renderer may only type-import host`);
-        }
+      }
+      for (const m of src.matchAll(BARE_IMPORT_RE)) {
+        const spec = m[1] ?? "";
+        if (forbidden(spec) || isHost(spec)) violations.push(`${file}: bare side-effect import of "${spec}"`);
+      }
+      for (const m of src.matchAll(DYNAMIC_RE)) {
+        const spec = m[1] ?? "";
+        if (forbidden(spec) || isHost(spec)) violations.push(`${file}: dynamic import/require of "${spec}"`);
       }
     }
     expect(violations).toEqual([]);
