@@ -30,7 +30,7 @@
 <br>
 
 ```bash
-
+https://github.com/Siren-403395/BlazeCoder.git
 <div align="center"><sub>一条命令：构建 → 装上 PATH → 引导你粘贴 API Key。</sub></div>
 
 ```bash
