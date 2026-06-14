@@ -9,41 +9,51 @@ import type { SessionSummary } from "@coding-agent/core";
 import type { TodoItem } from "@coding-agent/shared";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
-import { LOGO, LOGO_WIDTH, TAGLINE } from "./banner";
 import type { SlashCommand } from "./commands";
 import type { Item, PendingPermission } from "./state";
 
-/** The welcome screen shown on an empty session: logo wordmark + orientation. */
-export function WelcomeBanner({ model, cwd, effort, width }: { model: string; cwd: string; effort: string; width: number }) {
-  const compact = width < LOGO_WIDTH + 2;
+/** Near-black for text printed ON the amber chip (warm, high-contrast on #e8a64d). */
+const ON_ACCENT = "#15110a";
+
+/**
+ * The product lockup: a solid amber "chip" reading ✶ zephyrcode. A filled color block
+ * (not bare letters) so the mark reads as a deliberate badge wherever it appears
+ * (welcome screen + onboarding). Shared so both stay identical.
+ */
+export function Wordmark() {
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
-      {compact ? (
-        <Text color={theme.accent} bold>
-          ✶ zephyrcode
-        </Text>
-      ) : (
-        LOGO.map((line, i) => (
-          <Text key={i} color={theme.accent}>
-            {line}
+    <Text backgroundColor={theme.accent} color={ON_ACCENT} bold>
+      {"  ✶ zephyrcode  "}
+    </Text>
+  );
+}
+
+/**
+ * The welcome screen shown on an empty session: the wordmark + workspace facts wrapped
+ * in a single bordered card (the logo is framed, not floating), with the hints beneath it.
+ */
+export function WelcomeBanner({ model, cwd, effort, width }: { model: string; cwd: string; effort: string; width: number }) {
+  const cardWidth = Math.min(Math.max(width - 2, 30), 72);
+  return (
+    <Box flexDirection="column" marginY={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={2} paddingY={1} width={cardWidth}>
+        <Box>
+          <Wordmark />
+          <Text color={theme.faint}>{"   a command-line coding agent"}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          <Text>
+            <Text color={theme.muted}>{"cwd    "}</Text>
+            <Text color={theme.faint}>{cwd}</Text>
           </Text>
-        ))
-      )}
-      <Box marginTop={1}>
-        <Text color={theme.faint}>{TAGLINE}</Text>
+          <Text>
+            <Text color={theme.muted}>{"model  "}</Text>
+            <Text color={theme.faint}>{`${model} · effort ${effort}`}</Text>
+          </Text>
+        </Box>
       </Box>
-      <Box marginTop={1} flexDirection="column">
-        <Text>
-          <Text color={theme.muted}>{"cwd    "}</Text>
-          <Text color={theme.faint}>{cwd}</Text>
-        </Text>
-        <Text>
-          <Text color={theme.muted}>{"model  "}</Text>
-          <Text color={theme.faint}>{`${model} · effort ${effort}`}</Text>
-        </Text>
-      </Box>
-      <Box marginTop={1}>
-        <Text color={theme.faint}>/help for commands · @ to add files · ↑ for history · /resume to reopen a chat</Text>
+      <Box marginTop={1} paddingX={1}>
+        <Text color={theme.faint}>{"/help  ·  @ files  ·  ↑ history  ·  /resume  ·  say “ultrathink” to go deep"}</Text>
       </Box>
     </Box>
   );
@@ -154,7 +164,11 @@ export function LoadingLine({ word, meta }: { word: string; meta: string }) {
   );
 }
 
-/** The prompt input: a top rule carrying the current effort, then the editable line. */
+/**
+ * The prompt input: the editable line inside a full rounded box (clear top + bottom
+ * borders, so it reads as a real field, not a floating line), with the current effort
+ * (and output style, if any) on a faint status row beneath it.
+ */
 export function InputBox({
   value,
   cursor,
@@ -174,16 +188,15 @@ export function InputBox({
   width: number;
   showCursor?: boolean;
 }) {
-  const label = ` ✶ ${effort}${outputStyle ? ` · ${outputStyle}` : ""} `;
-  const dashes = Math.max(2, width - label.length - 1);
+  const status = `✶ ${effort}${outputStyle ? ` · ${outputStyle}` : ""}`;
   return (
-    <Box flexDirection="column" marginTop={1}>
-      <Box>
-        <Text color={theme.faint}>{"─".repeat(dashes)}</Text>
-        <Text color={theme.accent}>{label}</Text>
-        <Text color={theme.faint}>─</Text>
+    <Box flexDirection="column" marginTop={1} width={Math.max(20, width)}>
+      <Box borderStyle="round" borderColor={theme.accent} paddingX={1}>
+        <InputLine value={value} cursor={cursor} ghost={ghost} placeholder={placeholder} showCursor={showCursor} />
       </Box>
-      <InputLine value={value} cursor={cursor} ghost={ghost} placeholder={placeholder} showCursor={showCursor} />
+      <Box justifyContent="flex-end" paddingRight={1}>
+        <Text color={theme.faint}>{status}</Text>
+      </Box>
     </Box>
   );
 }

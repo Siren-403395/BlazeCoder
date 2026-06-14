@@ -8,11 +8,11 @@
  */
 
 import { useCallback, useState } from "react";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import { setActiveProvider } from "../authStore";
 import { defaultModel, type ModelOption, type Provider } from "../providers";
-import { LOGO, LOGO_WIDTH, TAGLINE } from "./banner";
 import { theme } from "./theme";
+import { Wordmark } from "./view";
 
 type Step = "provider" | "model" | "key";
 
@@ -64,7 +64,6 @@ export function Onboarding({
   onDone: (saved: boolean) => void;
 }) {
   const { exit } = useApp();
-  const { stdout } = useStdout();
   const [provider, setProvider] = useState<Provider>(providers[0]!);
   const [step, setStep] = useState<Step>(() => firstStep(providers[0]!, providers.length));
   const [pIndex, setPIndex] = useState(0);
@@ -151,23 +150,11 @@ export function Onboarding({
     }
   });
 
-  const compact = (stdout?.columns ?? 80) < LOGO_WIDTH + 2;
-
   return (
     <Box flexDirection="column" marginY={1}>
-      {compact ? (
-        <Text color={theme.accent} bold>
-          ✶ zephyrcode
-        </Text>
-      ) : (
-        LOGO.map((line, i) => (
-          <Text key={i} color={theme.accent}>
-            {line}
-          </Text>
-        ))
-      )}
+      <Wordmark />
       <Box marginTop={1}>
-        <Text color={theme.faint}>{`${TAGLINE} · first-run setup`}</Text>
+        <Text color={theme.faint}>{"a command-line coding agent · first-run setup"}</Text>
       </Box>
 
       {step === "provider" ? (
