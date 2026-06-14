@@ -24,7 +24,7 @@ export function formatTokens(n: number): string {
 const ON_ACCENT = "#15110a";
 
 /** A top-lit amber ramp (bright → dim) applied row-by-row to the block wordmark for depth. */
-const WORDMARK_RAMP = ["#f3c06a", "#ecac52", "#e8a64d", "#d99644", "#c4863c"];
+const WORDMARK_RAMP = ["#f5c877", "#efb95f", "#e8a64d", "#dd9a44", "#cf8d3c", "#bd7f34", "#a9712d"];
 
 /**
  * The product lockup: a solid amber "chip" reading ✶ ZephyrCode. A filled color block
