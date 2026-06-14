@@ -70,3 +70,54 @@ describe("an output style reshapes the assembled system prompt", () => {
     expect(sys).not.toContain("# Doing tasks");
   });
 });
+
+describe("runtime output-style switching (takes effect next run)", () => {
+  const TERSE = { name: "terse", description: "brief", prompt: "STYLE_TERSE: one sentence" };
+  const POET = { name: "poet", description: "haiku", prompt: "STYLE_POET: only haiku", keepCodingInstructions: false };
+
+  function makeRuntimeWithStyles(active?: string) {
+    const clock = new FixedClock(1);
+    const gw = new ScriptedGateway("m", [reply("a", []), reply("b", []), reply("c", [])]);
+    const rt = createAgentRuntime({
+      gateway: gw,
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+      outputStyles: [TERSE, POET],
+      outputStyle: active,
+    });
+    const systemAfterRun = async () => {
+      await rt.run({ prompt: "hi" }, () => {}, new AbortController().signal);
+      return gw.lastRequest!.system;
+    };
+    return { rt, systemAfterRun };
+  }
+
+  it("activates the startup style and exposes the available styles", async () => {
+    const { rt, systemAfterRun } = makeRuntimeWithStyles("terse");
+    expect(rt.outputStyles.map((s) => s.name)).toEqual(["terse", "poet"]);
+    expect(rt.outputStyle).toBe("terse");
+    expect(await systemAfterRun()).toContain("## Additional instructions\nSTYLE_TERSE: one sentence");
+  });
+
+  it("switching to an override style replaces the base prompt on the next run", async () => {
+    const { rt, systemAfterRun } = makeRuntimeWithStyles();
+    expect(await systemAfterRun()).toContain("You are zephyrcode"); // no style yet
+    rt.setOutputStyle(POET);
+    expect(rt.outputStyle).toBe("poet");
+    const sys = await systemAfterRun();
+    expect(sys).toContain("STYLE_POET: only haiku");
+    expect(sys).not.toContain("# Doing tasks"); // override drops the base sections
+  });
+
+  it("clearing the style reverts to the base prompt", async () => {
+    const { rt, systemAfterRun } = makeRuntimeWithStyles("terse");
+    rt.setOutputStyle(undefined);
+    expect(rt.outputStyle).toBeUndefined();
+    const sys = await systemAfterRun();
+    expect(sys).toContain("You are zephyrcode");
+    expect(sys).not.toContain("STYLE_TERSE");
+  });
+});

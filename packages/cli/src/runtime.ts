@@ -17,7 +17,6 @@ import {
   loadOutputStyles,
   loadSkills,
   makeSkillTool,
-  outputStyleOptions,
   silentLogger,
   systemClock,
   webTools,
@@ -87,13 +86,12 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     ...(config.webEnabled ? webTools(new HttpWebClient()) : []),
   ];
 
-  // Output style (same trust gate): a configured style reshapes the system prompt.
+  // Output styles (same trust gate): the runtime owns the active style so /output-style
+  // can switch it at runtime. config.outputStyle selects the one active at startup.
   const styleDirs = [join(config.home, "output-styles"), ...(trusted ? [join(root, ".zephyrcode", "output-styles")] : [])];
   const styles = loadOutputStyles(styleDirs);
-  const styleOpts = outputStyleOptions(config.outputStyle ? styles.find((s) => s.name === config.outputStyle) : undefined);
 
   return createAgentRuntime({
-    ...styleOpts,
     gateway,
     sessionStore: new FileSessionStore(projectDir, systemClock),
     memory: new FileMemoryStore(join(projectDir, "memory")),
@@ -110,6 +108,8 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
     extraPostToolUseHooks,
     extraTools,
     skills,
+    outputStyles: styles,
+    outputStyle: config.outputStyle,
     agents,
     maxTurns: config.maxTurns,
     maxBudgetUsd: config.maxBudgetUsd,

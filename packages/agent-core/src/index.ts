@@ -29,6 +29,8 @@ import type { AgentDefinition } from "./orchestration/agentRegistry";
 import { runSubagent } from "./orchestration/subagent";
 import type { SubagentRunResult } from "./orchestration/subagent";
 import type { Skill } from "./skills/loadSkills";
+import { outputStyleOptions } from "./outputStyles";
+import type { OutputStyle } from "./outputStyles";
 import { HookBus } from "./permissions/hooks";
 import type { PostToolUseHook, PreToolUseHook } from "./permissions/hooks";
 import { PermissionBroker, PermissionEngine } from "./permissions/engine";
@@ -104,8 +106,12 @@ export interface AgentRuntimeOptions {
   tools?: Tool[];
   /** Extra tools appended to the built-ins (e.g. a Skill tool, web tools). */
   extraTools?: Tool[];
-  /** Loaded skills (exposed via runtime.skills for a future /skill palette). */
+  /** Loaded skills (exposed via runtime.skills for the /skill palette). */
   skills?: Skill[];
+  /** Output styles available to switch between at runtime (exposed via runtime.outputStyles). */
+  outputStyles?: OutputStyle[];
+  /** Name of the output style to activate at startup (resolved against outputStyles). */
+  outputStyle?: string;
   /** Custom sub-agent definitions (merged over the built-ins) for the Task tool. */
   agents?: AgentDefinition[];
   /** Extra PreToolUse/PostToolUse hooks (e.g. settings-driven command hooks), registered after the built-in secrets guard. */
@@ -212,12 +218,20 @@ export class AgentRuntime {
   private readonly agentRegistry: AgentRegistry;
   private readonly executor: ToolExecutor;
   private readonly contextManager: ContextManager;
-  private readonly loopConfig: AgentLoopConfig;
+  /** Mutable so setOutputStyle can re-derive the prompt; the next run re-snapshots it. */
+  private loopConfig: AgentLoopConfig;
   private readonly defaultEffort: Effort;
   private readonly settingsFiles?: Record<"user" | "project" | "local", string>;
   private readonly spillDir?: string;
-  /** Loaded skills (for a /skill palette in the TUI). */
+  /** Loaded skills (for the /skill palette in the TUI). */
   readonly skills: Skill[];
+  /** Output styles available to switch between (for the /output-style palette). */
+  readonly outputStyles: OutputStyle[];
+  /** The non-style base prompt config, restored when the active style is cleared. */
+  private readonly basePromptOverride?: string;
+  private readonly baseExtraInstructions?: string;
+  /** Name of the currently-active output style, if any. */
+  private activeStyle?: string;
 
   constructor(opts: AgentRuntimeOptions) {
     this.store = opts.sessionStore;
@@ -278,6 +292,33 @@ export class AgentRuntime {
     this.settingsFiles = opts.settingsFiles;
     this.spillDir = opts.spillDir;
     this.skills = opts.skills ?? [];
+
+    // Output styles: the runtime owns the active style so it can switch at runtime.
+    // Remember the non-style base (opts.system/extraInstructions) so clearing reverts to it.
+    this.outputStyles = opts.outputStyles ?? [];
+    this.basePromptOverride = opts.system;
+    this.baseExtraInstructions = opts.extraInstructions;
+    this.setOutputStyle(opts.outputStyle ? this.outputStyles.find((s) => s.name === opts.outputStyle) : undefined);
+  }
+
+  /**
+   * Switch the active output style. Re-derives the system prompt knobs on loopConfig from
+   * the non-style base + the style; takes effect on the NEXT run (buildLoopConfig
+   * re-snapshots per run, exactly like /effort). Pass undefined to revert to the base.
+   */
+  setOutputStyle(style: OutputStyle | undefined): void {
+    const o = outputStyleOptions(style);
+    this.loopConfig = {
+      ...this.loopConfig,
+      promptOverride: o.system ?? this.basePromptOverride,
+      extraInstructions: o.extraInstructions ?? this.baseExtraInstructions,
+    };
+    this.activeStyle = style?.name;
+  }
+
+  /** The name of the active output style, if any (for display). */
+  get outputStyle(): string | undefined {
+    return this.activeStyle;
   }
 
   private loopDeps(effort: Effort): AgentLoopDeps {
