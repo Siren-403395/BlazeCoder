@@ -374,11 +374,16 @@ export function InputBox({
 }) {
   const status = `✶ ${effort}${outputStyle ? ` · ${outputStyle}` : ""}`;
   const boxWidth = Math.max(20, width);
+  // The editable text must wrap at the box's INNER content width (the box minus its two
+  // border columns and the two paddingX columns). Without an explicit bound a long line
+  // overflows the border and the terminal hard-wraps the characters while Ink still measures
+  // the row as one line tall — which manifests as the input scrolling/overwriting in place.
+  const innerWidth = Math.max(1, boxWidth - 4);
   return (
     <Box flexDirection="column" marginTop={1} width={boxWidth}>
       <TopBorder width={boxWidth} label={status} />
-      <Box borderStyle="round" borderColor={theme.accent} borderTop={false} paddingX={1}>
-        <InputLine value={value} cursor={cursor} ghost={ghost} placeholder={placeholder} showCursor={showCursor} />
+      <Box borderStyle="round" borderColor={theme.accent} borderTop={false} paddingX={1} width={boxWidth}>
+        <InputLine value={value} cursor={cursor} ghost={ghost} placeholder={placeholder} showCursor={showCursor} width={innerWidth} />
       </Box>
       <ModeIndicator mode={mode} />
     </Box>
@@ -418,25 +423,34 @@ export function InputLine({
   ghost,
   placeholder,
   showCursor = true,
+  width,
 }: {
   value: string;
   cursor: number;
   ghost?: string | null;
   placeholder?: string;
   showCursor?: boolean;
+  /** Content width to soft-wrap at (the box's inner width). Omit to size to content. */
+  width?: number;
 }) {
   if (value.length === 0) {
     return (
-      <Box>
-        <Text color={theme.accent}>{"❯ "}</Text>
-        {showCursor ? <Text inverse> </Text> : null}
-        {placeholder ? <Text color={theme.faint}>{placeholder}</Text> : null}
+      <Box width={width}>
+        <Text wrap="wrap">
+          <Text color={theme.accent}>{"❯ "}</Text>
+          {showCursor ? <Text inverse> </Text> : null}
+          {placeholder ? <Text color={theme.faint}>{placeholder}</Text> : null}
+        </Text>
       </Box>
     );
   }
 
-  // Multi-line aware: split on "\n" and place the block cursor on its row/col. Continuation
-  // rows align under the "❯ " gutter so a multi-line prompt reads as one indented block.
+  // Multi-line aware: split on "\n" and place the block cursor on its row/col. Each logical
+  // line is ONE wrapping <Text> (gutter, text, cursor and ghost share a single text flow), so
+  // Ink soft-wraps the whole row to `width` — CJK-aware — and grows the box height. Laying the
+  // gutter/text/cursor out as sibling <Text> nodes in a row instead does NOT wrap: a long line
+  // overflows the box and the terminal hard-wraps it while Ink measures the row as one line,
+  // which is what made the cursor scroll and overwrite in place.
   const lines = value.split("\n");
   let row = 0;
   let col = cursor;
@@ -446,28 +460,28 @@ export function InputLine({
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width={width}>
       {lines.map((line, r) => {
         const prefix = r === 0 ? "❯ " : "  ";
         const ghostTail = r === lines.length - 1 && ghost ? <Text color={theme.faint}>{ghost}</Text> : null;
         if (r !== row || !showCursor) {
           return (
-            <Box key={r}>
+            <Text key={r} wrap="wrap">
               <Text color={theme.accent}>{prefix}</Text>
-              <Text>{line}</Text>
+              {line}
               {ghostTail}
-            </Box>
+            </Text>
           );
         }
         const at = line.slice(col, col + 1);
         return (
-          <Box key={r}>
+          <Text key={r} wrap="wrap">
             <Text color={theme.accent}>{prefix}</Text>
-            <Text>{line.slice(0, col)}</Text>
+            {line.slice(0, col)}
             <Text inverse>{at.length ? at : " "}</Text>
-            <Text>{line.slice(col + 1)}</Text>
+            {line.slice(col + 1)}
             {ghostTail}
-          </Box>
+          </Text>
         );
       })}
     </Box>

@@ -231,6 +231,22 @@ describe("InputBox (effort baked into the top border + bottom-left mode indicato
     expect(frame).toContain("(shift+tab to cycle)");
     unmount();
   });
+
+  it("soft-wraps a long single line (incl. wide CJK) instead of overflowing the box on one row", () => {
+    // 40 CJK glyphs ≈ 80 terminal columns: at width 30 (inner ≈ 26) this MUST wrap to several
+    // rows. The old sibling-<Text> layout rendered it on one overflowing line — the scroll/
+    // overwrite bug. Wrapping means the run is split across rows and no single frame line holds
+    // the whole value.
+    const longCjk = "宽".repeat(40);
+    const { lastFrame, unmount } = render(
+      <InputBox value={longCjk} cursor={0} effort="high" mode="normal" width={30} showCursor={false} />,
+    );
+    const frame = lastFrame() ?? "";
+    const rowsWithText = frame.split("\n").filter((line) => line.includes("宽"));
+    expect(rowsWithText.length).toBeGreaterThanOrEqual(2); // it wrapped across rows
+    expect(rowsWithText.some((line) => line.includes(longCjk))).toBe(false); // no single overflowing row
+    unmount();
+  });
 });
 
 describe("welcome banner", () => {
