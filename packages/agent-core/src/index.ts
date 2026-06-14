@@ -71,6 +71,7 @@ export * from "./permissions/suggestions";
 export * from "./context/sessionContext";
 export * from "./context/compaction";
 export * from "./context/rehydration";
+export * from "./diff";
 export * from "./effort";
 export * from "./memory/memoryStore";
 export * from "./memory/memoryTool";

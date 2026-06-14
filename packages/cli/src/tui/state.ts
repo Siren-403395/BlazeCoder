@@ -9,14 +9,14 @@
  * region can show a growing token counter while it thinks.
  */
 
-import type { AgentEvent, SessionState, TodoItem, TranscriptMessage } from "@zephyrcode/shared";
+import type { AgentEvent, FileDiff, SessionState, TodoItem, TranscriptMessage } from "@zephyrcode/shared";
 
 export type ToolStatus = "running" | "ok" | "error";
 
 export type Item =
   | { kind: "user"; id: string; text: string }
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
-  | { kind: "tool"; id: string; name: string; status: ToolStatus; input: Record<string, unknown>; summary?: string; durationMs?: number }
+  | { kind: "tool"; id: string; name: string; status: ToolStatus; input: Record<string, unknown>; summary?: string; durationMs?: number; diff?: FileDiff }
   | { kind: "notice"; id: string; level: "info" | "warn" | "error"; message: string }
   | { kind: "compact"; id: string; reason: string }
   | { kind: "result"; id: string; subtype: string; summary: string };
@@ -310,9 +310,16 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       };
     }
 
-    case "file_change":
-      // Mutations are summarized by the tool_result line; nothing extra to render here.
-      return state;
+    case "file_change": {
+      // Attach the structured diff to the exact tool row that produced it (by toolUseId),
+      // so the ToolView can render a git-style block beneath that row.
+      if (!action.diff || !action.toolUseId) return state;
+      const { toolUseId, diff } = action;
+      return {
+        ...state,
+        items: state.items.map((i) => (i.id === toolUseId && i.kind === "tool" ? { ...i, diff } : i)),
+      };
+    }
 
     default:
       return state;

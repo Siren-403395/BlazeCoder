@@ -11,6 +11,7 @@
  */
 
 import { inferLanguage, isSecretPath, looksLikeSecret } from "@zephyrcode/shared";
+import { computeFileDiff } from "../../diff";
 import { WorkspaceBoundaryError } from "../../workspace/boundary";
 import type { Tool, ToolContext, ToolResult } from "../registry";
 import { TOOL_NAMES } from "../toolNames";
@@ -133,13 +134,14 @@ export const writeFileTool: Tool = {
       return { content: "Refusing to write content that appears to contain a secret (API key/private key).", isError: true };
     }
 
-    // stat() == null means the file does not exist → a fresh create (no read required).
-    const before = await ctx.workspace.stat(r.abs);
-    if (before) {
+    // read() == null means the file does not exist → a fresh create (no read required). For an
+    // overwrite we load the old content here both to enforce read-before-write AND to diff against.
+    const existing = await ctx.workspace.read(r.abs);
+    if (existing) {
       if (!ctx.ledger.has(r.abs)) {
         return { content: `${r.abs} already exists. Read it before overwriting so you do not discard content.`, isError: true };
       }
-      if (ctx.ledger.isStale(r.abs, before)) {
+      if (ctx.ledger.isStale(r.abs, existing.stamp)) {
         return { content: `${r.abs} changed on disk since you read it. Read it again before overwriting.`, isError: true };
       }
     }
@@ -148,7 +150,8 @@ export const writeFileTool: Tool = {
     await ctx.workspace.write({ path: r.abs, language, content });
     const after = await ctx.workspace.stat(r.abs);
     if (after) ctx.ledger.record(r.abs, after);
-    ctx.emit({ type: "file_change", op: "write", path: r.abs, language, content });
+    const diff = computeFileDiff(existing?.content ?? "", content, existing ? "write" : "create");
+    ctx.emit({ type: "file_change", op: "write", path: r.abs, language, diff });
     const lines = content === "" ? 0 : content.split("\n").length;
     return { content: `Wrote ${r.abs} (${lines} line${lines === 1 ? "" : "s"}).` };
   },
@@ -219,7 +222,8 @@ export const editFileTool: Tool = {
     await ctx.workspace.write({ path: r.abs, language: file.language, content: updated });
     const after = await ctx.workspace.stat(r.abs);
     if (after) ctx.ledger.record(r.abs, after);
-    ctx.emit({ type: "file_change", op: "edit", path: r.abs, language: file.language, content: updated });
+    const diff = computeFileDiff(file.content, updated, "edit");
+    ctx.emit({ type: "file_change", op: "edit", path: r.abs, language: file.language, diff });
     return { content: `Edited ${r.abs} (${occurrences} replacement${occurrences === 1 ? "" : "s"}).` };
   },
 };

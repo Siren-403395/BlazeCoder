@@ -9,6 +9,7 @@ import {
   silentLogger,
 } from "@zephyrcode/core";
 import type { ModelGateway, ModelRequest, ModelResponse } from "@zephyrcode/core";
+import type { FileDiff } from "@zephyrcode/shared";
 import { App } from "../src/index";
 import { ItemView } from "../src/tui/view";
 
@@ -45,6 +46,43 @@ describe("ItemView", () => {
     expect(frame).toContain("Write");
     expect(frame).toContain("/a.ts");
     expect(frame).toContain("Wrote /a.ts");
+    unmount();
+  });
+
+  it("renders a git-style diff block for an edited file and drops the redundant summary", () => {
+    const diff: FileDiff = {
+      op: "edit",
+      added: 1,
+      removed: 1,
+      truncated: false,
+      hunks: [
+        {
+          lines: [
+            { kind: "context", text: "keep me", oldLine: 1, newLine: 1 },
+            { kind: "del", text: "old line", oldLine: 2 },
+            { kind: "add", text: "new line", newLine: 2 },
+          ],
+        },
+      ],
+    };
+    const { lastFrame, unmount } = render(
+      <ItemView item={{ kind: "tool", id: "t", name: "Edit", status: "ok", input: { file_path: "/a.ts" }, summary: "Edited /a.ts (1 replacement).", diff }} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Edit"); // the tool row
+    expect(frame).toContain("- old line"); // a removed line
+    expect(frame).toContain("+ new line"); // an added line
+    expect(frame).toContain("+1"); // the added stat
+    expect(frame).toContain("−1"); // the removed stat (unicode minus)
+    expect(frame).not.toContain("1 replacement"); // the path-doubling summary is gone
+    unmount();
+  });
+
+  it("keeps the textual summary for non-file tools (no diff)", () => {
+    const { lastFrame, unmount } = render(
+      <ItemView item={{ kind: "tool", id: "t", name: "Bash", status: "ok", input: { command: "ls" }, summary: "exit 0" }} />,
+    );
+    expect(lastFrame() ?? "").toContain("exit 0");
     unmount();
   });
 
@@ -184,6 +222,9 @@ describe("App end-to-end (scripted runtime)", () => {
     expect(frame).toContain("Write"); // the tool ran
     expect(frame).toContain("done"); // the run finished successfully
     expect((await ws.read("/notes.md"))?.content).toBe("# Notes\n"); // the file was actually written
+    // End-to-end diff: the Write's create diff rode the file_change event, attached to the
+    // tool row, and rendered as a block (proving tool → event → reducer → DiffBlock).
+    expect(frame).toContain("+ # Notes");
 
     unmount();
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyEvent, initialState, isFinalItem, reduce, splitItems } from "../src/tui/state";
 import type { Item } from "../src/tui/state";
+import type { FileDiff } from "@zephyrcode/shared";
 
 describe("TUI state reducer", () => {
   it("records the prompt and enters running", () => {
@@ -25,6 +26,26 @@ describe("TUI state reducer", () => {
   it("an api_retry event surfaces a warn notice", () => {
     const s = applyEvent(initialState(), { type: "api_retry", attempt: 1, maxRetries: 8, delayMs: 500, status: 503 });
     expect(s.items.at(-1)).toMatchObject({ kind: "notice", level: "warn" });
+  });
+
+  it("attaches a file_change diff to the matching tool row by toolUseId", () => {
+    const diff: FileDiff = {
+      op: "edit",
+      added: 1,
+      removed: 1,
+      truncated: false,
+      hunks: [{ lines: [{ kind: "del", text: "old", oldLine: 1 }, { kind: "add", text: "new", newLine: 1 }] }],
+    };
+    let s = applyEvent(initialState(), { type: "tool_call", id: "t1", name: "Edit", input: { file_path: "/a.ts" } });
+    s = applyEvent(s, { type: "file_change", op: "edit", path: "/a.ts", toolUseId: "t1", diff });
+    const tool = s.items.find((i) => i.id === "t1");
+    expect(tool).toMatchObject({ kind: "tool", diff: { added: 1, removed: 1 } });
+  });
+
+  it("ignores a file_change carrying no diff/toolUseId (legacy no-op)", () => {
+    const s0 = applyEvent(initialState(), { type: "tool_call", id: "t1", name: "Edit", input: {} });
+    const s1 = applyEvent(s0, { type: "file_change", op: "edit", path: "/a.ts" });
+    expect(s1).toBe(s0); // unchanged reference — pure no-op
   });
 
   it("captures model/limits from the init event", () => {

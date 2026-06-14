@@ -9,6 +9,7 @@
  */
 
 import type { FileLanguage } from "./projectSchema";
+import type { FileDiff } from "./diff";
 
 export interface ToolCall {
   id: string;
@@ -73,13 +74,20 @@ export type AgentEvent =
       isError: boolean;
       durationMs: number;
     }
-  /** Emitted by write/edit/delete tools so the TUI's file/diff view stays live. */
+  /**
+   * Emitted by write/edit/delete tools so the TUI's diff view stays live. Carries a
+   * structured `diff` (not the bulky content) plus the `toolUseId` of the call that made
+   * the change, so the consumer can attach the diff to the exact tool row that produced it.
+   */
   | {
       type: "file_change";
       op: "write" | "edit" | "delete";
       path: string;
       language?: FileLanguage;
-      content?: string;
+      /** The tool call that produced this change (stamped by the executor). */
+      toolUseId?: string;
+      /** Structured line diff of the change, for rendering a git-style block. */
+      diff?: FileDiff;
     }
   /** Context budget gauge update (after each turn / compaction). */
   | { type: "budget"; totalTokens: number; usedTokens: number; remainingTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number }

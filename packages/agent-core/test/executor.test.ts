@@ -104,4 +104,18 @@ describe("ToolExecutor", () => {
     await executor.executeTurn([call("1", "a")], ctx);
     expect(events.some((e) => e.type === "tool_result" && e.toolUseId === "1")).toBe(true);
   });
+
+  it("stamps the originating toolUseId onto a file_change a tool emits", async () => {
+    // The tool emits file_change WITHOUT a toolUseId; the executor must fill it in so the
+    // UI can attach the diff to the right row even when several mutating rows are on screen.
+    const writer = makeTool("writer", async (_input, ctx) => {
+      ctx.emit({ type: "file_change", op: "edit", path: "/x.ts" });
+      return { content: "ok" };
+    });
+    const { executor } = setup({ tools: [writer] });
+    const { ctx, events } = makeCtx();
+    await executor.executeTurn([call("call-42", "writer")], ctx);
+    const change = events.find((e) => e.type === "file_change");
+    expect(change && change.type === "file_change" && change.toolUseId).toBe("call-42");
+  });
 });

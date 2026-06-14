@@ -96,7 +96,7 @@ export class ToolExecutor {
         denied = true;
         result = { content: decision.message, isError: true };
       } else {
-        result = await this.runHandler(tool, decision.input, ctx);
+        result = await this.runHandler(tool, decision.input, ctx, call.id);
         result = await this.hooks.runPostToolUse({
           toolName: tool.name,
           input: decision.input,
@@ -129,9 +129,17 @@ export class ToolExecutor {
     tool: Tool,
     input: Record<string, unknown>,
     ctx: ToolContext,
+    toolUseId: string,
   ): Promise<ToolResult> {
+    // Stamp the originating tool call onto any file_change the handler emits, so the UI can
+    // attach the diff to the exact tool row (mutating tools run sequentially, but every
+    // row of the turn is already on screen, so position alone can't identify the source).
+    const handlerCtx: ToolContext = {
+      ...ctx,
+      emit: (event) => ctx.emit(event.type === "file_change" ? { ...event, toolUseId } : event),
+    };
     try {
-      return await this.withTimeout(tool.execute(input, ctx), this.defaultTimeoutMs);
+      return await this.withTimeout(tool.execute(input, handlerCtx), this.defaultTimeoutMs);
     } catch (error) {
       return {
         content: `Tool "${tool.name}" failed: ${error instanceof Error ? error.message : String(error)}`,

@@ -3,10 +3,11 @@
  * runtime/IO here; App wires events in and these just draw.
  */
 
+import { homedir } from "node:os";
 import { Box, Text, useStdout } from "ink";
 import Spinner from "ink-spinner";
 import type { SessionSummary } from "@zephyrcode/core";
-import type { TodoItem } from "@zephyrcode/shared";
+import type { FileDiff, TodoItem } from "@zephyrcode/shared";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { TAGLINE, WORDMARK_ROWS, WORDMARK_WIDTH } from "./banner";
@@ -87,28 +88,86 @@ function Markdown({ text }: { text: string }) {
   return <Text>{renderMarkdown(text, width)}</Text>;
 }
 
-function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
-  const detail = toolDetail(item.name, item.input);
-  const dur = item.durationMs !== undefined && item.durationMs >= 1000 ? ` (${(item.durationMs / 1000).toFixed(1)}s)` : "";
+const HOME = homedir();
+
+/** Collapse a leading $HOME to ~ so file paths in the activity line stay short. */
+function collapseHome(p: string): string {
+  return HOME && (p === HOME || p.startsWith(`${HOME}/`)) ? `~${p.slice(HOME.length)}` : p;
+}
+
+const FILE_TOOLS = new Set(["Read", "Write", "Edit"]);
+
+/**
+ * A git-style diff block beneath a Write/Edit row: a line-number gutter, +/- signs colored
+ * green/red, dim context, a `⋯` between non-contiguous hunks, and a `+N −M` stat footer.
+ * Long lines are clipped to the terminal width so the block never wraps into noise.
+ */
+function DiffBlock({ diff }: { diff: FileDiff }) {
+  const { stdout } = useStdout();
+  const width = Math.max(40, stdout?.columns ?? 80);
+  // Gutter width from the largest line number across all hunks (min 2).
+  let maxNum = 0;
+  for (const h of diff.hunks) for (const l of h.lines) maxNum = Math.max(maxNum, l.newLine ?? l.oldLine ?? 0);
+  const gw = Math.max(2, String(maxNum).length);
+  const textWidth = Math.max(8, width - gw - 5); // gutter + " " + sign + " " + margin
+
+  const clip = (s: string) => (s.length > textWidth ? `${s.slice(0, textWidth - 1)}…` : s);
+
   return (
-    <Box>
-      {item.status === "running" ? (
-        <Text color={theme.accent}>
-          <Spinner type="dots" />
-        </Text>
-      ) : (
-        <Text color={item.status === "error" ? theme.error : theme.success}>{item.status === "error" ? "✘" : "✔"}</Text>
-      )}
-      <Text color={theme.muted}> {item.name}</Text>
-      {detail ? <Text color={theme.faint}> {detail}</Text> : null}
-      {/* Read's "summary" is just the first numbered line of the file — pure noise next to
-          the path, so we drop it. Other tools' summaries (Bash exit code, Write/Edit result,
-          Grep/Glob counts) carry signal and stay. */}
-      {item.summary && item.status !== "running" && item.name !== "Read" ? (
-        <Text color={theme.faint}>{`  ${item.summary}${dur}`}</Text>
-      ) : item.status !== "running" && dur ? (
-        <Text color={theme.faint}>{dur}</Text>
-      ) : null}
+    <Box flexDirection="column" marginLeft={2}>
+      {diff.hunks.map((hunk, hi) => (
+        <Box key={hi} flexDirection="column">
+          {hi > 0 ? <Text color={theme.faint}>{`${" ".repeat(gw)}  ⋯`}</Text> : null}
+          {hunk.lines.map((l, li) => {
+            const num = l.newLine ?? l.oldLine;
+            const gutter = (num !== undefined ? String(num) : "").padStart(gw);
+            const sign = l.kind === "add" ? "+" : l.kind === "del" ? "-" : " ";
+            const color = l.kind === "add" ? theme.success : l.kind === "del" ? theme.error : theme.faint;
+            return (
+              <Text key={li} color={color}>{`${gutter} ${sign} ${clip(l.text)}`}</Text>
+            );
+          })}
+        </Box>
+      ))}
+      <Box>
+        <Text color={theme.success}>{`${" ".repeat(gw)}  +${diff.added}`}</Text>
+        <Text color={theme.error}>{` −${diff.removed}`}</Text>
+        {diff.truncated ? <Text color={theme.faint}>{"  … diff truncated"}</Text> : null}
+      </Box>
+    </Box>
+  );
+}
+
+function ToolView({ item }: { item: Extract<Item, { kind: "tool" }> }) {
+  const raw = toolDetail(item.name, item.input);
+  const detail = FILE_TOOLS.has(item.name) ? collapseHome(raw) : raw;
+  const dur = item.durationMs !== undefined && item.durationMs >= 1000 ? ` (${(item.durationMs / 1000).toFixed(1)}s)` : "";
+  const done = item.status !== "running";
+  // When a diff is shown, it (with its +N −M stat) replaces the textual summary — otherwise
+  // the row would repeat the path ("Edit <path>" + "Edited <path> (1 replacement)").
+  const showDiff = done && !!item.diff && item.diff.hunks.length > 0;
+  // Read's summary is just the file's first line (noise next to the path); diffed mutations
+  // defer to the block. Everything else (Bash exit, Grep/Glob counts) keeps its summary.
+  const showSummary = !!item.summary && done && item.name !== "Read" && !showDiff;
+  return (
+    <Box flexDirection="column">
+      <Box>
+        {item.status === "running" ? (
+          <Text color={theme.accent}>
+            <Spinner type="dots" />
+          </Text>
+        ) : (
+          <Text color={item.status === "error" ? theme.error : theme.success}>{item.status === "error" ? "✘" : "✔"}</Text>
+        )}
+        <Text color={theme.muted}> {item.name}</Text>
+        {detail ? <Text color={theme.faint}> {detail}</Text> : null}
+        {showSummary ? (
+          <Text color={theme.faint}>{`  ${item.summary}${dur}`}</Text>
+        ) : done && dur ? (
+          <Text color={theme.faint}>{dur}</Text>
+        ) : null}
+      </Box>
+      {showDiff ? <DiffBlock diff={item.diff!} /> : null}
     </Box>
   );
 }

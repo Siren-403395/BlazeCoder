@@ -14,6 +14,21 @@ describe("Write tool", () => {
     expect(change?.path).toBe("/src/App.tsx");
     // A freshly written file is in the ledger, so a follow-up Edit is allowed.
     expect(ctx.ledger.has("/src/App.tsx")).toBe(true);
+    // A fresh file diffs against empty → all additions, marked "create".
+    expect(change?.diff?.op).toBe("create");
+    expect(change?.diff?.added).toBeGreaterThan(0);
+    expect(change?.diff?.removed).toBe(0);
+  });
+
+  it("emits an overwrite diff against the old content (read first)", async () => {
+    const { ctx, events } = makeCtx();
+    await ctx.workspace.write({ path: "/a.ts", language: "ts", content: "keep\nold\nkeep2" });
+    await readFileTool.execute({ file_path: "/a.ts" }, ctx);
+    await writeFileTool.execute({ file_path: "/a.ts", content: "keep\nnew\nkeep2" }, ctx);
+    const change = [...events].reverse().find((e): e is Extract<AgentEvent, { type: "file_change" }> => e.type === "file_change");
+    expect(change?.diff?.op).toBe("write");
+    expect(change?.diff?.added).toBe(1);
+    expect(change?.diff?.removed).toBe(1);
   });
 
   it("refuses to overwrite an existing file that was not read first", async () => {
@@ -92,6 +107,20 @@ describe("Edit tool", () => {
 
     const notFound = await editFileTool.execute({ file_path: "/a.ts", old_string: "zzz", new_string: "q" }, ctx);
     expect(notFound.isError).toBe(true);
+  });
+
+  it("emits a structured diff of the replaced line", async () => {
+    const { ctx, events } = makeCtx();
+    await ctx.workspace.write({ path: "/a.ts", language: "ts", content: "let x = 1;" });
+    await readFileTool.execute({ file_path: "/a.ts" }, ctx);
+    await editFileTool.execute({ file_path: "/a.ts", old_string: "x = 1", new_string: "x = 2" }, ctx);
+    const change = [...events].reverse().find((e): e is Extract<AgentEvent, { type: "file_change" }> => e.type === "file_change");
+    expect(change?.op).toBe("edit");
+    expect(change?.diff?.op).toBe("edit");
+    expect(change?.diff?.added).toBe(1);
+    expect(change?.diff?.removed).toBe(1);
+    const del = change?.diff?.hunks.flatMap((h) => h.lines).find((l) => l.kind === "del");
+    expect(del?.text).toBe("let x = 1;");
   });
 
   it("rejects an empty old_string (would otherwise corrupt the file with replace_all)", async () => {
