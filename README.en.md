@@ -1,4 +1,4 @@
-<!-- language switch / 语言切换 -->
+<!-- 语言切换 / language switch -->
 <p align="center">
   <a href="README.md">简体中文</a>
   &nbsp;·&nbsp;
@@ -7,227 +7,319 @@
 
 <div align="center">
 
-<h1>✶ zephyrcode</h1>
+<h1>✶ BlazeCoder</h1>
 
-<p><b>An AI coding agent that lives in your terminal</b></p>
+<p><b>An AI coding agent that reads and writes real files and runs real commands.</b></p>
 
-<p>Reads and edits real files, runs real shell commands, powered by DeepSeek.<br>
-Not a sandboxed toy. Frontend, backend, scripts, anything.</p>
+<p>Two front-ends over one agent kernel: a terminal TUI and a desktop GUI.<br>
+Powered by DeepSeek V4 Pro, with a permission gate guarding every action that lands.</p>
 
 <p>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A5%2020-e8a64d?style=flat-square&labelColor=2b2b2b">
-  <img alt="tests" src="https://img.shields.io/badge/tests-546%20passing-e8a64d?style=flat-square&labelColor=2b2b2b">
+  <img alt="tests" src="https://img.shields.io/badge/tests-548%20passing-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="context" src="https://img.shields.io/badge/context-1M%20tokens-e8a64d?style=flat-square&labelColor=2b2b2b">
+  <img alt="output" src="https://img.shields.io/badge/output-384K-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="model" src="https://img.shields.io/badge/model-deepseek--v4--pro-e8a64d?style=flat-square&labelColor=2b2b2b">
 </p>
 
+<!-- TODO: a terminal demo GIF (asciinema / vhs) belongs right here, worth more than any paragraph. -->
+
 </div>
 
-<!-- TODO: a terminal demo GIF (asciinema / vhs) belongs here. It sells the tool better than any prose. -->
+<br>
 
 ```bash
 git clone https://github.com/zephyr4123/zephyrcode.git && cd zephyrcode && ./install.sh
 ```
 
-<div align="center"><sub>One command: build → write config → put <code>zephyrcode</code> on your PATH. Then run <code>zephyrcode</code> in any directory.</sub></div>
+<div align="center"><sub>One command: build, put it on your PATH, then walk you through pasting an API key.</sub></div>
 
-<br>
+```bash
+blazecoder           # launch the terminal TUI in the current directory
+blazecoder --gui     # launch the desktop GUI (Electron), same agent
+```
+
+---
+
+## 🔥 What it is
+
+- Edits files and runs shell directly **in your working directory**, every step through a **permission gate**, not a sandbox toy.
+- Powered by **DeepSeek V4 Pro** through a provider-adapter layer, so wiring up Gemini / Claude is just one more file.
+- **Two front-ends, one kernel**: the terminal TUI and the desktop GUI are sibling adapters sharing the same runtime.
+- A **1M-token** context window, so long sessions do not trip compaction easily.
+
+## ⚡ Highlights
 
 <table>
 <tr>
 <td valign="top" width="50%">
 
-**What it is**
+**Two front-ends, one kernel**
 
-- A **model-driven loop**: gather context → act → verify, until the model stops calling tools
-- Edits files and runs shell **in your working directory**, behind a **permission gate**
-- Ports-and-adapters: the `agent-core` kernel is host-agnostic and runs **in-process** (no HTTP server)
-- **Model-adapter architecture**: DeepSeek V4 Pro today; adding Gemini / Claude is one provider file
+A terminal TUI (Ink) and a desktop GUI (Electron) are sibling adapters over the same agent runtime. Both depend on `@blazecoder/host`; the GUI never pulls in the TUI / Ink (a guard test watches for it).
 
 </td>
 <td valign="top" width="50%">
 
-**At a glance**
+**1M window, output unleashed to 384K**
 
-- **1M-token** context, output unleashed to the model max **384K**, no small cap
-- Built-in Read / Write / Edit / Glob / Grep / Bash / TodoWrite / memory + `Task` sub-agents + `Skill`
-- Skills, sub-agents, output styles, command hooks all **drop a file, done**
-- Passive memory, session resume, per-project isolation, tunable thinking depth
+Runs in DeepSeek V4 Pro's full ~1,048,576-token context. Output is handed the model's hard 384K ceiling and shrunk only on physical overflow, with no artificial small cap.
+
+</td>
+</tr>
+<tr>
+<td valign="top" width="50%">
+
+**Uncapped agent loop, real safety floor**
+
+Gather, act, verify, with **no turn or budget cap by default** (opt in via env when you want one). Plus an `auto` full-autonomy mode that still holds the line on protected paths, the secrets guard, and the catastrophic-command tripwire.
+
+</td>
+<td valign="top" width="50%">
+
+**Provider-adapter architecture: one file per model**
+
+Every model backend lives behind one `Provider` interface (auth, URL, body, streaming, tool schema, reasoning field); onboarding, config, and runtime stay model-agnostic. Adding Gemini / Claude is one file plus one registry line. DeepSeek V4 Pro ships built in today.
 
 </td>
 </tr>
 </table>
 
-```
-prompt → [model] → tool calls (Read / Edit / Bash …) → results fed back → [model] → … → done
-```
-
----
-
-## Quickstart
-
-**Requirements**
-
-- Node.js **≥ 20**
-- pnpm (the installer enables it via `corepack`, or prompts you to install it)
-- A DeepSeek API key ([get one here](https://platform.deepseek.com); leave blank for the offline stub model)
-
-**Install and run**
-
-```bash
-git clone https://github.com/zephyr4123/zephyrcode.git zephyrcode
-cd zephyrcode
-./install.sh           # build + drop a launcher in ~/.local/bin + guide you to connect a model
-
-zephyrcode             # start the interactive TUI in the current directory
-zephyrcode --gui       # launch the desktop GUI (Electron) — same agent as the TUI
-zephyrcode --setup     # connect / switch model + key anytime
-zephyrcode --help      # all options
-zephyrcode --update    # git pull + rebuild to the latest
-```
-
-> **Two front-ends, one agent.** Use `zephyrcode` in the terminal, or `zephyrcode --gui` for a desktop window (it builds itself once on first launch). Both share the same `~/.zephyrcode/config.json` and the same agent kernel — connect a model once, use it from either.
-
-**First run guides you through connecting a model**
-
-The installer (or your first `zephyrcode` launch) opens a guided setup: **pick a model → paste your API key** (input is masked, never echoed). The key is written to `~/.zephyrcode/config.json` (mode 600). **No more hand-editing a `.env`.**
-
-**Try it with no API key**
-
-```bash
-AGENT_FAKE_MODEL=1 zephyrcode    # offline stub model, the whole TUI works, no key needed
-```
-
-> The only model today is `deepseek-v4-pro`. To switch provider or change your key, run `zephyrcode --setup`.
-> The launcher remembers where you cloned the repo; if you move it, re-run `./install.sh`.
-
----
-
-## Features
+## 🖥️ Two front-ends, one kernel
 
 <table>
-<thead><tr><th>Capability</th><th>What you get</th></tr></thead>
-<tbody>
-<tr><td><b>Tools</b></td><td>Read · Write · Edit · Glob · Grep · Bash · TodoWrite · memory (built-in); <code>Task</code> sub-agents and <code>Skill</code> (model-callable); WebSearch / WebFetch (off by default, <code>AGENT_WEB=1</code>)</td></tr>
-<tr><td><b>Permissions</b></td><td>4 modes + a rule grammar (<code>Bash(git push:*)</code>, <code>Read(src/**)</code>); built-in secrets deny-list; read-before-edit invariant</td></tr>
-<tr><td><b>Context</b></td><td>1M-token window; budget-driven graduated compaction (spill → clear old tool output → summarize last), with a thrash breaker</td></tr>
-<tr><td><b>Memory</b></td><td>Passive recall: <code>/memories/MEMORY.md</code> injected into context every turn; plus a model-driven <code>memory</code> tool</td></tr>
-<tr><td><b>Thinking depth</b></td><td><code>low</code> / <code>high</code> / <code>ultra</code> map to DeepSeek's native thinking modes; say "ultrathink" to max a single turn. <b>Controls depth, never output length</b></td></tr>
-<tr><td><b>Sessions</b></td><td>Per-project, persistent; <code>--resume</code> / <code>--continue</code>; state is isolated per project, never crosses over</td></tr>
-<tr><td><b>Extensible</b></td><td>Skills, sub-agents, output styles, command hooks are all Markdown / JSON files. No code changes</td></tr>
-</tbody>
+<tr>
+<td valign="top" width="50%">
+
+**Terminal TUI (Ink)**
+
+- Committed turns flow into Ink `<Static>` and into the terminal's native scrollback, with no redraw and no flicker
+- Renders git-style diff blocks with line numbers when files change (green add / red remove, `+N -M` stats, long hunks folded)
+- Multi-line input with soft-wrap; `@`-mention files, a `/` command palette, Tab completion, up/down history
+- Thinking depth sits in the input-box top border; `Shift+Tab` cycles permission modes live (normal to auto)
+- In-session pickers: resume a session, pick a skill, switch output style
+
+</td>
+<td valign="top" width="50%">
+
+**Desktop GUI (Electron)**
+
+- The renderer is a pure `(UiState, AgentEvent) -> UiState` reducer (a sibling of the TUI's `state.ts`), unit-tested headless
+- A chat / tool timeline with streaming output, a collapsible reasoning trace, and sub-agent rows
+- Inspector plus a diff viewer: tool args / results / timing, file changes rendered as a git diff with line numbers
+- Permission dialog with persisted scope (deny / once / always: local, project, user)
+- Sidebar listing past sessions and changed files; a top bar with project / model / mode / thinking depth and a clickable context gauge
+
+</td>
+</tr>
 </table>
 
----
+<sub>Both hosts depend on <code>@blazecoder/host</code> and <b>never on each other</b>. The GUI renderer never value-imports the TUI / Ink, enforced by a guard test.</sub>
 
-## Usage
+## 💬 Sample session
 
-<table>
-<thead><tr><th width="38%">CLI flag</th><th>What it does</th></tr></thead>
-<tbody>
-<tr><td><code>--cwd &lt;dir&gt;</code></td><td>Working directory the agent edits (default: current dir)</td></tr>
-<tr><td><code>--effort &lt;level&gt;</code></td><td>Thinking depth: <code>low</code> | <code>high</code> | <code>ultra</code> (default high)</td></tr>
-<tr><td><code>-c</code>, <code>--continue</code></td><td>Resume the most recent session</td></tr>
-<tr><td><code>--resume [id]</code></td><td>Resume a session by id; omit id to list recent sessions</td></tr>
-<tr><td><code>-p</code>, <code>--print &lt;text&gt;</code></td><td>Run one prompt headlessly and print the result (scripts / CI)</td></tr>
-<tr><td><code>--output-format &lt;fmt&gt;</code></td><td>Headless output: <code>text</code> | <code>json</code> | <code>stream-json</code></td></tr>
-<tr><td><code>--gui</code></td><td>Launch the desktop GUI (Electron) instead of the terminal UI</td></tr>
-<tr><td><code>--yolo</code></td><td>Headless: auto-approve tool calls (dangerous, trusted CI only)</td></tr>
-<tr><td><code>--update</code> · <code>-v</code> · <code>-h</code></td><td>Update to latest · version · help</td></tr>
-</tbody>
-</table>
+```console
+❯ add a debounce helper to src/utils.ts and cover it with a test
 
-<table>
-<thead><tr><th width="38%">In-session slash command</th><th>What it does</th></tr></thead>
-<tbody>
-<tr><td><code>/resume</code></td><td>Pick and resume a past conversation</td></tr>
-<tr><td><code>/effort &lt;low｜high｜ultra&gt;</code></td><td>Set thinking depth</td></tr>
-<tr><td><code>/skill</code></td><td>Pick and run a project skill</td></tr>
-<tr><td><code>/output-style [name]</code></td><td>Switch output style (next turn; <code>default</code> reverts)</td></tr>
-<tr><td><code>/usage</code> · <code>/context</code></td><td>Token usage and cost · context window fill</td></tr>
-<tr><td><code>/clear</code> · <code>/help</code> · <code>/exit</code></td><td>New session (old stays on disk) · help · quit</td></tr>
-</tbody>
-</table>
-
-**Keys**: <kbd>@</kbd> reference a file · <kbd>/</kbd> command palette · <kbd>Tab</kbd> complete · <kbd>↑</kbd><kbd>↓</kbd> completion/history · <kbd>Enter</kbd> send (queues a steering message while running) · <kbd>Esc</kbd> interrupt · <kbd>Ctrl+C</kbd> quit.
-When a tool needs approval: <kbd>y</kbd> allow once · <kbd>a</kbd> always (this project, gitignored) · <kbd>A</kbd> always (committable project rule) · <kbd>n</kbd> deny.
-
-**Sample session**
-
-```text
-❯ add a debounce helper to utils.ts and write tests for it
+  ✶ Breaking this down…
+  ☐ implement debounce()
+  ☐ write the unit test
+  ☐ run pnpm test to verify
 
   ✔ Read   src/utils.ts
-  ✔ Write  src/utils.ts
-  ✔ Write  test/utils.test.ts
-  ✔ Bash   pnpm test      passing
 
-  Added debounce() with a few edge-case tests. All green.
+  ⚠ Permission: Bash  pnpm test
+    read / write / network: write (runs the test suite)
+    [y] allow once   [a] always (local, not committed)   [A] always (commit to project rules)   [n] deny
+  ❯ a
+
+  ✔ Write  src/utils.ts
+    src/utils.ts                                              +14 -0
+    ┌─ 11 ┊ export function debounce<T extends (...a: any[]) => void>(
+    │  12 ┊   fn: T, ms: number,
+    │  13 ┊ ) { /* … +N more lines */ }
+    └─ +14 -0
+  ✔ Write  test/utils.test.ts                                +28 -0
+  ✔ Bash   pnpm test                                         passed
+
+  Added debounce(), covering immediate-fire, repeated-call, and cancel edges. All tests green.
 ```
 
----
+## 🧰 Capability matrix
 
-## Configuration
-
-Credentials are written to `~/.zephyrcode/config.json` by onboarding (`./install.sh`, first launch, or `zephyrcode --setup`): **you never hand-edit a file, and there is no `.env`**. The variables below are optional overrides (for CI / power users); the real environment always wins.
+**Loop & context**
 
 <table>
-<thead><tr><th>Variable</th><th>Default</th><th>Controls</th></tr></thead>
+<thead><tr><th>Capability</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>DEEPSEEK_API_KEY</code></td><td>(the saved one)</td><td>Override the stored key (CI / one-off). Nothing configured = offline stub</td></tr>
-<tr><td><code>ZEPHYRCODE_MODEL</code></td><td><code>deepseek-v4-pro</code></td><td>Override the active model id</td></tr>
-<tr><td><code>AGENT_CONTEXT_TOKENS</code></td><td><code>1048576</code></td><td>Context window (DeepSeek-V4-Pro ≈ 1M)</td></tr>
-<tr><td><code>AGENT_MAX_OUTPUT_TOKENS</code></td><td>unset = model max 384K</td><td>Optional output ceiling; unset = unleashed, sized to fit the window</td></tr>
-<tr><td><code>AGENT_MAX_TURNS</code> · <code>AGENT_MAX_BUDGET_USD</code></td><td><code>24</code> · <code>1.0</code></td><td>Per-run tool-turn / spend caps</td></tr>
-<tr><td><code>AGENT_WEB</code> · <code>AGENT_FAKE_MODEL</code></td><td>off · off</td><td>Enable web tools · use the offline stub model</td></tr>
+<tr><td><b>Uncapped loop</b></td><td>Gather context, call model, run tools, feed results back, with no turn / budget cap by default, running until the model finishes or you interrupt</td></tr>
+<tr><td><b>Opt-in safety caps</b></td><td>Tool-turn (<code>AGENT_MAX_TURNS</code>) and accumulated-cost (<code>AGENT_MAX_BUDGET_USD</code>) ceilings are off by default and apply only when you set them</td></tr>
+<tr><td><b>Mid-run steering</b></td><td>Type while it runs, no abort needed; the loop drains the queue after each tool turn and folds your message into the next turn</td></tr>
+<tr><td><b>Sub-agent bounding</b></td><td><code>Task</code> sub-agents get a fresh context and cannot nest; an unattended sub-agent has a 50-turn fallback cap while the main loop stays uncapped</td></tr>
+<tr><td><b>1M-token window</b></td><td>Runs in DeepSeek V4 Pro's full ~1,048,576-token window, so long sessions do not trip compaction easily</td></tr>
+<tr><td><b>Output unleashed to 384K</b></td><td>Output is handed the model's full 384K budget, trimmed only on physical overflow, with no artificial small cap</td></tr>
+<tr><td><b>Effort = thinking depth</b></td><td><code>low</code> / <code>high</code> / <code>ultra</code> map to the three native thinking modes; controls reasoning depth only, never output length</td></tr>
+<tr><td><b>Graduated compaction</b></td><td>When the window gets tight, first drops regenerable old tool output in place (no LLM call), then summarizes the history head into one dense block only if still over budget</td></tr>
+<tr><td><b>Thrash circuit breaker</b></td><td>Stops re-summarizing once it stops freeing meaningful space, instead of spinning forever</td></tr>
+<tr><td><b>Reactive compaction</b></td><td>On a context-overflow rejection, compacts once and retries that turn automatically</td></tr>
+<tr><td><b><code>/compact</code> and <code>/context</code></b></td><td>Compact on demand; get an honest per-block breakdown of window usage (system / tools / project rules / memory / history / tool output), not one blended percentage</td></tr>
+<tr><td><b>Post-compaction file rehydration</b></td><td>After summarizing, re-reads recently changed files from disk and injects their latest content, clears the read ledger, and forces a re-read before the next edit</td></tr>
 </tbody>
 </table>
 
-**Where state lives** (per-project, never crosses over):
+**Permissions & safety**
 
-```text
-~/.zephyrcode/
-  config.json                       global credentials: provider + key + model (mode 600, written by onboarding)
-  settings.json                     user-level permission rules + hooks
-  skills/  agents/  output-styles/  user-scope extensions (always loaded)
-  projects/<project-key>/           <basename>-<8-hex of sha256(cwd)>
-    sessions/                         this project's conversations
-    memory/                           this project's cross-session memory
+<table>
+<thead><tr><th>Capability</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><b>Ordered permission gate</b></td><td>Every tool call passes a fixed 8-step gate (hooks, protected paths, deny, allow, ask, mode decision, read-only auto-pass, human prompt), each decision carrying a machine-readable reason</td></tr>
+<tr><td><b>5 permission modes</b></td><td><code>default</code> (asks before any write / command) · <code>acceptEdits</code> (auto-approves edits, still asks for commands) · <code>auto</code> (full autonomy, safety floor intact) · <code>plan</code> (read-only, denies every non-read-only tool) · <code>bypass</code> (<code>--yolo</code>, allows everything)</td></tr>
+<tr><td><b>Catastrophic tripwire</b></td><td>A narrow classifier spots irreversible commands (<code>rm -rf</code> on root / home / system dirs, fork bombs, <code>dd</code> / <code>mkfs</code>, recursive chmod/chown on <code>/</code> or <code>~</code>, etc.) and forces a human confirmation even when an "always allow" rule or a hook would let them through</td></tr>
+<tr><td><b>Secrets guard</b></td><td>A deterministic guard, independent of the model and the permission mode, refuses to read or write known secret / credential files (<code>.env</code>, <code>.pem</code>, <code>id_rsa</code>, <code>.ssh/</code>, <code>.aws/</code> …) and refuses to write content that looks like an API key / private key</td></tr>
+<tr><td><b>Protected paths</b></td><td>VCS internals, secrets, shell rc, and tool config (<code>.git/</code>, <code>.ssh/</code>, <code>.aws/</code>, <code>.netrc</code> …) are checked before any allow rule and never auto-pass except under bypass</td></tr>
+<tr><td><b>Read-before-edit</b></td><td>Read records a file's mtime + size; Edit and overwrite-Write refuse any file that was never read, or that changed on disk since reading, so they never blind-edit / overwrite outside changes</td></tr>
+<tr><td><b>Rule grammar</b></td><td>Rules like <code>Bash(git push:*)</code> and <code>Read(src/**)</code> dispatch per-tool matchers; prefix / glob allow rules never match chained commands (<code>a && b</code>), while deny / ask match any sub-command</td></tr>
+<tr><td><b>Layered settings</b></td><td>Permission rules merge from three scopes (global user / committable project / gitignored local), always deny-beats-allow-beats-ask; command hooks load only for trusted workspaces</td></tr>
+<tr><td><b>Bash risk classification</b></td><td>Each command is graded read / write / network / destructive with a reason, surfaced right on the prompt</td></tr>
+<tr><td><b>Denial-loop protection</b></td><td>After the same kind of call is rejected repeatedly, the loop nudges the model to change approach instead of grinding</td></tr>
+</tbody>
+</table>
 
-<your repo>/.zephyrcode/
-  settings.json                     project permission rules + hooks (committable)
-  settings.local.json               local overrides (gitignore this)
-  skills/  agents/  output-styles/  project-scope extensions (trusted workspaces only)
+**Tools & extensibility**
+
+<table>
+<thead><tr><th>Capability</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><b>Built-in tool set</b></td><td>Read / Write / Edit / Glob / Grep / Bash, reading and writing real files and running real commands; Glob and Grep are pure-Node, with no ripgrep dependency</td></tr>
+<tr><td><b>TodoWrite task list</b></td><td>Maintains a live session task list (exactly one item in progress at a time), shows it to you, and nudges you to run verification before marking 3+ items done</td></tr>
+<tr><td><b><code>Task</code> sub-agent delegation</b></td><td>Dispatches a specialized sub-agent (builder / read-only explorer / custom) to work in a fresh context and return only a distilled report; sub-agents are structurally barred from nesting again</td></tr>
+<tr><td><b><code>Skill</code></b></td><td>Reusable prompt recipes defined in SKILL.md (with <code>$ARGUMENTS</code> / <code>${SKILL_DIR}</code>) become model-callable (also <code>/name</code>-callable) tools, expanded inline or forked into a restricted sub-agent</td></tr>
+<tr><td><b>Passive auto-memory</b></td><td>Each turn auto-injects the project <code>/memories/MEMORY.md</code> index (capped at 4000 chars) into context, recalling prior work without spending a tool call</td></tr>
+<tr><td><b><code>memory</code> tool</b></td><td>Model-driven memory sandboxed to <code>/memories</code> (view/create/str_replace/insert/delete/rename); persistent notes survive compaction and survive across sessions</td></tr>
+<tr><td><b>WebSearch / WebFetch</b></td><td>Optional read-only web tools behind a WebClient port, registered only when config explicitly enables them (<code>AGENT_WEB=1</code>)</td></tr>
+<tr><td><b>Output styles</b></td><td>Drop-in markdown style files reshape how the model responds, switchable live in-session via <code>/output-style</code></td></tr>
+<tr><td><b>settings.json command hooks</b></td><td>PreToolUse / PostToolUse hooks shell out to any command (deny/ask/rewrite the input) for validation, formatting, audit logging; project hooks load only for trusted workspaces, with a global kill switch</td></tr>
+<tr><td><b>Tool-output spill to disk</b></td><td>Each tool can declare its own max output size; oversized output spills to <code>.blazecoder/tool-results</code>, leaving only a head/tail preview to read back, instead of flooding context</td></tr>
+</tbody>
+</table>
+
+## 🏗️ Architecture
+
+The agent loop is deliberately "dumb": assemble context, call the model, run tools, feed results back, repeat.
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │                                          │
+                    ▼                                          │
+  you  ──▶ [ gather context ] ──▶ [ call model ] ──▶ tool calls?
+              ▲                                  │
+              │                            yes   │   no
+  steering    │                  ┌──────────────┴───────┐
+  (type while │                  ▼                      ▼
+   it runs)   │           [ permission gate ]     [ done / reply ]
+              │                  │
+              │          allow / ask / deny
+              │                  ▼
+              └────────  [ run tools, feed results back ]
+                                 │
+                  (uncapped by default · auto-compacts when the 1M window fills)
 ```
 
-The API key stays global; everything project-specific either travels with the repo or lives under the per-project state dir.
+Ports and adapters: the kernel is host-agnostic, runs in-process, and serves no HTTP.
 
----
+```
+   @blazecoder/shared      types, validation, secret patterns (no deps)
+          ▲
+   @blazecoder/core        the agent kernel: loop, tools, permissions, context
+          ▲                engine. host-agnostic, fully unit-tested
+   @blazecoder/host        Node/OS wiring: filesystem, providers, config, sessions
+          ▲
+     ┌────┴─────┐
+ @blazecoder/   @blazecoder/
+    cli            desktop      ← sibling UI adapters
+  (Ink TUI)      (Electron)        desktop never imports cli / Ink
+```
 
-## Extending
+<sub>The kernel publishes as <code>@blazecoder/core</code> (its directory is <code>packages/agent-core</code>). The two UI adapters are equal siblings with no cross-dependency edge, a structural constraint enforced by a guard test, and the most important architectural selling point of the project.</sub>
 
-Drop a file in, no rebuild needed. User scope (`~/.zephyrcode/…`) always loads; project scope (`<repo>/.zephyrcode/…`) loads once you **trust** the workspace.
+## ⚙️ Configuration
+
+Your credentials are written to `~/.blazecoder/config.json` by the guided setup (`./install.sh`, first launch, or `blazecoder --setup`). **You never edit a file by hand, and there are no `.env` files.**
+
+The environment variables below are all optional overrides for CI and advanced use; real environment variables always win. Thinking depth (`low` / `high` / `ultra`) maps to DeepSeek's three native thinking modes and **controls reasoning depth only, never output length**.
+
+**Permission modes**
+
+<table>
+<thead><tr><th>Mode</th><th>Behavior</th></tr></thead>
+<tbody>
+<tr><td><code>default</code></td><td>Asks before any file write / command run</td></tr>
+<tr><td><code>acceptEdits</code></td><td>Auto-approves file edits, still asks for commands</td></tr>
+<tr><td><code>auto</code></td><td>Full autonomy, no prompts; protected paths, secrets guard, and the catastrophic tripwire still apply</td></tr>
+<tr><td><code>plan</code></td><td>Read-only; denies every non-read-only tool</td></tr>
+<tr><td><code>bypass</code></td><td><code>--yolo</code>, allows everything (dangerous, trusted CI only)</td></tr>
+</tbody>
+</table>
+
+**Optional environment variables**
+
+<table>
+<thead><tr><th>Variable</th><th>Default</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>DEEPSEEK_API_KEY</code></td><td>(saved by setup)</td><td>Overrides the stored key (CI / temporary); with nothing configured at all it falls back to an offline stub</td></tr>
+<tr><td><code>BLAZECODER_MODEL</code></td><td><code>deepseek-v4-pro</code></td><td>Overrides the current model id</td></tr>
+<tr><td><code>AGENT_MAX_TURNS</code> · <code>AGENT_MAX_BUDGET_USD</code></td><td>unset = no limit</td><td>Optional tool-turn / cost ceilings, off by default</td></tr>
+<tr><td><code>AGENT_MAX_OUTPUT_TOKENS</code></td><td>unset = model max 384K</td><td>Optional output cap; unset means full, shrunk dynamically by window</td></tr>
+<tr><td><code>AGENT_WEB</code> · <code>AGENT_FAKE_MODEL</code></td><td>off · off</td><td>Enable the web tools · use the offline stub model (try the whole UI with no key)</td></tr>
+</tbody>
+</table>
+
+Credentials live in `~/.blazecoder/config.json` (mode 600, written atomically). Sessions and cross-session memory are isolated per project under `~/.blazecoder/projects/<project-key>/`, so they never cross-contaminate. The permission settings files (`.blazecoder/settings.json` committable, `settings.local.json` best gitignored) travel with the repo.
+
+## 🚦 CLI reference
+
+<table>
+<thead><tr><th width="34%">Flag</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>blazecoder</code></td><td>Launch the terminal TUI in the current directory</td></tr>
+<tr><td><code>--gui</code> · <code>--desktop</code></td><td>Launch the desktop GUI (Electron) instead of the terminal</td></tr>
+<tr><td><code>--cwd &lt;dir&gt;</code></td><td>Working directory the agent operates in (default: current dir)</td></tr>
+<tr><td><code>--effort &lt;level&gt;</code></td><td>Thinking depth: <code>low</code> | <code>high</code> | <code>ultra</code> (default high)</td></tr>
+<tr><td><code>-c</code>, <code>--continue</code></td><td>Resume the most recent session</td></tr>
+<tr><td><code>--resume [id]</code></td><td>Resume a session by id; omit the id to list recent sessions</td></tr>
+<tr><td><code>-p</code>, <code>--print &lt;text&gt;</code></td><td>Run one prompt headless and print the result (scripts / CI)</td></tr>
+<tr><td><code>--output-format &lt;format&gt;</code></td><td>Headless output: <code>text</code> | <code>json</code> | <code>stream-json</code></td></tr>
+<tr><td><code>--setup</code></td><td>Connect / switch the model provider and API key, then exit</td></tr>
+<tr><td><code>-v</code> · <code>-h</code></td><td>Version · help</td></tr>
+</tbody>
+</table>
+
+<sub>In-session slash commands too: <code>/effort</code>, <code>/resume</code>, <code>/skill</code>, <code>/output-style</code>, <code>/context</code>, <code>/usage</code>, <code>/compact</code>, <code>/changes</code>, <code>/clear</code>, <code>/help</code>.</sub>
+
+## 🧩 Extending
+
+Drop a file and it takes effect, no rebuild needed. User scope (`~/.blazecoder/…`) always loads; project scope (`<repo>/.blazecoder/…`) requires **trusting the workspace** first.
 
 <details>
-<summary><b>Skill</b> &nbsp;<code>&lt;repo&gt;/.zephyrcode/skills/&lt;name&gt;/SKILL.md</code></summary>
+<summary><b>Skill</b> &nbsp;<code>&lt;repo&gt;/.blazecoder/skills/&lt;name&gt;/SKILL.md</code></summary>
 
 <br>
 
 ```markdown
 ---
 name: review-pr
-description: Review the working changes for bugs and style
-context: inline          # inline (body returned as-is) | fork (runs as a sub-agent)
+description: Review workspace changes for bugs and style
+context: inline          # inline (body returned verbatim) | fork (run as a sub-agent)
 allowedTools: [Read, Grep, Bash]   # fork only
 ---
-Review `git diff` for $ARGUMENTS. Skill files live in ${SKILL_DIR}.
+Review the part of `git diff` about $ARGUMENTS. The skill files live at ${SKILL_DIR}.
 ```
 
 </details>
 
 <details>
-<summary><b>Sub-agent</b> &nbsp;<code>&lt;repo&gt;/.zephyrcode/agents/&lt;name&gt;.md</code></summary>
+<summary><b>Sub-agent</b> &nbsp;<code>&lt;repo&gt;/.blazecoder/agents/&lt;name&gt;.md</code></summary>
 
 <br>
 
@@ -238,13 +330,13 @@ description: Read-only codebase explorer
 tools: [Read, Grep, Glob]
 maxTurns: 12
 ---
-You are a focused codebase explorer. Report findings concisely; never edit files.
+You are a focused codebase explorer. Report findings concisely and never modify files.
 ```
 
 </details>
 
 <details>
-<summary><b>Output style</b> &nbsp;<code>&lt;repo&gt;/.zephyrcode/output-styles/&lt;name&gt;.md</code></summary>
+<summary><b>Output style</b> &nbsp;<code>&lt;repo&gt;/.blazecoder/output-styles/&lt;name&gt;.md</code></summary>
 
 <br>
 
@@ -252,7 +344,7 @@ You are a focused codebase explorer. Report findings concisely; never edit files
 ---
 name: terse
 description: One-sentence answers
-keepCodingInstructions: true   # true augments the base prompt; false replaces it
+keepCodingInstructions: true   # true appends to the base prompt; false replaces it
 ---
 Answer in as few words as possible.
 ```
@@ -280,75 +372,35 @@ Answer in as few words as possible.
 }
 ```
 
-Command hooks run arbitrary shell, so project-scope hooks load only for a **trusted** workspace; `ZEPHYRCODE_DISABLE_HOOKS=1` is the global kill switch.
+Command hooks run arbitrary shell, so project-scope hooks load only for **trusted workspaces**; `BLAZECODER_DISABLE_HOOKS=1` is the global kill switch.
 
 </details>
 
----
+<details>
+<summary><b>Add a model provider</b> &nbsp;<code>packages/host/src/providers/&lt;name&gt;.ts</code></summary>
 
-## Architecture
+<br>
 
-A pnpm + Turborepo monorepo, ports and adapters:
+Every model backend lives behind one `Provider` interface (auth header, base URL, request body, streaming format, tool schema, reasoning field). Wiring up Gemini / Claude is writing one provider file and adding one line to the `PROVIDERS` array in `registry.ts`; the guided setup lists it automatically.
 
-```text
-packages/
-  shared/      types shared across the agent (file / event / session schema, safety)
-  agent-core/  the portable, unit-tested kernel (@zephyrcode/core), depends only on ports:
-               loop · context (compaction/memory) · tools · permissions/hooks · sessions
-               · workspace (real FS + boundary + read-before-edit ledger)
-               · skills / sub-agents / output-styles · effort
-  host/        the Node/OS wiring (@zephyrcode/host): model gateway · local-process sandbox
-               · config/settings/credentials · session+memory stores · provider registry
-               · headless renderer · buildRuntime(). No UI code at all.
-  cli/         terminal host: Ink TUI + headless, wires host + agent-core in-process
-  desktop/     desktop host: an Electron GUI, a sibling of the TUI; also wires host in-process
-docs/ARCHITECTURE.md
-```
+</details>
 
-The dependency graph is a clean DAG: `shared ← core ← host ← {cli, desktop}`. Both UI hosts depend on `host` and **never on each other** — the TUI and the GUI are interchangeable sibling adapters over one runtime. The GUI renderer is an **Ink-free island** (it type-imports kernel types only, never a value import), so adding a web / vscode host later is just one more package with no change to core/cli.
+## 🛠️ Develop
 
-`agent-core` has **no** UI, HTTP, or DeepSeek imports. Everything crosses the boundary through ports (`ModelGateway`, `Workspace`, `Sandbox`, `SessionStore`, `MemoryStore`, `Clock`, `Logger`), so it runs fully under unit tests with in-memory fakes, runs **in-process** under any host, and swapping/adding a model is one provider (with its own adapter) in `host`.
-
----
-
-## Development
+A pnpm + Turborepo monorepo.
 
 ```bash
 pnpm install
-pnpm --filter @zephyrcode/cli zephyrcode    # run the TUI via tsx (no build step)
-pnpm --filter @zephyrcode/cli build         # produce packages/cli/dist/zephyrcode.js
-pnpm desktop                                # desktop GUI in dev mode (Vite HMR + Electron)
+pnpm --filter @blazecoder/cli build    # produces packages/cli/dist/blazecoder.js
+pnpm desktop                           # desktop GUI dev mode (Vite HMR + Electron)
 
 pnpm typecheck    # all packages
-pnpm test         # unit + integration + e2e (546 tests)
+pnpm test         # unit + integration + e2e (548)
 pnpm build        # build everything
 ```
 
-> End users run `zephyrcode --gui` (loads the built GUI); `pnpm desktop` is the dev command with hot reload.
+Workspace layout: `packages/{shared, agent-core, host, cli, desktop}`. `agent-core` runs its full unit suite with in-memory fakes; end users run `blazecoder --gui` (which loads the built GUI), while `pnpm desktop` is the hot-reload dev command (needs a graphical display).
 
-- **Unit**: every `agent-core` module + shared safety primitives + the TUI reducer
-- **Integration**: the full loop with a scripted model + in-memory fakes; the headless runner
-- **E2E**: builds the real bundle and drives the real `node dist/zephyrcode.js` process (argv, config, exit codes, headless output)
+## 📄 License
 
-New kernel capability: **a tool** is a `Tool` in `agent-core/src/tools/builtin/` plus a registration; **a guardrail** is a `PreToolUse` / `PostToolUse` hook (no loop changes); **a model provider** is one file in `cli/src/providers/` (with its own `ModelGateway` adapter) registered in the registry, and onboarding then lists it automatically.
-
----
-
-## Roadmap
-
-- More model providers: Gemini, Claude, and others (the provider registry is ready; just add a file)
-- OS-level command sandbox (macOS `sandbox-exec` / Linux `bwrap`) behind the existing `Sandbox` port
-- MCP server/tool integration (the tool-call contract is already transport-agnostic)
-
----
-
-<div align="center">
-
-<sub>Inspired by Anthropic's <a href="https://www.anthropic.com/claude-code">Claude Code</a>, powered by <a href="https://www.deepseek.com">DeepSeek</a>.<br>
-zephyrcode is an independent project, not affiliated with or endorsed by Anthropic or DeepSeek.</sub>
-
-<br><br>
-
-License <a href="LICENSE"><b>MIT</b></a> © 2026 Zephyr Huang &nbsp;·&nbsp; <a href="README.md">简体中文</a>
-
-</div>
+<a href="LICENSE"><b>MIT</b></a> © 2026 Zephyr Huang &nbsp;·&nbsp; <a href="README.md">简体中文</a>

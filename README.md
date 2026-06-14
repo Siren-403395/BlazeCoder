@@ -7,210 +7,302 @@
 
 <div align="center">
 
-<h1>✶ zephyrcode</h1>
+<h1>✶ BlazeCoder</h1>
 
-<p><b>一个跑在你终端里的 AI 编程智能体</b></p>
+<p><b>一个读写真实文件、执行真实命令的 AI 编程智能体</b></p>
 
-<p>在终端里读写真实文件、执行真实命令，由 DeepSeek 驱动。<br>
-不是沙箱玩具，能干前端、后端、脚本，任何活儿。</p>
+<p>终端 TUI 与桌面 GUI 两种界面，同一个智能体内核。<br>
+由 DeepSeek V4 Pro 驱动，权限闸门把守每一次落地。</p>
 
 <p>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A5%2020-e8a64d?style=flat-square&labelColor=2b2b2b">
-  <img alt="tests" src="https://img.shields.io/badge/tests-546%20passing-e8a64d?style=flat-square&labelColor=2b2b2b">
+  <img alt="tests" src="https://img.shields.io/badge/tests-548%20passing-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="context" src="https://img.shields.io/badge/context-1M%20tokens-e8a64d?style=flat-square&labelColor=2b2b2b">
+  <img alt="output" src="https://img.shields.io/badge/output-384K-e8a64d?style=flat-square&labelColor=2b2b2b">
   <img alt="model" src="https://img.shields.io/badge/model-deepseek--v4--pro-e8a64d?style=flat-square&labelColor=2b2b2b">
 </p>
 
+<!-- TODO: 这里非常适合放一段终端演示 GIF（asciinema / vhs 录制），比任何文字都有说服力。 -->
+
 </div>
 
-<!-- TODO: 这里非常适合放一段终端演示 GIF（asciinema / vhs 录制），比任何文字都有说服力。 -->
+<br>
 
 ```bash
 git clone https://github.com/zephyr4123/zephyrcode.git && cd zephyrcode && ./install.sh
 ```
 
-<div align="center"><sub>一条命令：构建 → 装上 PATH → 引导你粘贴 API Key。然后在任意目录敲 <code>zephyrcode</code> 即可。</sub></div>
+<div align="center"><sub>一条命令：构建 → 装上 PATH → 引导你粘贴 API Key。</sub></div>
 
-<br>
+```bash
+blazecoder           # 在当前目录启动终端 TUI
+blazecoder --gui     # 启动桌面 GUI（Electron），同一个智能体
+```
+
+---
+
+## 🔥 它是什么
+
+- 在**你的工作目录**里直接改文件、跑 shell，每一步都过**权限闸门**，不是沙箱玩具。
+- 由 **DeepSeek V4 Pro** 驱动，走 provider 适配器架构，接入 Gemini / Claude 只是加一个文件。
+- **两套界面，一个内核**：终端 TUI 与桌面 GUI 是对等的兄弟适配器，共用同一份 runtime。
+- **100 万 token** 上下文窗口，长会话不轻易触发压缩。
+
+## ⚡ 亮点
 
 <table>
 <tr>
 <td valign="top" width="50%">
 
-**它是什么**
+**两套界面，一个内核**
 
-- 一个**模型驱动的循环**：取上下文 → 动手 → 验证，直到模型不再调用工具
-- 在**你的工作目录**里直接改文件、跑 shell，全程**权限闸门**把守
-- 端口与适配器架构：内核 `agent-core` 与宿主无关，**进程内**运行，没有 HTTP 服务
-- **模型适配器架构**：当前内置 DeepSeek V4 Pro，接入 Gemini / Claude 等只需加一个 provider 文件
+终端 TUI（Ink）与桌面 GUI（Electron）是对等的兄弟适配器，跑在同一个智能体 runtime 上。两者都依赖 `@blazecoder/host`，GUI 永不引入 TUI/Ink（有守卫测试盯着）。
 
 </td>
 <td valign="top" width="50%">
 
-**一眼速览**
+**100 万窗口，输出放到 384K**
 
-- 上下文 **100 万 token**，输出放到模型上限 **384K**，不设小限
-- 内置 Read / Write / Edit / Glob / Grep / Bash / TodoWrite / memory + 子智能体 `Task` + 技能 `Skill`
-- 技能、子智能体、输出风格、命令钩子全部**放文件即生效**
-- 被动记忆、会话恢复、按项目隔离、思考深度可调
+跑在 DeepSeek V4 Pro 约 1,048,576 token 的完整上下文里，输出交给模型 384K 的硬上限，只在物理溢出时才收缩，不设人为小限。
+
+</td>
+</tr>
+<tr>
+<td valign="top" width="50%">
+
+**不设上限的智能体循环 + 真正的安全底线**
+
+取上下文 → 动手 → 验证，默认**不设轮数或花费上限**（要的话用环境变量开）。外加一个 `auto` 全自治模式，仍守住受保护路径、密钥防护与毁灭性命令绊线。
+
+</td>
+<td valign="top" width="50%">
+
+**Provider 适配器架构：加一个文件接一个模型**
+
+每个模型后端都活在同一个 `Provider` 接口之后（鉴权、URL、请求体、流式、工具 schema、思考字段），引导 / 配置 / runtime 全程模型无关。加 Gemini / Claude 就是一个文件 + 注册表一行。今天内置 DeepSeek V4 Pro。
 
 </td>
 </tr>
 </table>
 
+## 🖥️ 两套界面，一个内核
+
+<table>
+<tr>
+<td valign="top" width="50%">
+
+**终端 TUI（Ink）**
+
+- 已落定的对话提交进 Ink `<Static>`，滚进终端原生历史，无重绘、无闪烁
+- 写 / 改文件时渲染 git 风格的带行号 diff 块（绿加红减、`+N -M` 统计、超长折叠）
+- 多行输入 + 软换行；`@` 引用文件、`/` 命令面板、Tab 补全、↑↓ 历史
+- 思考深度嵌在输入框上边框；`Shift+Tab` 实时切换权限模式（normal ⇄ auto）
+- 会话内选择器：恢复会话 / 挑技能 / 切输出风格
+
+</td>
+<td valign="top" width="50%">
+
+**桌面 GUI（Electron）**
+
+- 渲染层是一个纯 `(UiState, AgentEvent) -> UiState` reducer（TUI `state.ts` 的兄弟），全程 headless 单测
+- 对话 / 工具时间线带流式输出、可折叠的思考轨迹、子智能体行
+- 检查器 + diff 查看器：工具入参 / 出参 / 计时，文件改动渲染带行号的 git diff
+- 权限弹窗带持久化范围（拒绝 / 本次 / 永久 local·project·user）
+- 侧栏列历史会话与改动文件，顶栏有项目 / 模型 / 模式 / 思考深度 / 可点的上下文仪表
+
+</td>
+</tr>
+</table>
+
+<sub>两个 host 都依赖 <code>@blazecoder/host</code>、<b>互不依赖</b>。GUI 渲染层永不 value-import TUI/Ink，由一个守卫测试强制保证。</sub>
+
+## 💬 示例会话
+
+```console
+❯ 给 src/utils.ts 加一个防抖函数，并补上测试
+
+  ✶ 拆解任务…
+  ☐ 实现 debounce()
+  ☐ 补单元测试
+  ☐ 跑 pnpm test 验证
+
+  ✔ Read   src/utils.ts
+
+  ⚠ 权限：Bash  pnpm test
+    读 / 写 / 网络：写（运行测试）
+    [y] 本次允许   [a] 永久允许（本地，不提交）   [A] 永久允许（提交进项目规则）   [n] 拒绝
+  ❯ a
+
+  ✔ Write  src/utils.ts
+    src/utils.ts                                              +14 -0
+    ┌─ 11 ┊ export function debounce<T extends (...a: any[]) => void>(
+    │  12 ┊   fn: T, ms: number,
+    │  13 ┊ ) { /* … +N more lines */ }
+    └─ +14 -0
+  ✔ Write  test/utils.test.ts                                +28 -0
+  ✔ Bash   pnpm test                                         通过
+
+  已加 debounce()，覆盖了立即触发、连续调用与取消三种边界，测试全绿。
 ```
-prompt → [模型] → 工具调用 (Read / Edit / Bash …) → 结果回填 → [模型] → … → 完成
-```
 
----
+## 🧰 能力清单
 
-## 快速开始
-
-**前置要求**
-
-- Node.js **≥ 20**
-- pnpm（安装脚本会用 `corepack` 自动启用，没有则提示你装）
-- 一个 DeepSeek API Key（[在这里申请](https://platform.deepseek.com)；留空则用离线 stub 模型）
-
-**安装并运行**
-
-```bash
-git clone https://github.com/zephyr4123/zephyrcode.git zephyrcode
-cd zephyrcode
-./install.sh           # 构建 + 装 launcher 到 ~/.local/bin + 引导你连接模型
-
-zephyrcode             # 在当前目录启动交互式 TUI
-zephyrcode --gui       # 启动桌面 GUI（Electron），与 TUI 同一个智能体
-zephyrcode --setup     # 随时重新连接 / 切换模型与 Key
-zephyrcode --help      # 查看所有参数
-zephyrcode --update    # git pull + 重新构建到最新
-```
-
-> **两种界面，一个智能体。** 终端里用 `zephyrcode`；想要图形界面就 `zephyrcode --gui`（首次会自动构建一次）。两者共用同一份 `~/.zephyrcode/config.json` 与同一套智能体内核——连一次模型,两边都能用。
-
-**首次运行会引导你连接模型**
-
-安装脚本（或第一次启动 `zephyrcode`）会弹出引导：**选模型 → 粘贴 API Key**（输入全程掩码，不回显）。Key 会写进 `~/.zephyrcode/config.json`（权限 600），**再也不用手动建 `.env`**。
-
-**没有 API Key 也能先跑起来**
-
-```bash
-AGENT_FAKE_MODEL=1 zephyrcode    # 离线 stub 模型，整套 TUI 都能体验，不需要 key
-```
-
-> 当前可选模型只有 `deepseek-v4-pro`。要换 provider 或改 Key，随时跑 `zephyrcode --setup`。
-> launcher 记着你 clone 的位置；挪了目录就重新跑一次 `./install.sh`。
-
----
-
-## 核心能力
+**循环与上下文**
 
 <table>
 <thead><tr><th>能力</th><th>说明</th></tr></thead>
 <tbody>
-<tr><td><b>工具</b></td><td>Read · Write · Edit · Glob · Grep · Bash · TodoWrite · memory（内置）；<code>Task</code> 子智能体、<code>Skill</code> 技能（模型可调）；WebSearch / WebFetch（默认关，<code>AGENT_WEB=1</code> 开）</td></tr>
-<tr><td><b>权限</b></td><td>4 种模式 + 规则语法（<code>Bash(git push:*)</code>、<code>Read(src/**)</code>）；内置密钥黑名单；改文件前必须先读（read-before-edit）</td></tr>
-<tr><td><b>上下文</b></td><td>100 万 token 窗口；按预算分级压缩（先落盘、再清旧工具输出、最后才摘要），带防抖断路器</td></tr>
-<tr><td><b>记忆</b></td><td>被动记忆：每轮自动把 <code>/memories/MEMORY.md</code> 索引注入上下文；外加模型主动读写的 <code>memory</code> 工具</td></tr>
-<tr><td><b>思考深度</b></td><td><code>low</code> / <code>high</code> / <code>ultra</code> 对应 DeepSeek 原生思考档位；说一句 “ultrathink” 把当轮拉满。<b>只控思考，不限输出</b></td></tr>
-<tr><td><b>会话</b></td><td>按项目持久化；<code>--resume</code> / <code>--continue</code> 恢复；状态按项目隔离，互不串</td></tr>
-<tr><td><b>扩展</b></td><td>技能、子智能体、输出风格、命令钩子全部放 Markdown / JSON 文件即生效，无需改代码</td></tr>
+<tr><td><b>不设上限的循环</b></td><td>取上下文 → 调模型 → 执行工具 → 结果回填，默认无轮数 / 花费上限，跑到模型完成或你打断为止</td></tr>
+<tr><td><b>可选的安全上限</b></td><td>工具轮数（<code>AGENT_MAX_TURNS</code>）与累计花费（<code>AGENT_MAX_BUDGET_USD</code>）上限默认关闭，仅在你显式配置时生效</td></tr>
+<tr><td><b>运行中插话</b></td><td>运行时直接输入即可，无需打断；循环在每轮工具后排空队列，把消息折进下一轮对话</td></tr>
+<tr><td><b>子智能体边界</b></td><td><code>Task</code> 子智能体跑在全新上下文里且不可嵌套；无人值守的子智能体有 50 轮兜底上限，主循环则不设限</td></tr>
+<tr><td><b>100 万 token 窗口</b></td><td>跑在 DeepSeek V4 Pro 约 1,048,576 token 的完整窗口里，长会话不轻易触发压缩</td></tr>
+<tr><td><b>输出放满 384K</b></td><td>输出交给模型 384K 的完整预算，只在物理溢出时才收缩，不设人为小限</td></tr>
+<tr><td><b>思考深度 = effort</b></td><td><code>low</code> / <code>high</code> / <code>ultra</code> 映射到三种原生思考档位，只控推理深度，从不动输出长度</td></tr>
+<tr><td><b>分级压缩</b></td><td>窗口吃紧时先就地清掉可再生的旧工具输出（不调模型），仍超预算才把历史头部摘要成一个密集块</td></tr>
+<tr><td><b>防抖断路器</b></td><td>当再摘要也释放不出有意义的空间时就停手，而非无限空转</td></tr>
+<tr><td><b>响应式压缩</b></td><td>遇到上下文溢出被拒时，压缩一次并自动重试该轮</td></tr>
+<tr><td><b><code>/compact</code> 与 <code>/context</code></b></td><td>可按需手动压缩；按块如实拆解窗口占用（系统 / 工具 / 项目规则 / 记忆 / 历史 / 工具输出），而非一个笼统占用比</td></tr>
+<tr><td><b>压缩后文件回灌</b></td><td>摘要后从磁盘重新读取近期改动文件并注入最新内容，清空读账本，强制下次编辑前重读</td></tr>
 </tbody>
 </table>
 
----
-
-## 用法
+**权限与安全**
 
 <table>
-<thead><tr><th width="38%">命令行参数</th><th>作用</th></tr></thead>
+<thead><tr><th>能力</th><th>说明</th></tr></thead>
 <tbody>
+<tr><td><b>有序权限闸门</b></td><td>每次工具调用过固定的 8 步闸门（钩子 → 受保护路径 → deny → allow → ask → 模式判定 → 只读自动放行 → 人工询问），每个决定都带机器可读的理由</td></tr>
+<tr><td><b>5 种权限模式</b></td><td><code>default</code>（写 / 命令前都问） · <code>acceptEdits</code>（自动批改、命令仍问） · <code>auto</code>（全自治，安全底线仍在） · <code>plan</code>（只读，非只读工具全拒） · <code>bypass</code>（<code>--yolo</code>，全放行）</td></tr>
+<tr><td><b>毁灭性命令绊线</b></td><td>一个窄分类器识别不可逆命令（对根 / home / 系统目录 <code>rm -rf</code>、fork bomb、<code>dd</code>/<code>mkfs</code>、对 <code>/</code>~ 递归 chmod/chown 等），即使有「永久允许」规则或钩子放行也强制人工确认</td></tr>
+<tr><td><b>密钥防护</b></td><td>一个独立于模型与权限模式的确定性防护，拒绝读写已知密钥 / 凭据文件（<code>.env</code>、<code>.pem</code>、<code>id_rsa</code>、<code>.ssh/</code>、<code>.aws/</code> …），也拒绝写看起来像 API key / 私钥的内容</td></tr>
+<tr><td><b>受保护路径</b></td><td>VCS 内部、密钥、shell rc、工具配置（<code>.git/</code>、<code>.ssh/</code>、<code>.aws/</code>、<code>.netrc</code> …）在任何 allow 规则之前检查，除 bypass 外永不自动放行</td></tr>
+<tr><td><b>改前必读</b></td><td>Read 记下文件 mtime+size；Edit 与覆盖式 Write 拒绝未读过、或读取后在磁盘上变过的文件，绝不盲改 / 覆盖外部改动</td></tr>
+<tr><td><b>规则语法</b></td><td><code>Bash(git push:*)</code>、<code>Read(src/**)</code> 这样的规则，按工具分派匹配器；prefix/通配的 allow 规则永不匹配链式命令（<code>a && b</code>），deny / ask 则匹配任意子命令</td></tr>
+<tr><td><b>分层设置</b></td><td>权限规则从三个范围合并（全局用户 / 可提交项目 / gitignore 本地），一律 deny 胜 allow 胜 ask；命令钩子仅对受信任工作区加载</td></tr>
+<tr><td><b>Bash 风险分级</b></td><td>每条命令都被分级为读 / 写 / 网络 / 毁灭性并带理由，结果直接展示在询问弹窗上</td></tr>
+<tr><td><b>拒绝循环防护</b></td><td>同类调用被反复拒绝后，循环会提示模型换一种思路，而不是死磕</td></tr>
+</tbody>
+</table>
+
+**工具与扩展**
+
+<table>
+<thead><tr><th>能力</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><b>内置工具集</b></td><td>Read / Write / Edit / Glob / Grep / Bash，读写真实文件、跑真实命令；Glob 与 Grep 纯 Node 实现，不依赖 ripgrep</td></tr>
+<tr><td><b>TodoWrite 任务列表</b></td><td>维护一份实时会话任务列表（同时只有一项进行中），展示给你看，并在标记 3+ 项完成前提示先跑验证</td></tr>
+<tr><td><b><code>Task</code> 子智能体委派</b></td><td>派出专门子智能体（builder / 只读 explorer / 自定义）在全新上下文里干活，只回传提炼后的报告；子智能体结构上禁止再嵌套</td></tr>
+<tr><td><b><code>Skill</code> 技能</b></td><td>SKILL.md 定义的可复用提示词配方（支持 <code>$ARGUMENTS</code>/<code>${SKILL_DIR}</code>）成为模型可调（也可 <code>/名称</code> 调）的工具，可 inline 展开或 fork 成受限子智能体</td></tr>
+<tr><td><b>被动自动记忆</b></td><td>每轮自动把项目 <code>/memories/MEMORY.md</code> 索引（上限 4000 字）注入上下文，无需花一次工具调用就能回忆既往工作</td></tr>
+<tr><td><b><code>memory</code> 工具</b></td><td>沙箱在 <code>/memories</code> 的模型主动记忆（view/create/str_replace/insert/delete/rename），持久笔记跨压缩、跨会话存活</td></tr>
+<tr><td><b>WebSearch / WebFetch</b></td><td>可选只读联网工具，藏在 WebClient 端口之后，仅在配置显式开启（<code>AGENT_WEB=1</code>）时注册</td></tr>
+<tr><td><b>输出风格</b></td><td>放入即生效的 markdown 风格文件重塑模型作答方式，会话内可用 <code>/output-style</code> 实时切换</td></tr>
+<tr><td><b>settings.json 命令钩子</b></td><td>PreToolUse / PostToolUse 钩子 shell out 到任意命令（deny/ask/改写入参），加校验、格式化、审计日志；项目级钩子仅对受信任工作区加载，带全局总开关</td></tr>
+<tr><td><b>工具输出落盘</b></td><td>每个工具可声明自己的最大输出尺寸；超限输出落盘到 <code>.blazecoder/tool-results</code>，只留头尾预览供回读，不淹没上下文</td></tr>
+</tbody>
+</table>
+
+## 🏗️ 架构
+
+智能体循环刻意做得很「笨」：装上下文、调模型、执行工具、结果回填、重复。
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │                                          │
+                    ▼                                          │
+   你  ──▶ [ 取上下文 ] ──▶ [ 调模型 ] ──▶ 有工具调用？
+              ▲                                  │
+              │                            有    │   无
+   插话       │                  ┌──────────────┴───────┐
+  （运行中    │                  ▼                      ▼
+   直接输入） │           [ 权限闸门 ]            [ 完成 / 回复 ]
+              │                  │
+              │          allow / ask / deny
+              │                  ▼
+              └────────  [ 执行工具，结果回填 ]
+                                 │
+                  （默认不设上限 · 1M 窗口吃满时自动压缩）
+```
+
+端口与适配器：内核与宿主无关，进程内运行，没有 HTTP 服务。
+
+```
+   @blazecoder/shared      类型、校验、密钥模式（无依赖）
+          ▲
+   @blazecoder/core        智能体内核：循环、工具、权限、上下文引擎。
+          ▲                与宿主无关，全套单测覆盖
+   @blazecoder/host        Node/OS 接线：文件系统、provider、配置、会话
+          ▲
+     ┌────┴─────┐
+ @blazecoder/   @blazecoder/
+    cli            desktop      ← 对等的 UI 适配器
+  (Ink TUI)      (Electron)        desktop 永不引入 cli / Ink
+```
+
+<sub>内核的发布名是 <code>@blazecoder/core</code>（目录为 <code>packages/agent-core</code>）。两个 UI 适配器是对等兄弟、无交叉依赖边，这条结构性约束由守卫测试强制保证，是本项目最关键的架构卖点。</sub>
+
+## ⚙️ 配置
+
+凭据由引导流程（`./install.sh`、首次启动、或 `blazecoder --setup`）写入 `~/.blazecoder/config.json`。**你不用手动编辑任何文件，也没有 `.env`。**
+
+下面这些环境变量都是可选覆盖项，给 CI 与高级用法用，真实环境变量永远优先。思考深度（`low` / `high` / `ultra`）映射到 DeepSeek 的三种原生思考档位，**只控推理深度，不碰输出长度**。
+
+**权限模式**
+
+<table>
+<thead><tr><th>模式</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td><code>default</code></td><td>任何写文件 / 跑命令前都询问</td></tr>
+<tr><td><code>acceptEdits</code></td><td>自动批准改文件，命令仍询问</td></tr>
+<tr><td><code>auto</code></td><td>全自治、不打断；受保护路径、密钥防护、毁灭性命令绊线仍生效</td></tr>
+<tr><td><code>plan</code></td><td>只读，所有非只读工具一律拒绝</td></tr>
+<tr><td><code>bypass</code></td><td><code>--yolo</code>，全部放行（危险，仅限可信 CI）</td></tr>
+</tbody>
+</table>
+
+**可选环境变量**
+
+<table>
+<thead><tr><th>变量</th><th>默认</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td><code>DEEPSEEK_API_KEY</code></td><td>（引导保存的）</td><td>覆盖已存 Key（CI / 临时）；完全没配置则用离线 stub</td></tr>
+<tr><td><code>BLAZECODER_MODEL</code></td><td><code>deepseek-v4-pro</code></td><td>覆盖当前模型 id</td></tr>
+<tr><td><code>AGENT_MAX_TURNS</code> · <code>AGENT_MAX_BUDGET_USD</code></td><td>不设＝不限</td><td>可选的工具轮数 / 花费上限，默认关闭</td></tr>
+<tr><td><code>AGENT_MAX_OUTPUT_TOKENS</code></td><td>不设＝模型上限 384K</td><td>可选输出上限；不设即放满，按窗口动态收缩</td></tr>
+<tr><td><code>AGENT_WEB</code> · <code>AGENT_FAKE_MODEL</code></td><td>关 · 关</td><td>开启联网工具 · 用离线 stub 模型（无需 Key 即可体验整套界面）</td></tr>
+</tbody>
+</table>
+
+凭据存放在 `~/.blazecoder/config.json`（权限 600，原子写入）；会话与跨会话记忆按项目隔离在 `~/.blazecoder/projects/<项目key>/` 下，互不串。权限设置文件（`.blazecoder/settings.json` 可提交、`settings.local.json` 建议 gitignore）随仓库走。
+
+## 🚦 命令行参数
+
+<table>
+<thead><tr><th width="34%">参数</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td><code>blazecoder</code></td><td>在当前目录启动终端 TUI</td></tr>
+<tr><td><code>--gui</code> · <code>--desktop</code></td><td>启动桌面 GUI（Electron），而非终端界面</td></tr>
 <tr><td><code>--cwd &lt;dir&gt;</code></td><td>智能体操作的工作目录（默认当前目录）</td></tr>
 <tr><td><code>--effort &lt;级别&gt;</code></td><td>思考深度：<code>low</code> | <code>high</code> | <code>ultra</code>（默认 high）</td></tr>
 <tr><td><code>-c</code>, <code>--continue</code></td><td>恢复最近一次会话</td></tr>
 <tr><td><code>--resume [id]</code></td><td>按 id 恢复会话；省略 id 则列出最近会话</td></tr>
 <tr><td><code>-p</code>, <code>--print &lt;文本&gt;</code></td><td>无界面跑一条 prompt 并打印结果（脚本 / CI）</td></tr>
 <tr><td><code>--output-format &lt;格式&gt;</code></td><td>headless 输出：<code>text</code> | <code>json</code> | <code>stream-json</code></td></tr>
-<tr><td><code>--gui</code></td><td>启动桌面 GUI（Electron），而非终端界面</td></tr>
-<tr><td><code>--yolo</code></td><td>headless 下自动批准工具调用（危险，仅限可信 CI）</td></tr>
-<tr><td><code>--update</code> · <code>-v</code> · <code>-h</code></td><td>更新到最新 · 版本号 · 帮助</td></tr>
+<tr><td><code>--setup</code></td><td>连接 / 切换模型 provider 与 API Key，然后退出</td></tr>
+<tr><td><code>-v</code> · <code>-h</code></td><td>版本号 · 帮助</td></tr>
 </tbody>
 </table>
 
-<table>
-<thead><tr><th width="38%">会话内斜杠命令</th><th>作用</th></tr></thead>
-<tbody>
-<tr><td><code>/resume</code></td><td>选择并恢复一段历史会话</td></tr>
-<tr><td><code>/effort &lt;low｜high｜ultra&gt;</code></td><td>设置思考深度</td></tr>
-<tr><td><code>/skill</code></td><td>挑一个项目技能并运行</td></tr>
-<tr><td><code>/output-style [名称]</code></td><td>切换输出风格（下一轮生效；<code>default</code> 还原）</td></tr>
-<tr><td><code>/usage</code> · <code>/context</code></td><td>token 用量与花费 · 上下文窗口占用</td></tr>
-<tr><td><code>/clear</code> · <code>/help</code> · <code>/exit</code></td><td>新开会话（旧的留盘） · 帮助 · 退出</td></tr>
-</tbody>
-</table>
+<sub>会话内还有斜杠命令：<code>/effort</code>、<code>/resume</code>、<code>/skill</code>、<code>/output-style</code>、<code>/context</code>、<code>/usage</code>、<code>/compact</code>、<code>/changes</code>、<code>/clear</code>、<code>/help</code>。</sub>
 
-**按键**：<kbd>@</kbd> 引用文件 · <kbd>/</kbd> 命令面板 · <kbd>Tab</kbd> 补全 · <kbd>↑</kbd><kbd>↓</kbd> 补全/历史 · <kbd>Enter</kbd> 发送（运行中则排队插话）· <kbd>Esc</kbd> 打断 · <kbd>Ctrl+C</kbd> 退出。
-需要批准工具时：<kbd>y</kbd> 本次允许 · <kbd>a</kbd> 永久允许（本项目，gitignore）· <kbd>A</kbd> 永久允许（提交进项目规则）· <kbd>n</kbd> 拒绝。
+## 🧩 扩展
 
-**示例会话**
-
-```text
-❯ 给 utils.ts 加一个防抖函数，并补测试
-
-  ✔ Read   src/utils.ts
-  ✔ Write  src/utils.ts
-  ✔ Write  test/utils.test.ts
-  ✔ Bash   pnpm test      通过
-
-  已加 debounce()，补了几个边界用例，测试全绿。
-```
-
----
-
-## 配置
-
-凭据由引导流程（`./install.sh`、首次启动、或 `zephyrcode --setup`）写入 `~/.zephyrcode/config.json`，**你不用手动编辑任何文件，也没有 `.env`**。下面这些环境变量是可选的覆盖项（给 CI / 高级用法），真实环境变量永远优先。
-
-<table>
-<thead><tr><th>变量</th><th>默认</th><th>作用</th></tr></thead>
-<tbody>
-<tr><td><code>DEEPSEEK_API_KEY</code></td><td>（用引导保存的）</td><td>覆盖已存 Key（CI / 临时）。完全没配置则用离线 stub</td></tr>
-<tr><td><code>ZEPHYRCODE_MODEL</code></td><td><code>deepseek-v4-pro</code></td><td>覆盖当前模型 id</td></tr>
-<tr><td><code>AGENT_CONTEXT_TOKENS</code></td><td><code>1048576</code></td><td>上下文窗口（DeepSeek-V4-Pro 约 1M）</td></tr>
-<tr><td><code>AGENT_MAX_OUTPUT_TOKENS</code></td><td>不设＝模型上限 384K</td><td>可选输出上限；不设即放满，按窗口动态收缩</td></tr>
-<tr><td><code>AGENT_MAX_TURNS</code> · <code>AGENT_MAX_BUDGET_USD</code></td><td><code>24</code> · <code>1.0</code></td><td>单次运行的工具轮数 / 花费上限</td></tr>
-<tr><td><code>AGENT_WEB</code> · <code>AGENT_FAKE_MODEL</code></td><td>关 · 关</td><td>开启联网工具 · 用离线 stub 模型</td></tr>
-</tbody>
-</table>
-
-**状态存放位置**（按项目隔离，会话之间不串）：
-
-```text
-~/.zephyrcode/
-  config.json                       全局凭据：provider + Key + 模型（权限 600，引导写入）
-  settings.json                     用户级权限规则 + 钩子
-  skills/  agents/  output-styles/  用户级扩展（始终加载）
-  projects/<项目key>/               <项目名>-<cwd 的 sha256 前 8 位>
-    sessions/                         该项目的会话记录
-    memory/                           该项目的跨会话记忆
-
-<你的仓库>/.zephyrcode/
-  settings.json                     项目级权限规则 + 钩子（可提交）
-  settings.local.json               本地覆盖（建议 gitignore）
-  skills/  agents/  output-styles/  项目级扩展（仅受信任工作区加载）
-```
-
-API Key 留在全局，项目相关的一切要么随仓库走，要么在按项目隔离的状态目录里。
-
----
-
-## 扩展
-
-放文件即生效，无需重新构建。用户级（`~/.zephyrcode/…`）始终加载；项目级（`<仓库>/.zephyrcode/…`）需要先**信任该工作区**。
+放文件即生效，无需重新构建。用户级（`~/.blazecoder/…`）始终加载；项目级（`<仓库>/.blazecoder/…`）需要先**信任该工作区**。
 
 <details>
-<summary><b>技能 Skill</b> &nbsp;<code>&lt;仓库&gt;/.zephyrcode/skills/&lt;名称&gt;/SKILL.md</code></summary>
+<summary><b>技能 Skill</b> &nbsp;<code>&lt;仓库&gt;/.blazecoder/skills/&lt;名称&gt;/SKILL.md</code></summary>
 
 <br>
 
@@ -227,7 +319,7 @@ allowedTools: [Read, Grep, Bash]   # 仅 fork 用
 </details>
 
 <details>
-<summary><b>子智能体 Sub-agent</b> &nbsp;<code>&lt;仓库&gt;/.zephyrcode/agents/&lt;名称&gt;.md</code></summary>
+<summary><b>子智能体 Sub-agent</b> &nbsp;<code>&lt;仓库&gt;/.blazecoder/agents/&lt;名称&gt;.md</code></summary>
 
 <br>
 
@@ -244,7 +336,7 @@ maxTurns: 12
 </details>
 
 <details>
-<summary><b>输出风格 Output style</b> &nbsp;<code>&lt;仓库&gt;/.zephyrcode/output-styles/&lt;名称&gt;.md</code></summary>
+<summary><b>输出风格 Output style</b> &nbsp;<code>&lt;仓库&gt;/.blazecoder/output-styles/&lt;名称&gt;.md</code></summary>
 
 <br>
 
@@ -280,75 +372,35 @@ keepCodingInstructions: true   # true 在基础提示词上追加；false 则替
 }
 ```
 
-命令钩子会执行任意 shell，所以项目级钩子只对**受信任工作区**加载；`ZEPHYRCODE_DISABLE_HOOKS=1` 是全局总开关。
+命令钩子会执行任意 shell，所以项目级钩子只对**受信任工作区**加载；`BLAZECODER_DISABLE_HOOKS=1` 是全局总开关。
 
 </details>
 
----
+<details>
+<summary><b>加一个模型 Provider</b> &nbsp;<code>packages/host/src/providers/&lt;名称&gt;.ts</code></summary>
 
-## 架构
+<br>
 
-pnpm + Turborepo 单仓，端口与适配器（ports &amp; adapters）：
+每个模型后端都活在同一个 `Provider` 接口之后（鉴权头、base URL、请求体、流式格式、工具 schema、思考字段）。接入 Gemini / Claude 就是写一个 provider 文件、再把它加进 `registry.ts` 的 `PROVIDERS` 数组一行，引导流程会自动把它列出来。
 
-```text
-packages/
-  shared/      跨层共享的类型（文件 / 事件 / 会话 schema、安全原语）
-  agent-core/  可移植、被单测覆盖的内核（@zephyrcode/core），只依赖注入的端口：
-               循环 · 上下文（压缩/记忆）· 工具 · 权限/钩子 · 会话
-               · 工作区（真实 FS + 边界 + read-before-edit 账本）
-               · 技能/子智能体/输出风格 · 思考深度
-  host/        Node/OS 接线层（@zephyrcode/host）：模型网关 · 本地进程沙箱
-               · 配置/设置/凭据 · 会话/记忆存储 · provider 注册表
-               · headless 渲染器 · buildRuntime()。无任何 UI 代码
-  cli/         终端 host：Ink TUI + headless，进程内接 host + agent-core
-  desktop/     桌面 host：Electron GUI，与 TUI 对等；同样进程内接 host
-docs/ARCHITECTURE.md
-```
+</details>
 
-依赖图是一条干净的有向无环图：`shared ← core ← host ← {cli, desktop}`。两个 UI host 都依赖 `host`、**互不依赖**——TUI 和 GUI 是可互换的兄弟适配器，跑的是同一个 runtime。GUI 渲染层是一座 **Ink-free 孤岛**（只 type-only 引用内核类型，绝不 value import），所以将来加 web / vscode host 只需再挂一个包，core/cli 零改动。
+## 🛠️ 开发
 
-`agent-core` 里**没有任何** UI / HTTP / DeepSeek 引用，一切都通过端口（`ModelGateway`、`Workspace`、`Sandbox`、`SessionStore`、`MemoryStore`、`Clock`、`Logger`）跨界，所以它能用内存假实现跑全套单测，也能被任意 host **进程内**运行；换/加模型只是在 `host` 里加一个 provider（自带适配器）。
-
----
-
-## 开发
+pnpm + Turborepo 单仓。
 
 ```bash
 pnpm install
-pnpm --filter @zephyrcode/cli zephyrcode    # 用 tsx 直接跑 TUI（免构建）
-pnpm --filter @zephyrcode/cli build         # 产出 packages/cli/dist/zephyrcode.js
-pnpm desktop                                # 桌面 GUI 开发模式（Vite HMR + Electron）
+pnpm --filter @blazecoder/cli build    # 产出 packages/cli/dist/blazecoder.js
+pnpm desktop                           # 桌面 GUI 开发模式（Vite HMR + Electron）
 
 pnpm typecheck    # 全部包
-pnpm test         # 单元 + 集成 + e2e（546 个）
+pnpm test         # 单元 + 集成 + e2e（548 个）
 pnpm build        # 构建全部
 ```
 
-> 终端用户跑 `zephyrcode --gui`（加载已构建的 GUI）；`pnpm desktop` 是带热更新的开发命令。
+工作区布局：`packages/{shared, agent-core, host, cli, desktop}`。`agent-core` 用内存假实现跑全套单测；终端用户跑 `blazecoder --gui`（加载已构建的 GUI），`pnpm desktop` 是带热更新的开发命令（需要图形显示）。
 
-- **单元**：`agent-core` 每个模块 + shared 安全原语 + TUI reducer
-- **集成**：脚本化模型 + 内存假实现跑通整条循环；headless 跑通
-- **e2e**：构建真实 bundle，驱动真实的 `node dist/zephyrcode.js` 进程（参数、配置、退出码、headless 输出）
+## 📄 许可证
 
-新增内核能力：**新工具** = 在 `agent-core/src/tools/builtin/` 加一个 `Tool` 并注册；**新护栏** = 一个 `PreToolUse` / `PostToolUse` 钩子（不动循环）；**新模型 provider** = 在 `cli/src/providers/` 加一个 provider 文件（自带 `ModelGateway` 适配器）再注册进 registry，引导流程会自动把它列出来。
-
----
-
-## 路线图
-
-- 更多模型 provider：Gemini、Claude 等（provider registry 已就绪，加一个文件即可）
-- OS 级命令沙箱（macOS `sandbox-exec` / Linux `bwrap`），接在现有 `Sandbox` 端口后面
-- MCP 服务器/工具接入（工具调用契约已与传输无关）
-
----
-
-<div align="center">
-
-<sub>灵感来自 Anthropic 的 <a href="https://www.anthropic.com/claude-code">Claude Code</a>，由 <a href="https://www.deepseek.com">DeepSeek</a> 驱动。<br>
-zephyrcode 是独立项目，与 Anthropic、DeepSeek 无隶属或背书关系。</sub>
-
-<br><br>
-
-许可证 <a href="LICENSE"><b>MIT</b></a> © 2026 Zephyr Huang &nbsp;·&nbsp; <a href="README.en.md">English</a>
-
-</div>
+<a href="LICENSE"><b>MIT</b></a> © 2026 Zephyr Huang &nbsp;·&nbsp; <a href="README.en.md">English</a>
