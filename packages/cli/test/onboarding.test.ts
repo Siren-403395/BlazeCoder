@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAuthConfig } from "../src/authStore";
-import { needsOnboarding, runHeadlessSetup, type SetupIo } from "../src/onboarding";
+import { needsOnboarding, runHeadlessSetup, shouldRunOnboardingGate, type SetupIo } from "../src/onboarding";
 import type { CliConfig } from "../src/config";
 
 let home: string;
@@ -34,6 +34,17 @@ describe("needsOnboarding", () => {
     expect(needsOnboarding(cfg({ apiKey: "" }))).toBe(true);
     expect(needsOnboarding(cfg({ apiKey: "sk-1" }))).toBe(false);
     expect(needsOnboarding(cfg({ apiKey: "", fakeModel: true }))).toBe(false);
+  });
+});
+
+describe("shouldRunOnboardingGate", () => {
+  it("fires only with no key, an interactive TTY, and a non-headless run", () => {
+    const noKey = cfg({ apiKey: "" });
+    expect(shouldRunOnboardingGate(noKey, { headless: false, isTTY: true })).toBe(true);
+    expect(shouldRunOnboardingGate(noKey, { headless: true, isTTY: true })).toBe(false); // --print
+    expect(shouldRunOnboardingGate(noKey, { headless: false, isTTY: false })).toBe(false); // piped
+    expect(shouldRunOnboardingGate(cfg({ apiKey: "sk-1" }), { headless: false, isTTY: true })).toBe(false);
+    expect(shouldRunOnboardingGate(cfg({ apiKey: "", fakeModel: true }), { headless: false, isTTY: true })).toBe(false);
   });
 });
 

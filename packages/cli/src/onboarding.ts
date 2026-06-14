@@ -17,6 +17,16 @@ export function needsOnboarding(config: CliConfig): boolean {
   return !config.fakeModel && !config.apiKey;
 }
 
+/**
+ * Whether the interactive first-run TUI onboarding gate should fire for this launch:
+ * a key is needed, we're not in a headless (`--print`) run, and stdin is a real TTY
+ * (so Ink can read keystrokes). Extracted so the decision is unit-tested rather than
+ * buried in main()'s control flow.
+ */
+export function shouldRunOnboardingGate(config: CliConfig, opts: { headless: boolean; isTTY: boolean }): boolean {
+  return needsOnboarding(config) && !opts.headless && opts.isTTY;
+}
+
 export interface SetupResult {
   saved: boolean;
   providerId?: string;
@@ -92,23 +102,35 @@ export async function runHeadlessSetup(home: string, io: SetupIo): Promise<Setup
   return { saved: true, providerId: provider.id, model: chosenModel.id };
 }
 
-/** Build a real stdin/stdout SetupIo backed by readline, and tear it down after `fn`. */
+/**
+ * Build a real stdin/stdout SetupIo backed by readline, and tear it down after the flow.
+ * NOTE: readline does not mask input, so a key pasted at the `--setup` prompt is echoed
+ * to the terminal (the pretty in-TUI onboarding masks it; this script path does not).
+ */
 export async function runSetup(home: string): Promise<SetupResult> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const io: SetupIo = {
     write: (t) => process.stdout.write(t),
     // Resolve with the typed/piped line, or null on EOF (closed/empty stdin) so a
-    // non-interactive run skips gracefully instead of hanging forever.
+    // non-interactive run skips gracefully instead of hanging forever. The `done`
+    // guard makes resolution idempotent (a 'close' after an answer is a no-op) and
+    // swallows a synchronous throw from question() on an already-closed stream.
     ask: (q) =>
       new Promise<string | null>((res) => {
-        let answered = false;
-        rl.question(q, (answer) => {
-          answered = true;
-          res(answer);
-        });
-        rl.once("close", () => {
-          if (!answered) res(null);
-        });
+        let settled = false;
+        const done = (v: string | null) => {
+          if (!settled) {
+            settled = true;
+            res(v);
+          }
+        };
+        try {
+          rl.question(q, (answer) => done(answer));
+        } catch {
+          done(null);
+          return;
+        }
+        rl.once("close", () => done(null));
       }),
     env: process.env,
   };

@@ -42,8 +42,16 @@ export interface CliConfig {
 }
 
 function num(value: string | undefined, fallback: number): number {
-  const n = value === undefined ? NaN : Number(value);
+  const s = value?.trim();
+  if (!s) return fallback; // unset OR empty/whitespace (e.g. `VAR=` in CI) → the default
+  const n = Number(s);
   return Number.isFinite(n) ? n : fallback;
+}
+
+/** A trimmed env value, or undefined when unset/empty, so `??` chains fall through correctly. */
+function envStr(value: string | undefined): string | undefined {
+  const t = value?.trim();
+  return t ? t : undefined;
 }
 
 /** The state/config dir (~/.zephyrcode), from the env or the default. */
@@ -78,40 +86,43 @@ function loadDotenv(path: string): Record<string, string> {
 }
 
 /**
- * One-time rescue of a key from the OLD `.env` form into the managed config, so an
- * existing install keeps working after the switch. Runs only when no managed config
- * exists yet; afterwards `.env` is never read again. (We retired .env config; this
- * just migrates the user's existing key so onboarding doesn't re-prompt needlessly.)
+ * One-time rescue of a key from the OLD build's global config (`~/.zephyrcode/.env`,
+ * the only file the previous installer wrote) into the managed config, so upgrading
+ * keeps working without re-onboarding. Runs ONLY when no managed config exists yet;
+ * afterwards `.env` is never read again. We deliberately do NOT read a project-local
+ * `./.env`: that was a manual dev convenience, and migrating an arbitrary project's
+ * `.env` into the global config would be both surprising and a small attack surface.
  */
-function migrateLegacyEnv(home: string, cwd: string): void {
+function migrateLegacyEnv(home: string): void {
   if (existsSync(authConfigPath(home))) return;
-  const legacy = { ...loadDotenv(join(home, ".env")), ...loadDotenv(join(cwd, ".env")) };
+  const legacy = loadDotenv(join(home, ".env"));
   const apiKey = (legacy.DEEPSEEK_API_KEY ?? "").trim();
   if (!apiKey) return;
-  const provider = resolveProvider(undefined); // legacy .env was always DeepSeek
+  const provider = resolveProvider(undefined); // the old global .env was always DeepSeek
   const wantModel = legacy.DEEPSEEK_MODEL?.trim();
   const model = wantModel && findModel(provider, wantModel) ? wantModel : defaultModel(provider).id;
   const baseUrl = legacy.DEEPSEEK_BASE_URL?.trim();
   setActiveProvider(home, provider.id, baseUrl ? { apiKey, baseUrl } : { apiKey }, model);
 }
 
-export function loadConfig(cwd: string = process.cwd()): CliConfig {
+export function loadConfig(_cwd: string = process.cwd()): CliConfig {
   const home = resolveHome();
-  migrateLegacyEnv(home, cwd);
+  migrateLegacyEnv(home);
   const stored = loadAuthConfig(home);
   const env = process.env;
 
-  // Provider: env override → stored → registry default.
-  const provider = resolveProvider(env.ZEPHYRCODE_PROVIDER ?? stored.provider);
+  // Provider: env override → stored → registry default. Empty env strings fall through.
+  const provider = resolveProvider(envStr(env.ZEPHYRCODE_PROVIDER) ?? stored.provider);
   const creds = stored.providers[provider.id];
 
-  // Key/baseUrl: the provider's own env var always wins, else the stored value.
-  const apiKey = (env[provider.apiKeyEnv] ?? creds?.apiKey ?? "").trim();
+  // Key/baseUrl: a non-empty provider env var wins, else the stored value. (An empty
+  // env var must NOT shadow the stored key, or a configured user gets re-onboarded.)
+  const apiKey = (envStr(env[provider.apiKeyEnv]) ?? creds?.apiKey ?? "").trim();
   const baseUrl =
-    (provider.baseUrlEnv ? env[provider.baseUrlEnv] : undefined) ?? creds?.baseUrl ?? provider.defaultBaseUrl;
+    (provider.baseUrlEnv ? envStr(env[provider.baseUrlEnv]) : undefined) ?? creds?.baseUrl ?? provider.defaultBaseUrl;
 
   // Model: env override → stored → provider default; sizing comes from the model.
-  const wantModel = env.ZEPHYRCODE_MODEL ?? stored.model ?? defaultModel(provider).id;
+  const wantModel = envStr(env.ZEPHYRCODE_MODEL) ?? stored.model ?? defaultModel(provider).id;
   const model = findModel(provider, wantModel) ?? defaultModel(provider);
 
   return {

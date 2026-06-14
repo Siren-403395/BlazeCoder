@@ -84,14 +84,30 @@ describe("loadConfig", () => {
     expect(loadAuthConfig(home).providers.deepseek!.apiKey).toBe("sk-legacy-global");
   });
 
-  it("also rescues a key from a project-local ./.env on first load", () => {
-    writeFileSync(join(cwd, ".env"), "DEEPSEEK_API_KEY=sk-legacy-local\n");
-    expect(loadConfig(cwd).apiKey).toBe("sk-legacy-local");
+  it("does NOT migrate a project-local ./.env (only the global one is a legacy source)", () => {
+    writeFileSync(join(cwd, ".env"), "DEEPSEEK_API_KEY=sk-project-local\n");
+    expect(loadConfig(cwd).apiKey).toBe(""); // project .env is no longer a config source
+    expect(existsSync(authConfigPath(home))).toBe(false); // nothing migrated
   });
 
   it("does not migrate once a managed config already exists", () => {
     saveAuthConfig(home, { version: 1, providers: { deepseek: { apiKey: "sk-managed" } } });
     writeFileSync(join(home, ".env"), "DEEPSEEK_API_KEY=sk-legacy\n");
     expect(loadConfig(cwd).apiKey).toBe("sk-managed"); // legacy .env ignored
+  });
+
+  it("treats an empty/whitespace numeric env var as unset, not 0", () => {
+    // Regression: `num('')` used to return 0, capping output to 0 tokens.
+    process.env.AGENT_MAX_OUTPUT_TOKENS = "";
+    process.env.AGENT_CONTEXT_TOKENS = "   ";
+    const c = loadConfig(cwd);
+    expect(c.maxOutputTokens).toBe(384_000);
+    expect(c.contextTokens).toBe(1_048_576);
+  });
+
+  it("an empty DEEPSEEK_API_KEY env var does not shadow the stored key", () => {
+    saveAuthConfig(home, { version: 1, providers: { deepseek: { apiKey: "sk-stored" } } });
+    process.env.DEEPSEEK_API_KEY = "";
+    expect(loadConfig(cwd).apiKey).toBe("sk-stored");
   });
 });

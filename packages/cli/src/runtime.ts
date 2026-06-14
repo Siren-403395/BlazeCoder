@@ -58,7 +58,7 @@ export function buildRuntime(config: CliConfig, cwd: string, opts: BuildRuntimeO
         );
 
   // Sessions + agent memory are PER-PROJECT: rooted in this workspace's own
-  // state dir, never the shared home. (The .env / API key stays global.)
+  // state dir, never the shared home. (The API key in config.json stays global.)
   const root = canonical(cwd);
   const projectDir = projectStateDir(config.home, root);
 

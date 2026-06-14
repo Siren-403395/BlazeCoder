@@ -1,6 +1,6 @@
 /**
  * Per-project state isolation. zephyrcode keeps ONE home dir (~/.zephyrcode) for
- * user-global config (the API key in .env), but everything that belongs to a
+ * user-global config (the API key in config.json), but everything that belongs to a
  * specific working directory — its sessions and the agent's cross-session memory
  * — must live under that project's own subdirectory. Isolation is therefore
  * STRUCTURAL (the directory IS the boundary), not a read-time filter that a
@@ -8,7 +8,7 @@
  *
  * Layout:
  *   ~/.zephyrcode/
- *     .env                              # user-global config
+ *     config.json                       # user-global config (provider + key + model)
  *     projects/
  *       <project-key>/
  *         sessions/<id>.json            # this project's conversations

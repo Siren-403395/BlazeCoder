@@ -9,6 +9,12 @@
  *   ultra -> Think Max   (thinking on, budget "max" — deepest reasoning)
  *
  * It is a sticky session setting plus a per-turn "ultrathink" keyword escalation.
+ *
+ * EXTENSION SEAM (deferred): `resolveEffort` and `ThinkingBudget` ("high"|"max") encode
+ * DeepSeek-V4-Pro's native thinking modes. When a provider with different reasoning
+ * semantics is added (e.g. Gemini's on/off, Claude's token budget), move effort→thinking
+ * resolution behind the provider (a `Provider.resolveEffort(effort)`) instead of this
+ * global map, and treat `ModelRequest.thinkingBudget` as a provider-interpreted hint.
  */
 
 export type Effort = "low" | "high" | "ultra";

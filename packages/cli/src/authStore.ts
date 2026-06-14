@@ -16,7 +16,7 @@
  * The file is written 0600 (owner read/write only) since it holds an API key.
  */
 
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const AUTH_CONFIG_VERSION = 1;
@@ -64,17 +64,30 @@ export function loadAuthConfig(home: string): AuthConfig {
   };
 }
 
-/** Persist the managed config (creates the home dir, writes pretty JSON, locks it to 0600). */
+/**
+ * Persist the managed config. Writes a 0600 temp file then atomically renames it over
+ * the target, so there is never a window where the key sits in a world-readable file
+ * and a crash can't leave a torn write. The home dir is locked to 0700 too, so other
+ * users can't even see that a config exists.
+ */
 export function saveAuthConfig(home: string, config: AuthConfig): void {
   const path = authConfigPath(home);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
-  // writeFileSync's mode only applies on CREATE, so chmod explicitly for overwrites too.
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+  // Best-effort on platforms without POSIX modes (e.g. some Windows setups).
   try {
-    chmodSync(path, 0o600);
+    chmodSync(dir, 0o700);
   } catch {
-    // Best-effort on platforms without POSIX modes (e.g. some Windows setups).
+    /* ignore */
   }
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  try {
+    chmodSync(tmp, 0o600);
+  } catch {
+    /* ignore */
+  }
+  renameSync(tmp, path); // atomic on the same filesystem; preserves the 0600 mode
 }
 
 /**

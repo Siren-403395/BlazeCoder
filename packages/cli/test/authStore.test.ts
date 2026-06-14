@@ -37,7 +37,8 @@ describe("authStore (managed config.json)", () => {
     expect(c.provider).toBe("deepseek");
     expect(c.model).toBe("deepseek-v4-pro");
     expect(c.providers.deepseek!.apiKey).toBe("sk-1");
-    expect(statSync(authConfigPath(home)).mode & 0o777).toBe(0o600);
+    expect(statSync(authConfigPath(home)).mode & 0o777).toBe(0o600); // file: owner-only
+    expect(statSync(home).mode & 0o777).toBe(0o700); // dir: not even listable by others
   });
 
   it("setActiveProvider stores creds + makes it active, preserving other providers", () => {

@@ -9,7 +9,7 @@ import { render } from "ink";
 import { App } from "./tui/App";
 import { Onboarding } from "./tui/Onboarding";
 import { loadConfig } from "./config";
-import { needsOnboarding, runSetup } from "./onboarding";
+import { runSetup, shouldRunOnboardingGate } from "./onboarding";
 import { PROVIDERS } from "./providers";
 import { migrateLegacySessions } from "./projects";
 import { buildRuntime } from "./runtime";
@@ -132,7 +132,9 @@ async function main(): Promise<void> {
 
   // First-run gate: no key yet, interactive terminal, not a headless run → guide the
   // user through provider/model/key in the TUI, then re-read the freshly saved config.
-  if (needsOnboarding(config) && args.print === undefined && Boolean(process.stdin.isTTY)) {
+  // (--continue/--resume still work: onboarding precedes session resolution below, and
+  // the user can Esc-skip to the offline stub if they only want to read a session.)
+  if (shouldRunOnboardingGate(config, { headless: args.print !== undefined, isTTY: Boolean(process.stdin.isTTY) })) {
     const saved = await runTuiOnboarding(config.home);
     if (saved) process.stdout.write(CLEAR_SCREEN);
     config = loadConfig(cwd);
