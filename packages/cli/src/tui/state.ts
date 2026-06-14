@@ -204,6 +204,11 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
       // Thinking is not rendered — only counted, so the live region shows tokens growing.
       return { ...state, turnChars: state.turnChars + action.text.length };
 
+    case "tool_args_delta":
+      // Tool-call argument JSON (e.g. a file body) is counted but never rendered, so the
+      // live token gauge climbs continuously while a Write/Edit is being generated.
+      return { ...state, turnChars: state.turnChars + action.text.length };
+
     case "tool_call": {
       if (state.items.some((i) => i.id === action.id)) return state;
       return {
@@ -333,7 +338,13 @@ function hydrateItems(startSeq: number, messages: TranscriptMessage[]): { items:
   let seq = startSeq;
   for (const m of messages) {
     if (m.role === "user") {
-      items.push({ kind: "user", id: `u${++seq}`, text: m.content });
+      // A synthetic rehydration message carries full file bodies for the MODEL only —
+      // never replay it as a user item (that leaked the whole file onto the screen).
+      if (m.synthetic === "rehydrated_files") {
+        items.push({ kind: "compact", id: `c${++seq}`, reason: "restored file context after compaction" });
+      } else {
+        items.push({ kind: "user", id: `u${++seq}`, text: m.content });
+      }
     } else if (m.role === "assistant") {
       if (m.content) {
         items.push({ kind: "assistant", id: `a${++seq}`, text: m.content, streaming: false });

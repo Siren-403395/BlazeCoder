@@ -4,7 +4,7 @@
  * worker can run a session because state lives behind this port.
  */
 
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Clock, SessionState, SessionStore, SessionSummary } from "../ports";
 
@@ -94,18 +94,44 @@ export class FileSessionStore implements SessionStore {
   async save(state: SessionState): Promise<void> {
     state.updatedAt = this.clock.now();
     await mkdir(this.dir, { recursive: true });
-    await writeFile(this.file(state.id), JSON.stringify(state, null, 2), "utf8");
+    // Atomic write: a process killed mid-save leaves EITHER the old file or the new one
+    // intact, never a truncated half-file (a corrupt file would otherwise break list()).
+    const target = this.file(state.id);
+    const tmp = `${target}.${process.pid}.tmp`;
+    await writeFile(tmp, JSON.stringify(state, null, 2), "utf8");
+    await rename(tmp, target);
   }
 
   async list(): Promise<SessionSummary[]> {
+    let entries: string[];
     try {
-      const files = (await readdir(this.dir)).filter((f) => f.endsWith(".json"));
-      const states = await Promise.all(
-        files.map(async (f) => JSON.parse(await readFile(join(this.dir, f), "utf8")) as SessionState),
-      );
-      return states.map(toSummary).sort((a, b) => b.updatedAt - a.updatedAt);
+      entries = await readdir(this.dir);
     } catch {
-      return [];
+      return []; // no sessions dir yet
     }
+    // Best-effort sweep of orphaned temp files from a crash between write and rename. Skip
+    // our own in-flight tmp (same pid), and fire-and-forget so a delete error never hides
+    // sessions or blocks the listing.
+    for (const f of entries) {
+      if (f.endsWith(".tmp") && !f.endsWith(`.${process.pid}.tmp`)) {
+        void rm(join(this.dir, f), { force: true }).catch(() => {});
+      }
+    }
+    const files = entries.filter((f) => f.endsWith(".json"));
+    // Parse each file INDEPENDENTLY: one corrupt/partial session must not hide the rest
+    // (the old Promise.all rejected the whole listing on a single bad file → "all gone").
+    const states = await Promise.all(
+      files.map(async (f): Promise<SessionState | null> => {
+        try {
+          return JSON.parse(await readFile(join(this.dir, f), "utf8")) as SessionState;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return states
+      .filter((s): s is SessionState => s !== null)
+      .map(toSummary)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 }

@@ -62,6 +62,7 @@ export const TIPS: string[] = [
   "zephyrcode edits real files and runs real commands in your working directory.",
   "/clear starts a fresh session — the old one stays on disk for /resume.",
   "Markdown in replies is rendered: headings, lists, and highlighted code.",
+  "Shift+Enter (or end a line with \\) drops to a new line — write multi-line prompts.",
 ];
 
 /** A loading verb for the given run seed at the given step (advances over time). */

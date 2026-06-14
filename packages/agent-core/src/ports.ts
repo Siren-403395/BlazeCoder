@@ -66,6 +66,9 @@ export interface ModelStreamHandlers {
   onText(textChunk: string): void;
   /** Incremental reasoning trace (thinking mode); separate channel from onText. */
   onReasoning(textChunk: string): void;
+  /** Incremental tool-call argument fragments (e.g. a file body streaming into a Write).
+   *  Counted toward live output but not rendered, so the token gauge climbs continuously. */
+  onToolArgs?(textChunk: string): void;
   onToolCall(call: ToolCall): void;
   /** A transient failure is being retried with backoff (so the UI can show it). */
   onRetry?(info: { attempt: number; maxRetries: number; delayMs: number; status?: number }): void;

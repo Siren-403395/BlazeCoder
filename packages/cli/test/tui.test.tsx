@@ -11,7 +11,7 @@ import {
 import type { ModelGateway, ModelRequest, ModelResponse } from "@zephyrcode/core";
 import type { FileDiff } from "@zephyrcode/shared";
 import { App } from "../src/index";
-import { ItemView } from "../src/tui/view";
+import { InputLine, ItemView } from "../src/tui/view";
 
 class ScriptedGateway implements ModelGateway {
   readonly model = "scripted";
@@ -78,6 +78,27 @@ describe("ItemView", () => {
     unmount();
   });
 
+  it("caps the diff preview at ~10 lines and shows a '+N more lines' footer", () => {
+    // 15 added lines; only ~10 should render, the rest collapse into a hint.
+    const diff: FileDiff = {
+      op: "create",
+      added: 15,
+      removed: 0,
+      truncated: false,
+      hunks: [{ lines: Array.from({ length: 15 }, (_, i) => ({ kind: "add" as const, text: `L${i + 1}X`, newLine: i + 1 })) }],
+    };
+    const { lastFrame, unmount } = render(
+      <ItemView item={{ kind: "tool", id: "t", name: "Write", status: "ok", input: { file_path: "/big.ts" }, diff }} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("L1X"); // first line shown
+    expect(frame).toContain("L10X"); // 10th line shown
+    expect(frame).not.toContain("L11X"); // 11th line is collapsed away
+    expect(frame).toContain("+5 more lines"); // 15 - 10 shown
+    expect(frame).toContain("+15"); // the true stat is still exact
+    unmount();
+  });
+
   it("keeps the textual summary for non-file tools (no diff)", () => {
     const { lastFrame, unmount } = render(
       <ItemView item={{ kind: "tool", id: "t", name: "Bash", status: "ok", input: { command: "ls" }, summary: "exit 0" }} />,
@@ -99,6 +120,23 @@ describe("ItemView", () => {
       <ItemView item={{ kind: "notice", id: "n", level: "warn", message: "heads up" }} />,
     );
     expect(lastFrame() ?? "").toContain("heads up");
+    unmount();
+  });
+});
+
+describe("InputLine (multi-line)", () => {
+  it("renders a multi-line value across rows under the prompt gutter", () => {
+    const { lastFrame, unmount } = render(<InputLine value={"first line\nsecond line"} cursor={0} showCursor={false} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("first line");
+    expect(frame).toContain("second line");
+    expect(frame).toContain("❯"); // the prompt gutter is on row one
+    unmount();
+  });
+
+  it("shows the placeholder only when the value is empty", () => {
+    const { lastFrame, unmount } = render(<InputLine value={""} cursor={0} placeholder="type here" showCursor={false} />);
+    expect(lastFrame() ?? "").toContain("type here");
     unmount();
   });
 });
@@ -225,6 +263,65 @@ describe("App end-to-end (scripted runtime)", () => {
     // End-to-end diff: the Write's create diff rode the file_change event, attached to the
     // tool row, and rendered as a block (proving tool → event → reducer → DiffBlock).
     expect(frame).toContain("+ # Notes");
+
+    unmount();
+  });
+
+  it("a trailing backslash + Enter inserts a newline instead of submitting", async () => {
+    const clock = new FixedClock(1);
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([step("REPLY-IF-SUBMITTED")]),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+    });
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} effort="low" />);
+    await new Promise((r) => setTimeout(r, 80));
+    stdin.write("line one\\"); // ends with a single backslash
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r"); // Enter on a trailing "\" → newline, NOT submit
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("line two");
+    await new Promise((r) => setTimeout(r, 40));
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("line one"); // both lines are still being edited
+    expect(frame).toContain("line two");
+    expect(frame).not.toContain("REPLY-IF-SUBMITTED"); // nothing was submitted to the model
+
+    unmount();
+  });
+
+  it("a permission prompt accepts Esc as deny and unblocks the run (not swallowed)", async () => {
+    const clock = new FixedClock(1);
+    const runtime = createAgentRuntime({
+      gateway: new ScriptedGateway([
+        step("Listing files.", [{ id: "b", name: "Bash", input: { command: "ls" } }]),
+        step("All done."),
+      ]),
+      sessionStore: new InMemorySessionStore(clock),
+      memory: new InMemoryMemoryStore(),
+      workspace: new InMemoryWorkspace(),
+      clock,
+      logger: silentLogger,
+      ask: ["Bash"], // force a human prompt for Bash regardless of mode
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App runtime={runtime} effort="low" />);
+    await new Promise((r) => setTimeout(r, 80));
+    stdin.write("list files");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+
+    // The prompt blocks the loop.
+    await waitFor(() => (lastFrame() ?? "").includes("Permission required"));
+    // Esc must be handled here (the old code returned for every key, trapping the user).
+    stdin.write("\x1b");
+    // Denial unblocks the loop, which runs to completion.
+    await waitFor(() => (lastFrame() ?? "").includes("done"));
+    expect(lastFrame() ?? "").toContain("done");
 
     unmount();
   });

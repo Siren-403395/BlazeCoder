@@ -112,14 +112,18 @@ export function App({
   const busy = state.status === "running" || state.status === "awaiting_permission";
   // "Working" covers both a running turn and a manual /compact (which has no turn status).
   const working = busy || compacting;
+  // The elapsed clock drives the (only) animated line. It must NOT run while a permission
+  // prompt is up: there is nothing to animate there, and the 1s repaints re-anchor the
+  // viewport and fight the user's scroll (the prompt would feel pinned to the top).
+  const ticking = (state.status === "running" || compacting) && !state.permission;
 
-  // Tick a one-second clock while working, for the elapsed time + verb rotation.
+  // Tick a one-second clock while actively working, for the elapsed time + verb rotation.
   useEffect(() => {
-    if (!working) return;
+    if (!ticking) return;
     setElapsed(0);
     const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(timer);
-  }, [working]);
+  }, [ticking]);
 
   // Load the workspace file list for @-completion (on mount, and after each run).
   const loadFiles = useCallback(async () => {
@@ -383,9 +387,38 @@ export function App({
   }, []);
 
   useInput((input, key) => {
-    // 1) Permission approval.
+    // Newline insertion for multi-line prompts. Shift+Enter / Option(Meta)+Enter work on
+    // terminals that send a distinct sequence; a trailing "\" + Enter is the universal
+    // fallback that works everywhere. Shared by the steering (busy) and editing paths.
+    const insertNewline = () => setLine(draft.slice(0, cursor) + "\n" + draft.slice(cursor), cursor + 1);
+    const replaceTrailingBackslash = () => setLine(draft.slice(0, cursor - 1) + "\n" + draft.slice(cursor), cursor);
+    const wantsNewline = !!key.return && (key.shift || key.meta);
+    const wantsBackslashNewline = !!key.return && !key.shift && !key.meta && cursor > 0 && draft[cursor - 1] === "\\";
+    // Move the cursor up/down one line within a multi-line draft, preserving the column.
+    const moveCursorVertical = (dir: number) => {
+      const lines = draft.split("\n");
+      let row = 0;
+      let col = cursor;
+      while (row < lines.length - 1 && col > lines[row]!.length) {
+        col -= lines[row]!.length + 1;
+        row++;
+      }
+      const target = row + dir;
+      if (target < 0 || target >= lines.length) return;
+      let base = 0;
+      for (let r = 0; r < target; r++) base += lines[r]!.length + 1;
+      setCursor(base + Math.min(col, lines[target]!.length));
+    };
+
+    // 1) Permission approval. Ctrl+C (quit) and Esc (deny + unblock) MUST be handled here —
+    //    this branch returns for every key, so without these the global quit/abort handlers
+    //    below are unreachable and the user is trapped while a prompt is up.
     if (state.status === "awaiting_permission" && state.permission) {
       const { requestId: reqId, suggestions } = state.permission;
+      if (key.ctrl && input === "c") {
+        exit();
+        return;
+      }
       const remember = (destination: "local" | "project") => {
         if (suggestions?.length) {
           runtime.persistPermission({ type: "addRules", behavior: "allow", rules: suggestions, destination });
@@ -400,7 +433,8 @@ export function App({
         remember("local"); // always allow — this project, gitignored
       } else if (input === "A") {
         remember("project"); // always allow — committable project rule
-      } else if (input === "n") {
+      } else if (input === "n" || key.escape) {
+        // Esc == deny: resolve the pending request so the loop unblocks cleanly.
         runtime.resolvePermission(reqId, { behavior: "deny", message: "Denied by the user." });
         dispatch({ type: "permission_resolved" });
       }
@@ -440,6 +474,14 @@ export function App({
       }
       if (compactingRef.current) return; // no steering/editing while compacting
       if (key.return) {
+        if (wantsNewline) {
+          insertNewline();
+          return;
+        }
+        if (wantsBackslashNewline) {
+          replaceTrailingBackslash();
+          return;
+        }
         const text = draft.trim();
         if (text) {
           steerQueue.current.push(text);
@@ -457,6 +499,14 @@ export function App({
       return;
     }
     if (key.return) {
+      if (wantsNewline) {
+        insertNewline();
+        return;
+      }
+      if (wantsBackslashNewline) {
+        replaceTrailingBackslash();
+        return;
+      }
       void submit(draft);
       return;
     }
@@ -466,11 +516,13 @@ export function App({
     }
     if (key.upArrow) {
       if (completion) setCompIndex((i) => Math.max(0, i - 1));
+      else if (draft.includes("\n")) moveCursorVertical(-1); // navigate rows within a multi-line draft
       else historyUp();
       return;
     }
     if (key.downArrow) {
       if (completion) setCompIndex((i) => Math.min(completion.matches.length - 1, i + 1));
+      else if (draft.includes("\n")) moveCursorVertical(1);
       else historyDown();
       return;
     }
@@ -522,6 +574,13 @@ export function App({
 
       {state.items.length === 0 ? (
         <WelcomeBanner model={runtime.model} cwd={prettyPath(runtime.cwd)} effort={state.effort} width={width} />
+      ) : state.permission ? (
+        // While a permission prompt is up, suppress the live tail. Otherwise that tail (the
+        // still-running tool + any streamed reply) is repainted under the modal every frame,
+        // and when it is taller than the viewport Ink keeps re-anchoring the screen to its top
+        // — which is what made the prompt feel pinned and unscrollable. The prompt itself
+        // shows the tool + input being requested, so no context is lost.
+        null
       ) : (
         live.map((item) => <ItemView key={item.id} item={item} />)
       )}

@@ -152,6 +152,9 @@ export async function buildPostCompactFileMessage(
   if (blocks.length === 0) return null;
   return {
     role: "user",
+    // `synthetic` keeps this in the MODEL transcript but flags it so the TUI never replays
+    // the full file bodies into visible scrollback on hydrate (see hydrateItems).
+    synthetic: "rehydrated_files",
     content: `[Restored file context after compaction — current on-disk content of the files in play]\n${blocks.join("\n")}`,
   };
 }

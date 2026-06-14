@@ -97,42 +97,52 @@ function collapseHome(p: string): string {
 
 const FILE_TOOLS = new Set(["Read", "Write", "Edit"]);
 
+/** Diff lines rendered inline before collapsing to a "+N more lines" footer (Claude-Code style). */
+const MAX_DIFF_LINES = 10;
+
 /**
  * A git-style diff block beneath a Write/Edit row: a line-number gutter, +/- signs colored
  * green/red, dim context, a `⋯` between non-contiguous hunks, and a `+N −M` stat footer.
- * Long lines are clipped to the terminal width so the block never wraps into noise.
+ * Only the first ~10 diff lines are shown (enough to see WHAT is being written without
+ * flooding the TUI); the rest collapse into a "+N more lines" hint. Long lines are clipped
+ * to the terminal width so the block never wraps into noise.
  */
 function DiffBlock({ diff }: { diff: FileDiff }) {
   const { stdout } = useStdout();
   const width = Math.max(40, stdout?.columns ?? 80);
-  // Gutter width from the largest line number across all hunks (min 2).
-  let maxNum = 0;
-  for (const h of diff.hunks) for (const l of h.lines) maxNum = Math.max(maxNum, l.newLine ?? l.oldLine ?? 0);
-  const gw = Math.max(2, String(maxNum).length);
-  const textWidth = Math.max(8, width - gw - 5); // gutter + " " + sign + " " + margin
 
+  // Flatten hunks (tagging each line with its hunk index, to draw a ⋯ between hunks) and
+  // cap the rendered preview. The +A/−R tally below stays the TRUE total either way.
+  const flat = diff.hunks.flatMap((hunk, hi) => hunk.lines.map((line) => ({ line, hi })));
+  const visible = flat.slice(0, MAX_DIFF_LINES);
+  const shownChanged = visible.filter(({ line }) => line.kind !== "context").length;
+  const hiddenChanged = diff.added + diff.removed - shownChanged;
+
+  const gw = Math.max(2, ...visible.map(({ line }) => String(line.newLine ?? line.oldLine ?? 0).length));
+  const textWidth = Math.max(8, width - gw - 5); // gutter + " " + sign + " " + margin
   const clip = (s: string) => (s.length > textWidth ? `${s.slice(0, textWidth - 1)}…` : s);
 
   return (
     <Box flexDirection="column" marginLeft={2}>
-      {diff.hunks.map((hunk, hi) => (
-        <Box key={hi} flexDirection="column">
-          {hi > 0 ? <Text color={theme.faint}>{`${" ".repeat(gw)}  ⋯`}</Text> : null}
-          {hunk.lines.map((l, li) => {
-            const num = l.newLine ?? l.oldLine;
-            const gutter = (num !== undefined ? String(num) : "").padStart(gw);
-            const sign = l.kind === "add" ? "+" : l.kind === "del" ? "-" : " ";
-            const color = l.kind === "add" ? theme.success : l.kind === "del" ? theme.error : theme.faint;
-            return (
-              <Text key={li} color={color}>{`${gutter} ${sign} ${clip(l.text)}`}</Text>
-            );
-          })}
-        </Box>
-      ))}
+      {visible.map(({ line, hi }, i) => {
+        const num = line.newLine ?? line.oldLine;
+        const gutter = (num !== undefined ? String(num) : "").padStart(gw);
+        const sign = line.kind === "add" ? "+" : line.kind === "del" ? "-" : " ";
+        const color = line.kind === "add" ? theme.success : line.kind === "del" ? theme.error : theme.faint;
+        const hunkBreak = i > 0 && hi !== visible[i - 1]!.hi; // crossed into a new hunk
+        return (
+          <Box key={i} flexDirection="column">
+            {hunkBreak ? <Text color={theme.faint}>{`${" ".repeat(gw)}  ⋯`}</Text> : null}
+            <Text color={color}>{`${gutter} ${sign} ${clip(line.text)}`}</Text>
+          </Box>
+        );
+      })}
       <Box>
         <Text color={theme.success}>{`${" ".repeat(gw)}  +${diff.added}`}</Text>
         <Text color={theme.error}>{` −${diff.removed}`}</Text>
-        {diff.truncated ? <Text color={theme.faint}>{"  … diff truncated"}</Text> : null}
+        {hiddenChanged > 0 ? (
+          <Text color={theme.faint}>{`  … +${hiddenChanged} more line${hiddenChanged === 1 ? "" : "s"}`}</Text>
+        ) : null}
       </Box>
     </Box>
   );
@@ -321,25 +331,51 @@ export function InputLine({
   placeholder?: string;
   showCursor?: boolean;
 }) {
-  const before = value.slice(0, cursor);
-  const at = value.slice(cursor, cursor + 1);
-  const after = value.slice(cursor + 1);
+  if (value.length === 0) {
+    return (
+      <Box>
+        <Text color={theme.accent}>{"❯ "}</Text>
+        {showCursor ? <Text inverse> </Text> : null}
+        {placeholder ? <Text color={theme.faint}>{placeholder}</Text> : null}
+      </Box>
+    );
+  }
+
+  // Multi-line aware: split on "\n" and place the block cursor on its row/col. Continuation
+  // rows align under the "❯ " gutter so a multi-line prompt reads as one indented block.
+  const lines = value.split("\n");
+  let row = 0;
+  let col = cursor;
+  while (row < lines.length - 1 && col > lines[row]!.length) {
+    col -= lines[row]!.length + 1; // +1 for the consumed "\n"
+    row++;
+  }
+
   return (
-    <Box>
-      <Text color={theme.accent}>{"❯ "}</Text>
-      {value.length === 0 ? (
-        <>
-          {showCursor ? <Text inverse> </Text> : null}
-          {placeholder ? <Text color={theme.faint}>{placeholder}</Text> : null}
-        </>
-      ) : (
-        <>
-          <Text>{before}</Text>
-          {showCursor ? <Text inverse>{at.length ? at : " "}</Text> : <Text>{at}</Text>}
-          <Text>{after}</Text>
-          {ghost ? <Text color={theme.faint}>{ghost}</Text> : null}
-        </>
-      )}
+    <Box flexDirection="column">
+      {lines.map((line, r) => {
+        const prefix = r === 0 ? "❯ " : "  ";
+        const ghostTail = r === lines.length - 1 && ghost ? <Text color={theme.faint}>{ghost}</Text> : null;
+        if (r !== row || !showCursor) {
+          return (
+            <Box key={r}>
+              <Text color={theme.accent}>{prefix}</Text>
+              <Text>{line}</Text>
+              {ghostTail}
+            </Box>
+          );
+        }
+        const at = line.slice(col, col + 1);
+        return (
+          <Box key={r}>
+            <Text color={theme.accent}>{prefix}</Text>
+            <Text>{line.slice(0, col)}</Text>
+            <Text inverse>{at.length ? at : " "}</Text>
+            <Text>{line.slice(col + 1)}</Text>
+            {ghostTail}
+          </Box>
+        );
+      })}
     </Box>
   );
 }
@@ -464,8 +500,8 @@ export function PermissionPrompt({ p }: { p: PendingPermission }) {
       {p.suggestions?.length ? <Text color={theme.muted}>always-allow rule: {p.suggestions[0]}</Text> : null}
       <Text color={theme.faint}>
         {p.suggestions?.length
-          ? "[y] once · [a] always (local) · [A] always (project) · [n] no"
-          : "[y] allow once · [n] deny"}
+          ? "[y] once · [a] always (local) · [A] always (project) · [n]/esc no · ctrl+c quit"
+          : "[y] allow once · [n]/esc deny · ctrl+c quit"}
       </Text>
     </Box>
   );

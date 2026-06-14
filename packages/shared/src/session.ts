@@ -16,7 +16,12 @@ export interface ToolResultRecord {
 }
 
 export type TranscriptMessage =
-  | { role: "user"; content: string }
+  /**
+   * A user message. `synthetic` marks machine-injected content that is part of the MODEL
+   * transcript but must not be replayed verbatim into the visible UI on hydrate
+   * (e.g. "rehydrated_files" = full on-disk file bodies re-injected after compaction).
+   */
+  | { role: "user"; content: string; synthetic?: "rehydrated_files" }
   | { role: "assistant"; content: string; reasoning?: string; toolCalls: ToolCall[] }
   | { role: "tool"; results: ToolResultRecord[] }
   /** Replaces collapsed history after compaction; rendered to the model as context. */

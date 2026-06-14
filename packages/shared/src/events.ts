@@ -63,6 +63,9 @@ export type AgentEvent =
   | { type: "assistant_delta"; text: string }
   /** Incremental reasoning (deep-thinking) trace during streaming; concatenate in order. */
   | { type: "reasoning_delta"; text: string }
+  /** Incremental tool-call argument fragments (a file body streaming into a Write/Edit).
+   *  Counted toward the live token gauge but never rendered (it is raw argument JSON). */
+  | { type: "tool_args_delta"; text: string }
   /** A tool call surfaced live during streaming, before it executes. */
   | { type: "tool_call"; id: string; name: string; input: Record<string, unknown> }
   /** Result of executing one tool call (concise; bulky payloads use dedicated events). */

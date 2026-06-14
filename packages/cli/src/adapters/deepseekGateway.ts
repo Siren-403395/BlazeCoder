@@ -147,6 +147,10 @@ export class DeepSeekGateway implements ModelGateway {
             emitted = true;
             handlers.onReasoning(c);
           },
+          onToolArgs: (c) => {
+            emitted = true; // a mid-stream failure after this must not retry + double-emit
+            handlers.onToolArgs?.(c);
+          },
           onToolCall: handlers.onToolCall,
         };
         try {
@@ -229,7 +233,11 @@ export class DeepSeekGateway implements ModelGateway {
               const cur = acc.get(idx) ?? { id: "", name: "", args: "" };
               if (tc.id) cur.id = tc.id;
               if (tc.function?.name) cur.name = tc.function.name;
-              if (tc.function?.arguments) cur.args += tc.function.arguments;
+              if (tc.function?.arguments) {
+                cur.args += tc.function.arguments;
+                // Surface the fragment live so the token gauge climbs while a file body streams.
+                handlers.onToolArgs?.(tc.function.arguments);
+              }
               acc.set(idx, cur);
             }
           }

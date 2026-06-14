@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyEvent, initialState, isFinalItem, reduce, splitItems } from "../src/tui/state";
 import type { Item } from "../src/tui/state";
-import type { FileDiff } from "@zephyrcode/shared";
+import type { FileDiff, SessionState } from "@zephyrcode/shared";
 
 describe("TUI state reducer", () => {
   it("records the prompt and enters running", () => {
@@ -46,6 +46,40 @@ describe("TUI state reducer", () => {
     const s0 = applyEvent(initialState(), { type: "tool_call", id: "t1", name: "Edit", input: {} });
     const s1 = applyEvent(s0, { type: "file_change", op: "edit", path: "/a.ts" });
     expect(s1).toBe(s0); // unchanged reference — pure no-op
+  });
+
+  it("counts tool_args_delta toward the live gauge without rendering it", () => {
+    let s = applyEvent(initialState(), { type: "user_prompt", text: "go" });
+    s = applyEvent(s, { type: "tool_args_delta", text: "abcdef" });
+    expect(s.turnChars).toBe(6); // counted (mirrors reasoning_delta)
+    expect(s.items).toHaveLength(1); // only the user item — the JSON fragment is NOT rendered
+  });
+
+  it("hydrate renders a synthetic rehydration message as a chip, never the file body", () => {
+    const session = {
+      id: "s",
+      createdAt: 0,
+      updatedAt: 0,
+      model: "m",
+      title: "t",
+      cwd: "/w",
+      turns: 0,
+      costUsd: 0,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      status: "idle",
+      messages: [
+        { role: "user", content: "real prompt" },
+        { role: "summary", content: "…", boundary: { compactType: "manual", preTokens: 1 } },
+        { role: "user", synthetic: "rehydrated_files", content: "[Restored file context after compaction]\n<file>SECRET BODY</file>" },
+      ],
+    } as SessionState;
+    const s = applyEvent(initialState(), { type: "hydrate", session });
+    // The file body must NOT appear as a user item (this was the leak).
+    expect(s.items.some((i) => i.kind === "user" && i.text.includes("SECRET BODY"))).toBe(false);
+    // It renders as a compact-style chip instead.
+    expect(s.items.some((i) => i.kind === "compact" && i.reason.includes("restored file context"))).toBe(true);
+    // The genuine user prompt still renders.
+    expect(s.items.some((i) => i.kind === "user" && i.text === "real prompt")).toBe(true);
   });
 
   it("captures model/limits from the init event", () => {
