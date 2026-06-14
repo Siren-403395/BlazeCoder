@@ -9,7 +9,7 @@
  * region can show a growing token counter while it thinks.
  */
 
-import type { AgentEvent, FileDiff, SessionState, TodoItem, TranscriptMessage } from "@zephyrcode/shared";
+import type { AgentEvent, ContextReport, FileDiff, SessionState, TodoItem, TranscriptMessage } from "@zephyrcode/shared";
 
 export type ToolStatus = "running" | "ok" | "error";
 
@@ -19,6 +19,7 @@ export type Item =
   | { kind: "tool"; id: string; name: string; status: ToolStatus; input: Record<string, unknown>; summary?: string; durationMs?: number; diff?: FileDiff }
   | { kind: "notice"; id: string; level: "info" | "warn" | "error"; message: string }
   | { kind: "compact"; id: string; reason: string }
+  | { kind: "context"; id: string; report: ContextReport }
   | { kind: "result"; id: string; subtype: string; summary: string };
 
 export interface PendingPermission {
@@ -67,6 +68,7 @@ export type UiAction =
   | { type: "set_effort"; effort: string }
   | { type: "set_output_style"; style?: string }
   | { type: "permission_resolved" }
+  | { type: "context_report"; report: ContextReport }
   | { type: "hydrate"; session: SessionState }
   | { type: "reset" };
 
@@ -299,6 +301,11 @@ export function applyEvent(state: TuiState, action: UiAction): TuiState {
     case "notice": {
       const [nid, seq] = id(state, "n");
       return { ...state, seq, items: [...state.items, { kind: "notice", id: nid, level: action.level, message: action.message }] };
+    }
+
+    case "context_report": {
+      const [cid, seq] = id(state, "ctx");
+      return { ...state, seq, items: [...state.items, { kind: "context", id: cid, report: action.report }] };
     }
 
     case "result": {

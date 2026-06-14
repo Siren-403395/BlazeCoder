@@ -7,12 +7,17 @@ import { homedir } from "node:os";
 import { Box, Text, useStdout } from "ink";
 import Spinner from "ink-spinner";
 import type { SessionSummary } from "@zephyrcode/core";
-import type { FileDiff, TodoItem } from "@zephyrcode/shared";
+import type { ContextBlockKind, ContextReport, FileDiff, TodoItem } from "@zephyrcode/shared";
 import { theme, toolDetail } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { TAGLINE, WORDMARK_ROWS, WORDMARK_WIDTH } from "./banner";
 import type { SlashCommand } from "./commands";
 import type { Item, PendingPermission } from "./state";
+
+/** Compact token count: 1234 → "1.2k". Shared by the live gauge and the /context panel. */
+export function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
 
 /** Near-black for text printed ON the amber chip (warm, high-contrast on #e8a64d). */
 const ON_ACCENT = "#15110a";
@@ -226,6 +231,8 @@ export function ItemView({ item }: { item: Item }) {
           ⟳ context compacted ({item.reason})
         </Text>
       );
+    case "context":
+      return <ContextPanel report={item.report} />;
     case "result":
       return (
         <Box marginTop={1}>
@@ -234,6 +241,54 @@ export function ItemView({ item }: { item: Item }) {
         </Box>
       );
   }
+}
+
+/** Human labels for each context block, in the order computeContextBreakdown emits them. */
+const CONTEXT_BLOCK_LABELS: Record<ContextBlockKind, string> = {
+  system: "system prompt",
+  tools: "tool schemas",
+  rules: "project rules",
+  memory: "memory index",
+  history: "conversation",
+  toolResults: "tool results",
+};
+
+/**
+ * The /context panel: an honest breakdown of what fills the window. The HEADLINE is the
+ * server's authoritative input-token count when a turn has happened (else the estimate);
+ * the PER-BLOCK bars are the loop's char-heuristic estimate (the model only ever reports
+ * one aggregate total, so a block-level split can't be exact). Bars are scaled to the
+ * largest block so the composition is legible regardless of how empty the window is.
+ */
+export function ContextPanel({ report }: { report: ContextReport }) {
+  const { blocks, estimatedTotal, contextTokens, realUsedTokens, summarized } = report;
+  const headline = realUsedTokens ?? estimatedTotal;
+  const pct = contextTokens ? Math.round((100 * headline) / contextTokens) : 0;
+  const shown = blocks.filter((b) => b.tokens > 0);
+  const max = Math.max(1, ...shown.map((b) => b.tokens));
+  const labelWidth = Math.max(...Object.values(CONTEXT_BLOCK_LABELS).map((l) => l.length));
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text color={theme.accent} bold>
+        {`Context  ${pct}% `}
+        <Text color={theme.faint}>
+          {`${formatTokens(headline)} / ${formatTokens(contextTokens)} tokens${realUsedTokens === undefined ? " (estimated)" : ""}`}
+        </Text>
+      </Text>
+      {shown.map((b) => (
+        <Box key={b.kind}>
+          <Text color={theme.muted}>{`  ${CONTEXT_BLOCK_LABELS[b.kind].padEnd(labelWidth)}  `}</Text>
+          <Text color={theme.accentDim}>{"█".repeat(Math.max(1, Math.round((b.tokens / max) * 14)))}</Text>
+          <Text color={theme.faint}>{` ${formatTokens(b.tokens)}`}</Text>
+        </Box>
+      ))}
+      <Text color={theme.faint} italic>
+        {summarized
+          ? "  history was compacted · per-block split is estimated"
+          : "  per-block split is estimated (the model reports one total)"}
+      </Text>
+    </Box>
+  );
 }
 
 /**

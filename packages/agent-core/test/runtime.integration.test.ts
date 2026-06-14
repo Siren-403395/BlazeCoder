@@ -236,6 +236,49 @@ describe("AgentRuntime end-to-end (scripted model)", () => {
     expect(events).toHaveLength(0); // nothing emitted when there's no session
   });
 
+  it("contextReport() returns null before any conversation exists", async () => {
+    const rt = makeRuntime([reply("done", [])]);
+    expect(await rt.contextReport(undefined)).toBeNull();
+    expect(await rt.contextReport("no-such-session")).toBeNull();
+  });
+
+  it("contextReport() attributes the live transcript across blocks and carries the authoritative total", async () => {
+    const rt = makeRuntime([reply("Creating files.", writeFullProjectCalls()), reply("All done.", [])]);
+    const run = await rt.run({ prompt: "make a hello app" }, sink().emit, signal());
+
+    const report = await rt.contextReport(run.session.id);
+    expect(report).not.toBeNull();
+    expect(report!.blocks.map((b) => b.kind)).toEqual([
+      "system",
+      "tools",
+      "rules",
+      "memory",
+      "history",
+      "toolResults",
+    ]);
+    // A real turn ran tools, so both the system prompt and the conversation carry weight.
+    expect(report!.blocks.find((b) => b.kind === "system")!.tokens).toBeGreaterThan(0);
+    expect(report!.blocks.find((b) => b.kind === "history")!.tokens).toBeGreaterThan(0);
+    expect(report!.estimatedTotal).toBeGreaterThan(0);
+    expect(report!.contextTokens).toBeGreaterThan(0);
+    // The server's authoritative input count from the last turn is surfaced for the headline.
+    expect(report!.realUsedTokens).toBeGreaterThan(0);
+    expect(report!.summarized).toBe(false);
+  });
+
+  it("contextReport() flags a compacted transcript so the panel can say so", async () => {
+    const rt = makeRuntime([reply("Creating files.", writeFullProjectCalls()), reply("All done.", [])], {
+      compaction: { summaryKeepMinMessages: 1, summaryKeepMinTokens: 0, summaryKeepMaxTokens: 1_000_000 },
+    });
+    const run = await rt.run({ prompt: "make a hello app" }, sink().emit, signal());
+    await rt.compact(run.session.id, sink().emit, signal());
+
+    const report = await rt.contextReport(run.session.id);
+    expect(report!.summarized).toBe(true);
+    // After /compact the stale authoritative count is cleared, so the headline falls back to the estimate.
+    expect(report!.realUsedTokens).toBeUndefined();
+  });
+
   it("compact() summarizes a live session on demand, marks it manual, and persists", async () => {
     // A compaction window that keeps just the last message, so a short transcript still
     // has a head to summarize (the real defaults wait for ~1M tokens).

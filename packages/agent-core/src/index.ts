@@ -41,7 +41,8 @@ import { persistPermissionUpdate, supportsPersistence } from "./permissions/upda
 import type { PermissionUpdate } from "./permissions/update";
 import { ContextManager, DEFAULT_COMPACTION } from "./context/compaction";
 import type { CompactionConfig, ManualCompactResult } from "./context/compaction";
-import { computeBudget } from "./context/sessionContext";
+import { computeBudget, computeContextBreakdown } from "./context/sessionContext";
+import type { ContextReport } from "@zephyrcode/shared";
 import { buildLoopConfig } from "./loop/config";
 import { loadMemoryIndex } from "./memory/autoMemory";
 import { MODEL_MAX_OUTPUT_TOKENS } from "./effort";
@@ -467,6 +468,42 @@ export class AgentRuntime {
     // Refresh the context gauge with the post-compaction estimate.
     emit({ type: "budget", ...computeBudget(loop.contextTokens, result.tokensAfter) });
     return result;
+  }
+
+  /**
+   * Per-block context composition for the TUI's /context command. Rebuilds the same
+   * prompt/rules/tools snapshot a real turn uses (so the numbers match what the model
+   * actually receives) and attributes the estimated token cost across the request's
+   * blocks. The estimate is the loop's own char-heuristic; the server returns only one
+   * aggregate count, so the report also carries the authoritative realUsedTokens (when a
+   * turn has happened) for the renderer to show as the honest headline. Returns null
+   * before any conversation exists.
+   */
+  async contextReport(sessionId: string | undefined): Promise<ContextReport | null> {
+    if (!sessionId) return null;
+    const session = await this.store.get(sessionId);
+    if (!session || session.messages.length === 0) return null;
+
+    const memorySection = await loadMemoryIndex(this.memory).catch(() => "");
+    const loop = buildLoopConfig(
+      { ...this.loopConfig, effort: this.defaultEffort, memorySection: memorySection || undefined },
+      this.registry,
+      this.workspace.root,
+    );
+    const blocks = computeContextBreakdown({
+      system: loop.system,
+      projectRules: loop.projectRules,
+      memorySection: memorySection || undefined,
+      messages: session.messages,
+      tools: loop.tools,
+    });
+    return {
+      blocks,
+      estimatedTotal: blocks.reduce((sum, b) => sum + b.tokens, 0),
+      contextTokens: loop.contextTokens,
+      realUsedTokens: session.lastRealInputTokens,
+      summarized: session.messages[0]?.role === "summary",
+    };
   }
 
   resolvePermission(requestId: string, decision: BrokerDecision): boolean {

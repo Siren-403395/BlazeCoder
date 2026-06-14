@@ -49,6 +49,47 @@ describe("ItemView", () => {
     unmount();
   });
 
+  it("renders a /context panel: real-total headline + estimated per-block bars", () => {
+    const report = {
+      blocks: [
+        { kind: "system" as const, tokens: 8200 },
+        { kind: "tools" as const, tokens: 14100 },
+        { kind: "rules" as const, tokens: 400 },
+        { kind: "memory" as const, tokens: 0 }, // empty blocks are dropped from the panel
+        { kind: "history" as const, tokens: 23500 },
+        { kind: "toolResults" as const, tokens: 25400 },
+      ],
+      estimatedTotal: 71600,
+      contextTokens: 1_048_576,
+      realUsedTokens: 72400,
+      summarized: false,
+    };
+    const { lastFrame, unmount } = render(<ItemView item={{ kind: "context", id: "ctx", report }} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Context"); // headline
+    expect(frame).toContain("72.4k / 1048.6k tokens"); // authoritative real total, not the estimate
+    expect(frame).toContain("system prompt");
+    expect(frame).toContain("tool results");
+    expect(frame).not.toContain("memory index"); // zero-token block is hidden
+    expect(frame).toContain("estimated"); // honesty footer
+    unmount();
+  });
+
+  it("a /context panel falls back to the estimate headline before the first server count", () => {
+    const report = {
+      blocks: [{ kind: "system" as const, tokens: 8000 }, { kind: "tools" as const, tokens: 0 }, { kind: "rules" as const, tokens: 0 }, { kind: "memory" as const, tokens: 0 }, { kind: "history" as const, tokens: 500 }, { kind: "toolResults" as const, tokens: 0 }],
+      estimatedTotal: 8500,
+      contextTokens: 1_048_576,
+      realUsedTokens: undefined,
+      summarized: true,
+    };
+    const { lastFrame, unmount } = render(<ItemView item={{ kind: "context", id: "ctx2", report }} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("8.5k / 1048.6k tokens (estimated)"); // estimate headline, flagged
+    expect(frame).toContain("history was compacted"); // summarized footer variant
+    unmount();
+  });
+
   it("renders a git-style diff block for an edited file and drops the redundant summary", () => {
     const diff: FileDiff = {
       op: "edit",

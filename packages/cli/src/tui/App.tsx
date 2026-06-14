@@ -30,7 +30,7 @@ import {
 } from "@zephyrcode/core";
 import { applyEvent, initialState, splitItems } from "./state";
 import { argGhost, atToken, filterFiles, findCommand, palette } from "./commands";
-import { ChoicePicker, CommandPalette, FileCompletion, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
+import { ChoicePicker, CommandPalette, FileCompletion, formatTokens, InputBox, ItemView, LoadingLine, PermissionPrompt, SessionPicker, TipLine, TodoPanel, WelcomeBanner } from "./view";
 import { freshSeed, loadingWord, tipAt } from "./flavor";
 
 /** Clear screen + scrollback + home the cursor — issued before a /resume or /clear repaints. */
@@ -51,10 +51,6 @@ const NO_STYLE: OutputStyle = { name: "(default)", description: "no style · bas
 
 function formatElapsed(sec: number): string {
   return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
-}
-
-function formatTokens(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
 /** Shorten an absolute path by collapsing the home dir to "~". */
@@ -216,15 +212,9 @@ export function App({
           return;
         }
         case "context": {
-          const { tokensUsed, tokensTotal } = stateRef.current;
-          const pct = tokensTotal ? Math.round((100 * tokensUsed) / tokensTotal) : 0;
-          dispatch({
-            type: "notice",
-            level: "info",
-            message: tokensTotal
-              ? `Context ${pct}% — ${tokensUsed} / ${tokensTotal} tokens`
-              : "Context usage will appear after the first turn.",
-          });
+          const report = await runtime.contextReport(sessionId.current).catch(() => null);
+          if (report) dispatch({ type: "context_report", report });
+          else dispatch({ type: "notice", level: "info", message: "Context usage will appear after the first turn." });
           return;
         }
         case "compact": {

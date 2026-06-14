@@ -23,6 +23,25 @@ describe("TUI state reducer", () => {
     expect(s.todos.map((t) => t.content)).toEqual(["C"]); // replace, not append
   });
 
+  it("a context_report action appends a context panel item", () => {
+    const report = {
+      blocks: [
+        { kind: "system" as const, tokens: 8000 },
+        { kind: "tools" as const, tokens: 14000 },
+        { kind: "rules" as const, tokens: 400 },
+        { kind: "memory" as const, tokens: 800 },
+        { kind: "history" as const, tokens: 23000 },
+        { kind: "toolResults" as const, tokens: 25000 },
+      ],
+      estimatedTotal: 71200,
+      contextTokens: 1_048_576,
+      realUsedTokens: 72400,
+      summarized: false,
+    };
+    const s = applyEvent(initialState(), { type: "context_report", report });
+    expect(s.items.at(-1)).toMatchObject({ kind: "context", report });
+  });
+
   it("an api_retry event surfaces a warn notice", () => {
     const s = applyEvent(initialState(), { type: "api_retry", attempt: 1, maxRetries: 8, delayMs: 500, status: 503 });
     expect(s.items.at(-1)).toMatchObject({ kind: "notice", level: "warn" });
