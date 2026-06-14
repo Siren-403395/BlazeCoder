@@ -41,8 +41,11 @@ export interface CompactionConfig {
 
 export const DEFAULT_COMPACTION: CompactionConfig = {
   contextTokens: 65_536,
-  outputReservePad: 15_000,
-  outputReserveCap: 20_000,
+  // Reserve only what the model's OUTPUT needs (+ a small framing pad), not a third of the
+  // window. With an 8k output budget this is ~12k, leaving a ~53k effective input window —
+  // so summarization isn't triggered at ~50% of the window by a single exploration turn.
+  outputReservePad: 4_000,
+  outputReserveCap: 12_000,
   clearThreshold: 0.7,
   bufferTokens: 13_000,
   keepRecentToolResults: 3,
