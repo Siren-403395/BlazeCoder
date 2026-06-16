@@ -22,6 +22,7 @@ export const TOOL_NAMES = {
   todo: "TodoWrite",
   task: "Task",
   skill: "Skill",
+  exitPlanMode: "ExitPlanMode",
 } as const;
 
 export type ToolNameKey = keyof typeof TOOL_NAMES;

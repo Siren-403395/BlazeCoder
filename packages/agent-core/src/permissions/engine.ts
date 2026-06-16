@@ -273,6 +273,11 @@ export class PermissionEngine {
       return { behavior: "deny", message: `Tool "${tool.name}" is not permitted in ${this.mode} mode.`, decisionReason: { type: "mode", mode: this.mode } };
     }
 
+    // ExitPlanMode: show the proposed plan itself in the approval prompt (not the generic text).
+    if (tool.name === TOOL_NAMES.exitPlanMode && typeof input.plan === "string" && input.plan.trim()) {
+      askReason = `Plan ready — approve to exit plan mode and start work:\n\n${input.plan.trim()}`;
+    }
+
     // 7) Ask the human. If the run was ALREADY cancelled (e.g. the user aborted while an
     // earlier tool in this same turn was being prompted), do not open a fresh prompt: the
     // broker arms cancellation via signal.addEventListener("abort"), which never fires for an
@@ -295,12 +300,23 @@ export class PermissionEngine {
     });
     const decision = await pending;
     if (decision.behavior === "allow") {
+      // Approving an ExitPlanMode call IS the user authorizing the switch: leave plan mode and
+      // pre-approve the plan's command categories as session allow-rules (the engine owns mode).
+      if (tool.name === TOOL_NAMES.exitPlanMode && this.mode === "plan") {
+        const prompts = (Array.isArray(input.allowedCommands) ? input.allowedCommands : [])
+          .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+          .map((prompt) => ({ tool: TOOL_NAMES.bash, prompt: prompt.trim() }));
+        this.exitPlanMode(prompts, "acceptEdits");
+      }
       return { behavior: "allow", input: decision.updatedInput ?? input, decisionReason: askDecisionReason };
     }
     return { behavior: "deny", message: decision.message ?? "Denied by user.", decisionReason: askDecisionReason };
   }
 
   private modeDisposition(tool: Tool): "allow" | "ask" | "deny" {
+    // Plan-mode exit: the one non-read action permitted while planning. Surface it for approval
+    // (check() shows the plan and flips the mode on allow). Outside plan mode it is meaningless → deny.
+    if (tool.name === TOOL_NAMES.exitPlanMode) return this.mode === "plan" ? "ask" : "deny";
     if (CONTROL_TOOLS.has(tool.name)) return "allow"; // side-effect-free control tools
     switch (this.mode) {
       case "bypassPermissions":
