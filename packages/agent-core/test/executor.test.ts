@@ -88,6 +88,24 @@ describe("ToolExecutor", () => {
     expect(res!.content).toMatch(/timed out/);
   });
 
+  it("does NOT preempt a tool that declares its own (larger) maxTimeoutMs", async () => {
+    // Same 80ms tool + tiny 5ms default, but it declares a large maxTimeoutMs (a self-timing tool
+    // like Bash). The executor's safety net must sit above the tool's own deadline, not clip it.
+    const selfTimed: Tool = {
+      name: "selftimed",
+      readOnly: false,
+      description: "test tool",
+      inputSchema: { type: "object" },
+      maxTimeoutMs: 60_000,
+      execute: () => new Promise((resolve) => setTimeout(() => resolve({ content: "done" }), 80)),
+    };
+    const { executor } = setup({ tools: [selfTimed], defaultTimeoutMs: 5 });
+    const { ctx } = makeCtx();
+    const [res] = await executor.executeTurn([call("1", "selftimed")], ctx);
+    expect(res!.isError).toBeFalsy();
+    expect(res!.content).toBe("done");
+  });
+
   it("applies PostToolUse hook transforms", async () => {
     const hooks = new HookBus().onPostToolUse(({ result }) => ({ content: `${result.content}!` }));
     const a = makeTool("a", async () => ({ content: "A" }), true);

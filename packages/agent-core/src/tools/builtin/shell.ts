@@ -18,6 +18,9 @@ export const runCommandTool: Tool = {
   readOnly: false,
   compactable: true, // bulky stdout/stderr dumps; the command can be re-run if needed
   maxResultSizeChars: 30_000, // smaller cap; the tail (stderr) is always preserved on spill
+  // The sandbox enforces (and reaps on) a per-command timeout up to MAX_TIMEOUT_MS. Declare it so
+  // the executor's safety net sits above it, instead of the generic 120s default clipping it.
+  maxTimeoutMs: MAX_TIMEOUT_MS,
   description: `Run a shell command in the working directory; returns stdout/stderr and the exit code. This is how you install deps, build, run tests/type-checks/linters, use git, scaffold — and VERIFY your work after editing.
 
 Prefer the dedicated tools over their shell equivalents:

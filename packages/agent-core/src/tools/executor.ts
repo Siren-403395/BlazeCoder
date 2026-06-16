@@ -22,6 +22,9 @@ export interface ToolExecutorOptions {
 
 const DEFAULT_MAX_RESULT_CHARS = 60_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
+/** Slack added above a tool's own declared max, so the tool's internal timeout (which can reap a
+ *  child process) fires before the executor's blunt safety net does. */
+const TIMEOUT_GRACE_MS = 5_000;
 
 export class ToolExecutor {
   private readonly maxResultChars: number;
@@ -139,13 +142,25 @@ export class ToolExecutor {
       emit: (event) => ctx.emit(event.type === "file_change" ? { ...event, toolUseId } : event),
     };
     try {
-      return await this.withTimeout(tool.execute(input, handlerCtx), this.defaultTimeoutMs);
+      return await this.withTimeout(tool.execute(input, handlerCtx), this.backstopTimeout(tool));
     } catch (error) {
       return {
         content: `Tool "${tool.name}" failed: ${error instanceof Error ? error.message : String(error)}`,
         isError: true,
       };
     }
+  }
+
+  /**
+   * The executor's safety-net timeout for a tool. A tool that manages its own deadline (declares
+   * maxTimeoutMs) gets a net set just ABOVE that deadline (+ grace) so its own timeout fires first
+   * and can clean up (e.g. reap a child process); the net only trips if the tool itself wedges.
+   * Tools without a declared max use the executor default.
+   */
+  private backstopTimeout(tool: Tool): number {
+    return tool.maxTimeoutMs !== undefined
+      ? Math.max(this.defaultTimeoutMs, tool.maxTimeoutMs + TIMEOUT_GRACE_MS)
+      : this.defaultTimeoutMs;
   }
 
   private withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

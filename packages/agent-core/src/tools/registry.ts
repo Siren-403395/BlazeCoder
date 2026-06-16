@@ -63,6 +63,14 @@ export interface Tool {
   compactable?: boolean;
   /** Spill threshold: results larger than this go to disk + a preview (default in the executor). */
   maxResultSizeChars?: number;
+  /**
+   * The longest this tool may legitimately run. A tool that enforces its own deadline AND cleans
+   * up after it (e.g. Bash, whose sandbox times out a command — up to 10 min — and reaps the
+   * process tree) declares it here so the executor's safety-net timeout sits ABOVE the tool's own
+   * deadline instead of preempting it (which would both clip the allowed runtime and orphan the
+   * still-running work). Omit ⇒ the executor's default backstop applies.
+   */
+  maxTimeoutMs?: number;
   /** Keyword hints for a future deferred-tool search (not yet active). */
   searchHint?: string;
   /** Marks a core tool that must never be deferred (not yet active). */
