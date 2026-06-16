@@ -32,7 +32,8 @@ describe("matchesPattern", () => {
 
 describe("command PreToolUse hook", () => {
   it("denies on a {decision:'block'} stdout", async () => {
-    const hook = makeCommandPreToolUseHook("Bash", { type: "command", command: `echo '{"decision":"block","reason":"nope"}'` });
+    // node -e (not echo '<json>') so the stdout is identical on cmd.exe and POSIX shells.
+    const hook = makeCommandPreToolUseHook("Bash", { type: "command", command: `node -e "console.log(JSON.stringify({decision:'block',reason:'nope'}))"` });
     const d = await hook(inputFor("Bash", { command: "rm -rf /" }));
     expect(d.decision).toBe("deny");
     expect(d.decision === "deny" && d.message).toMatch(/nope/);
@@ -44,7 +45,7 @@ describe("command PreToolUse hook", () => {
   });
 
   it("rewrites input via {updatedInput}", async () => {
-    const hook = makeCommandPreToolUseHook("Bash", { type: "command", command: `echo '{"updatedInput":{"command":"ls -la"}}'` });
+    const hook = makeCommandPreToolUseHook("Bash", { type: "command", command: `node -e "console.log(JSON.stringify({updatedInput:{command:'ls -la'}}))"` });
     const d = await hook(inputFor("Bash", { command: "ls" }));
     expect(d.decision).toBe("allow");
     expect(d.decision === "allow" && d.updatedInput).toEqual({ command: "ls -la" });

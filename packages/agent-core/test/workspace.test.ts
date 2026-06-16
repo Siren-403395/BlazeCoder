@@ -1,8 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile, symlink } from "node:fs/promises";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileSystemWorkspace, InMemoryWorkspace, WorkspaceBoundaryError } from "../src/index";
+
+/** Whether this environment can create symlinks (Windows needs admin/Developer Mode; CI often can't). */
+function symlinksSupported(): boolean {
+  let dir: string | undefined;
+  try {
+    dir = mkdtempSync(join(tmpdir(), "ca-symcheck-"));
+    writeFileSync(join(dir, "t.txt"), "x");
+    symlinkSync(join(dir, "t.txt"), join(dir, "l.txt"));
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  }
+}
+const CAN_SYMLINK = symlinksSupported();
 
 describe("InMemoryWorkspace", () => {
   it("writes, reads, exists, deletes and walks", async () => {
@@ -89,7 +106,7 @@ describe("FileSystemWorkspace", () => {
     expect(respected.some((p) => p.endsWith("keep.ts"))).toBe(true);
   });
 
-  it("refuses to read, write, or delete through a symlink that escapes the boundary", async () => {
+  it.skipIf(!CAN_SYMLINK)("refuses to read, write, or delete through a symlink that escapes the boundary", async () => {
     const outside = await mkdtemp(join(tmpdir(), "ca-out-"));
     await writeFile(join(outside, "secret.txt"), "top secret");
     const link = join(root, "link.txt");

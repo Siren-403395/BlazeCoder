@@ -5,6 +5,7 @@
  * ledger's staleness check is exercised the same way it is on real disk.
  */
 
+import { posix } from "node:path";
 import { inferLanguage, type ProjectFile } from "@blazecoder/shared";
 import type { FileStamp, ReadFile, Workspace } from "../ports";
 import { isWithin, resolveWithin } from "./boundary";
@@ -24,12 +25,14 @@ export class InMemoryWorkspace implements Workspace {
     this.stamps.set(file.path, { mtimeMs: ++this.tick, size: file.content.length });
   }
 
+  // The virtual FS is rooted at POSIX "/"; force posix path rules so resolution is
+  // identical on every OS (the platform default would rewrite "/" to a drive on Windows).
   resolve(inputPath: string): string {
-    return resolveWithin([this.root], this.root, inputPath);
+    return resolveWithin([this.root], this.root, inputPath, posix);
   }
 
   isWritable(absPath: string): boolean {
-    return isWithin(this.root, absPath);
+    return isWithin(this.root, absPath, posix);
   }
 
   async read(absPath: string): Promise<ReadFile | null> {

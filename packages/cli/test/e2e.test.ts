@@ -15,10 +15,12 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const bundle = join(pkgRoot, "dist", "blazecoder.js");
-const tsupBin = join(pkgRoot, "node_modules", ".bin", "tsup");
+// On Windows the .bin shim is tsup.CMD, and spawning a .CMD requires a shell.
+const onWindows = process.platform === "win32";
+const tsupBin = join(pkgRoot, "node_modules", ".bin", onWindows ? "tsup.CMD" : "tsup");
 
 beforeAll(() => {
-  const build = spawnSync(tsupBin, [], { cwd: pkgRoot, encoding: "utf8" });
+  const build = spawnSync(onWindows ? `"${tsupBin}"` : tsupBin, [], { cwd: pkgRoot, encoding: "utf8", shell: onWindows });
   if (build.status !== 0) throw new Error(`tsup build failed: ${build.stderr || build.stdout}`);
 }, 60_000);
 
@@ -26,7 +28,7 @@ function runCa(args: string[]): { status: number | null; stdout: string; stderr:
   const home = mkdtempSync(join(tmpdir(), "zc-e2e-home-"));
   const cwd = mkdtempSync(join(tmpdir(), "zc-e2e-cwd-"));
   try {
-    const res = spawnSync("node", [bundle, ...args, "--cwd", cwd], {
+    const res = spawnSync(process.execPath, [bundle, ...args, "--cwd", cwd], {
       env: { ...process.env, BLAZECODER_HOME: home, AGENT_FAKE_MODEL: "1" },
       encoding: "utf8",
       timeout: 20_000,
