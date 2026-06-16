@@ -67,6 +67,19 @@ const COMMAND_WRAPPERS = new Set(["sudo", "doas", "xargs", "busybox"]);
  *  deliberately NOT including scratch mounts (/tmp, /mnt, /media, /Volumes, /data). */
 const SYSTEM_DIR = /^\/(bin|boot|dev|etc|lib|lib32|lib64|proc|root|run|sbin|srv|sys|usr|var|opt|home|System|Library|Applications|Users|private)(\/\*?)?$/;
 
+/** Windows cmd / PowerShell read-only inspection commands (matched case-insensitively). */
+const WIN_READ_CMDS = new Set([
+  "dir", "type", "where", "findstr", "tree", "ver", "tasklist", "systeminfo", "cd", "chdir", "fc", "comp", "more",
+  "get-content", "gc", "get-childitem", "gci", "select-string", "sls", "test-path", "get-location", "gl",
+]);
+/** Windows cmd / PowerShell file-mutating commands (reversible-ish). */
+const WIN_WRITE_CMDS = new Set([
+  "copy", "xcopy", "robocopy", "move", "ren", "rename", "md", "mklink", "attrib",
+  "set-content", "add-content", "new-item", "ni", "copy-item", "cpi", "move-item", "rename-item", "out-file",
+]);
+/** Windows delete commands — destructive, but only CATASTROPHIC with a system target (see classifyWindowsCatastrophic). */
+const WIN_DELETE_CMDS = new Set(["del", "erase", "rd", "rmdir", "remove-item", "ri"]);
+
 function tokens(segment: string): string[] {
   return segment.split(/\s+/).filter(Boolean);
 }
@@ -114,6 +127,42 @@ function hasRecursiveForce(args: string[]): boolean {
   return hasR && hasF;
 }
 
+// ── Windows-specific catastrophic detection (cmd.exe + PowerShell) ──
+
+/** A Windows drive root, system directory, or system env-var target — the irreversible wipe targets. */
+function isWindowsDangerousTarget(arg: string): boolean {
+  const t = unquote(arg).replace(/\//g, "\\");
+  // Whole-drive root (C:\ C: C:\*, any letter) or the current-drive root (\ \*).
+  if (/^[A-Za-z]:(\\\*?)?$/.test(t) || t === "\\" || t === "\\*") return true;
+  // Windows system tree and anything beneath it.
+  if (/^[A-Za-z]:\\(windows|winnt|system32|boot)(\\.*)?$/i.test(t)) return true;
+  // The bare Users / Program Files / ProgramData roots (a deep subpath is scoped, not catastrophic).
+  if (/^[A-Za-z]:\\(users|program files( \(x86\))?|programdata)\\?\*?$/i.test(t)) return true;
+  // System / profile env-var roots: cmd %VAR% and PowerShell $env:VAR.
+  if (/^(%|\$env:)(systemroot|windir|systemdrive|programfiles( \(x86\))?|programdata|userprofile)%?\\?\*?$/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * Windows-native irreversible deletes the Unix `rm` patterns miss: cmd's del/erase and rd/rmdir
+ * (with /s), `format` of a drive, and PowerShell's Remove-Item -Recurse. `head` is already
+ * lowercased. Conservative: a scoped target (a project subfolder) is NOT flagged.
+ */
+function classifyWindowsCatastrophic(head: string, args: string[]): CommandClassification | null {
+  const hasTarget = args.some((a) => !/^[-/]/.test(a) && isWindowsDangerousTarget(a));
+  const recursive = args.some((a) => /^\/s$/i.test(a) || /^-r(ecurse)?$/i.test(a));
+  if ((head === "del" || head === "erase" || head === "rd" || head === "rmdir") && recursive && hasTarget) {
+    return { category: "filesystem", risk: "destructive", reason: `recursive ${head} of a drive root or system dir`, catastrophic: true };
+  }
+  if ((head === "remove-item" || head === "ri") && recursive && hasTarget) {
+    return { category: "filesystem", risk: "destructive", reason: "Remove-Item -Recurse of a drive root or system dir", catastrophic: true };
+  }
+  if (head === "format" && args.some((a) => /^[A-Za-z]:\\?$/.test(unquote(a)))) {
+    return { category: "filesystem", risk: "destructive", reason: "format wipes a drive", catastrophic: true };
+  }
+  return null;
+}
+
 /** Catastrophic signatures detected on the WHOLE command (operators are part of them). */
 function isCatastrophicWhole(raw: string): boolean {
   const c = raw.replace(/\s+/g, " ");
@@ -153,7 +202,12 @@ function classifySegment(segment: string): CommandClassification {
     while (t.length > 1 && /^-/.test(t[0]!)) t = /^-[a-zA-Z]$/.test(t[0]!) ? t.slice(2) : t.slice(1);
   }
   const head = realHead(t[0] ?? "");
+  const h = head.toLowerCase(); // Windows commands + PowerShell cmdlets are case-insensitive
   const args = t.slice(1);
+
+  // ── Windows-native catastrophic deletes (cmd del/rd/format, PowerShell Remove-Item) ──
+  const winCatastrophic = classifyWindowsCatastrophic(h, args);
+  if (winCatastrophic) return winCatastrophic;
 
   // ── Catastrophic, irreversible ──
   if (head === "rm" && hasRecursiveForce(args) && hasDangerousFsTarget(args)) {
@@ -220,6 +274,11 @@ function classifySegment(segment: string): CommandClassification {
     return { category: "process", risk: "read", reason: `${head} (read-only)`, catastrophic: false };
   }
   if (WRITE_CMDS.has(head)) return { category: "filesystem", risk: "write", reason: `${head} writes files`, catastrophic: false };
+
+  // ── Windows cmd / PowerShell commands (advisory; matched case-insensitively) ──
+  if (WIN_DELETE_CMDS.has(h)) return { category: "filesystem", risk: "destructive", reason: `${h} deletes files`, catastrophic: false };
+  if (WIN_READ_CMDS.has(h)) return { category: "process", risk: "read", reason: `${h} (read-only)`, catastrophic: false };
+  if (WIN_WRITE_CMDS.has(h)) return { category: "filesystem", risk: "write", reason: `${h} writes files`, catastrophic: false };
 
   // ── Unknown: assume it can write (advisory, conservative). ──
   return { category: "unknown", risk: "write", reason: head ? `unrecognized command "${head}"` : "command", catastrophic: false };

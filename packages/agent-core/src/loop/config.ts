@@ -10,7 +10,7 @@
 
 import { MODEL_MAX_OUTPUT_TOKENS, resolveEffort } from "../effort";
 import type { ThinkingBudget } from "../effort";
-import { buildProjectRules } from "../memory/projectRules";
+import { buildProjectRules, platformEnvironmentLines } from "../memory/projectRules";
 import { buildSystemPrompt } from "../prompts";
 import type { ToolSchema } from "../ports";
 import type { ToolRegistry } from "../tools/registry";
@@ -48,7 +48,12 @@ export function buildLoopConfig(config: AgentLoopConfig, registry: ToolRegistry,
   }).join("\n\n");
   return {
     system,
-    projectRules: buildProjectRules({ root: workspaceRoot, userRules: config.userRules, memory: config.memorySection }),
+    projectRules: buildProjectRules({
+      root: workspaceRoot,
+      userRules: config.userRules,
+      environment: platformEnvironmentLines(process.platform),
+      memory: config.memorySection,
+    }),
     tools: registry.schemas(),
     thinking,
     thinkingBudget: budget,

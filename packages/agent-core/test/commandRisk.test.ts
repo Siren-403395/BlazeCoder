@@ -143,3 +143,73 @@ describe("classifyCommand — graded advisory risk", () => {
     expect(classifyCommand("   ").risk).toBe("read");
   });
 });
+
+describe("classifyCommand — Windows catastrophic tripwire (cmd.exe + PowerShell)", () => {
+  const catastrophic = [
+    "del /s /q C:\\",
+    "del /f /s /q C:\\*",
+    "DEL /S /Q C:\\", // case-insensitive
+    "rd /s /q C:\\",
+    "rd /s /q C:\\Windows",
+    "rmdir /s /q C:\\Windows\\System32",
+    "del /s C:/Windows", // forward slashes normalized
+    "format C:",
+    "format /q D:",
+    "Remove-Item -Recurse -Force C:\\",
+    "remove-item -recurse C:\\Windows",
+    "ri -r C:\\Users",
+    "del /s /q %SystemRoot%",
+    "rd /s /q %windir%",
+    "Remove-Item -Recurse $env:SystemDrive\\",
+    "cd tmp && del /s /q C:\\", // catastrophic tail of a compound command
+  ];
+  for (const cmd of catastrophic) {
+    it(`flags catastrophic: ${cmd}`, () => {
+      const c = classifyCommand(cmd);
+      expect(c.catastrophic).toBe(true);
+      expect(c.risk).toBe("destructive");
+    });
+  }
+
+  const notCatastrophic = [
+    "del /q foo.txt", // a scoped file delete
+    "del /s /q .\\dist", // a scoped recursive delete
+    "rd /s /q node_modules",
+    "Remove-Item -Recurse -Force .\\build",
+    "rmdir /s /q C:\\Users\\Alice\\project", // a deep user subpath is scoped, not the whole drive
+    "del /s /q C:\\project\\tmp",
+    "copy a.txt b.txt",
+    "dir C:\\", // listing a drive root is read-only, not a wipe
+  ];
+  for (const cmd of notCatastrophic) {
+    it(`does NOT flag catastrophic: ${cmd}`, () => {
+      expect(classifyCommand(cmd).catastrophic).toBe(false);
+    });
+  }
+});
+
+describe("classifyCommand — Windows advisory risk", () => {
+  const cases: [string, string, string][] = [
+    // command, expected risk, expected category
+    ["dir", "read", "process"],
+    ["type package.json", "read", "process"],
+    ["findstr foo src", "read", "process"],
+    ["Get-Content file.txt", "read", "process"],
+    ["gci -Recurse", "read", "process"],
+    ["copy a.txt b.txt", "write", "filesystem"],
+    ["xcopy /s src dst", "write", "filesystem"],
+    ["ren old.txt new.txt", "write", "filesystem"],
+    ["New-Item -ItemType File x.txt", "write", "filesystem"],
+    ["del foo.txt", "destructive", "filesystem"],
+    ["rd /s /q node_modules", "destructive", "filesystem"],
+    ["Remove-Item -Recurse build", "destructive", "filesystem"],
+  ];
+  for (const [cmd, risk, category] of cases) {
+    it(`${cmd} → ${risk}/${category}`, () => {
+      const c = classifyCommand(cmd);
+      expect(c.risk).toBe(risk);
+      expect(c.category).toBe(category);
+      expect(c.catastrophic).toBe(false);
+    });
+  }
+});
